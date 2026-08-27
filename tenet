@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ ! -f "$PROJECT_ROOT/build/tenet.jar" ]] \
+        || find "$PROJECT_ROOT/src/main/java" -type f -newer "$PROJECT_ROOT/build/tenet.jar" -print -quit | grep -q .; then
+    "$PROJECT_ROOT/scripts/build.sh"
+fi
+
+exec java -jar "$PROJECT_ROOT/build/tenet.jar" "$@"
