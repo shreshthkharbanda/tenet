@@ -52,9 +52,6 @@ public final class Rules {
   public static List<Rule> all(TenetConfig config) {
     return List.of(
         new LyingQueryRule(),
-        new BooleanPredicateRule(),
-        new VagueIdentifierRule(),
-        new VocabularyDriftRule(),
         new BooleanFlagParameterRule(),
         new CommandQueryRule(),
         new GuardClauseRule(config),
@@ -80,10 +77,8 @@ public final class Rules {
         new PatternCosplayRule(),
         new SequentialIndependentCallsRule(),
         new CheckThenActRule(),
-        new UnboundedFanOutRule(),
         new RetryWithoutPolicyRule(),
         new CompoundingRetriesRule(),
-        new RetriedNonIdempotentRule(),
         new UnboundedWaitRule());
   }
 }

@@ -75,6 +75,38 @@ class ProfilesTest {
   }
 
   @Test
+  void conventionsAndDefensiveRulesLeftConsensus() {
+    Set<String> ids = idsFor(new Properties());
+    assertFalse(ids.contains("TNT-A02"));
+    assertFalse(ids.contains("TNT-A03"));
+    assertFalse(ids.contains("TNT-A04"));
+    assertFalse(ids.contains("TNT-H03"));
+    assertFalse(ids.contains("TNT-H06"));
+  }
+
+  @Test
+  void conventionsProfileAddsNamingRules() {
+    Properties properties = new Properties();
+    properties.setProperty("profile", "conventions");
+    Set<String> ids = idsFor(properties);
+    assertTrue(ids.contains("TNT-A02"));
+    assertTrue(ids.contains("TNT-A03"));
+    assertTrue(ids.contains("TNT-A04"));
+    assertFalse(ids.contains("TNT-H03"));
+  }
+
+  @Test
+  void profilesCombineWithConflictChecking() {
+    Properties properties = new Properties();
+    properties.setProperty("profile", "conventions,defensive,clean-code");
+    Set<String> ids = idsFor(properties);
+    assertTrue(ids.contains("TNT-A03"));
+    assertTrue(ids.contains("TNT-H06"));
+    assertTrue(ids.contains("TNT-CC01"));
+    assertFalse(ids.contains("TNT-DM01"));
+  }
+
+  @Test
   void unknownProfileFailsLoudly() {
     Properties properties = new Properties();
     properties.setProperty("profile", "grug-brained");

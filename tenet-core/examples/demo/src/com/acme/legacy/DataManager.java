@@ -10,7 +10,7 @@ public class DataManager {
   static Map<String, String> temp = new HashMap<>();
   static int flag;
 
-  @SuppressWarnings("tenet:TNT-A03")
+  @SuppressWarnings("tenet:TNT-C01")
   public void process(String key, String value) {
     temp.put(key, value);
     flag = flag + 1;
@@ -37,6 +37,7 @@ public class DataManager {
   }
 
     public String load(String path) {
+    flag = flag + 1;
     try {
       return java.nio.file.Files.readString(java.nio.file.Path.of(path));
     } catch (Exception e) {

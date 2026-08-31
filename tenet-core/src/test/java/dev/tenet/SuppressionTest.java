@@ -18,15 +18,15 @@ class SuppressionTest {
     EvidenceEngine engine = new EvidenceEngine(new JavacFrontend(), Rules.all(), new Kernel());
     Report report = engine.check(List.of(Path.of("examples", "demo")), List.of());
 
-    boolean processFlagged =
+    boolean suppressedFieldFlagged =
         report.findings().stream()
-            .anyMatch(f -> f.ruleId().equals("TNT-A03") && f.title().contains("process"));
-    boolean tempStillFlagged =
+            .anyMatch(f -> f.ruleId().equals("TNT-C01") && f.title().contains("DataManager.temp"));
+    boolean unsuppressedFieldStillFires =
         report.findings().stream()
-            .anyMatch(f -> f.ruleId().equals("TNT-A03") && f.title().contains("temp"));
+            .anyMatch(f -> f.ruleId().equals("TNT-C01") && f.title().contains("DataManager.flag"));
 
-    assertTrue(!processFlagged, "suppressed finding leaked through");
-    assertTrue(tempStillFlagged, "suppression scope was wider than the annotated method");
+    assertTrue(!suppressedFieldFlagged, "suppressed finding leaked through");
+    assertTrue(unsuppressedFieldStillFires, "suppression scope was wider than the annotated method");
     assertTrue(report.stats().suppressedFindings() >= 1, "suppression count missing from stats");
   }
 }

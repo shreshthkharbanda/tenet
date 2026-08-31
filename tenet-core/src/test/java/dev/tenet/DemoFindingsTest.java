@@ -31,10 +31,10 @@ class DemoFindingsTest {
     Set<String> expected =
         new TreeSet<>(
             Set.of(
-                "TNT-A01", "TNT-A03", "TNT-A04", "TNT-B01", "TNT-B02", "TNT-B03", "TNT-B04",
+                "TNT-A01", "TNT-B01", "TNT-B02", "TNT-B03", "TNT-B04",
                 "TNT-C01", "TNT-C02", "TNT-D01", "TNT-D02", "TNT-D03", "TNT-D04", "TNT-D05",
                 "TNT-E01", "TNT-E02", "TNT-F01", "TNT-F02", "TNT-G02", "TNT-G03", "TNT-G05", "TNT-G06",
-                "TNT-H01", "TNT-H02", "TNT-H03", "TNT-H04", "TNT-H05", "TNT-H07"));
+                "TNT-H01", "TNT-H02", "TNT-H04", "TNT-H05", "TNT-H07"));
     Set<String> found = new TreeSet<>();
     report.findings().forEach(finding -> found.add(finding.ruleId()));
 

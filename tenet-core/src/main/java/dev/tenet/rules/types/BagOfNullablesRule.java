@@ -18,20 +18,17 @@ import java.util.Set;
 public final class BagOfNullablesRule implements Rule {
 
   private static final int MIN_FIELDS = 5;
-  private static final double MAX_JACCARD = 0.2;
-
+  
   private static final RuleDescriptor DESCRIPTOR =
       new RuleDescriptor(
           "TNT-D03",
           "Bag of nullables",
           Dimension.TYPES,
-          Severity.ADVISORY,
+          Severity.PROVEN,
           2,
           "one type, one shape",
-          "Construction-site clustering: two constructors assign near-disjoint field sets "
-              + "(Jaccard < "
-              + MAX_JACCARD
-              + ") — the subtypes that want to exist.");
+          "Construction-site analysis: two constructors assign fully disjoint field sets, "
+              + "proof of two construction shapes living in one type.");
 
   @Override
   public RuleDescriptor descriptor() {
@@ -58,7 +55,7 @@ public final class BagOfNullablesRule implements Rule {
         Set<String> first = ctors.get(i).fieldsAssignedInConstructor();
         Set<String> second = ctors.get(j).fieldsAssignedInConstructor();
         if (first.isEmpty() || second.isEmpty()) continue;
-        if (jaccard(first, second) < MAX_JACCARD) {
+        if (disjoint(first, second)) {
           return Optional.of(new DisjointPair(ctors.get(i), first, ctors.get(j), second));
         }
       }
@@ -66,12 +63,8 @@ public final class BagOfNullablesRule implements Rule {
     return Optional.empty();
   }
 
-  private double jaccard(Set<String> first, Set<String> second) {
-    Set<String> intersection = new HashSet<>(first);
-    intersection.retainAll(second);
-    Set<String> union = new HashSet<>(first);
-    union.addAll(second);
-    return union.isEmpty() ? 1.0 : (double) intersection.size() / union.size();
+  private boolean disjoint(Set<String> first, Set<String> second) {
+    return first.stream().noneMatch(second::contains);
   }
 
   private record DisjointPair(
