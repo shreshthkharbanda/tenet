@@ -40,6 +40,15 @@ public final class TenetConfig {
     return new TenetConfig(values, disabled, ruleIds);
   }
 
+  public String profile() {
+    String raw = values.get("profile");
+    return raw == null || raw.isBlank() ? "consensus" : raw.toLowerCase(java.util.Locale.ROOT);
+  }
+
+  public boolean explicitlyEnabled(String ruleId) {
+    return "true".equalsIgnoreCase(values.get(key(ruleId, "enabled")));
+  }
+
   public boolean enabled(String ruleId) {
     if (!only.isEmpty()) return only.contains(ruleId);
     if (disabled.contains(ruleId)) return false;

@@ -46,7 +46,7 @@ public final class Rules {
   }
 
   public static List<Rule> enabled(TenetConfig config) {
-    return all(config).stream().filter(rule -> config.enabled(rule.descriptor().id())).toList();
+    return Profiles.enabled(config);
   }
 
   public static List<Rule> all(TenetConfig config) {
