@@ -6,7 +6,7 @@ Try it in under two minutes:
 
 ```bash
 git clone https://github.com/shreshthkharbanda/tenet && cd tenet
-./bin/tenet check examples/demo
+./bin/tenet check tenet-core/examples/demo
 ```
 
 The first run builds the jar (needs JDK 21+ and Maven), then prints findings from a demo project seeded with 28 kinds of planted defects. Each finding shows the rule, the file and line, the evidence, and a suggested fix:
@@ -25,13 +25,54 @@ Point `check` at any source root. Analysis of a 250-file repo takes one to three
 
 ```bash
 ./bin/tenet check path/to/src                  # human-readable report
-./bin/tenet check path/to/src --format json    # for CI and coding agents
-./bin/tenet check src --classpath a.jar:b.jar  # resolve your dependencies
+./bin/tenet check path/to/src --format json    # for coding agents and scripts
+./bin/tenet check path/to/src --format sarif   # for GitHub code scanning
 ./bin/tenet rules                              # list all 34 rules
 ./bin/tenet explain TNT-A01                    # one rule in depth
 ```
 
-Exit code 0 means clean, 1 means findings, so `tenet check` drops into CI as-is. Without a classpath, calls into unresolved dependencies degrade to "unknown" and the affected rules skip rather than guess.
+If the target is a Maven project, Tenet resolves the compile classpath from the nearest `pom.xml` on its own; pass `--classpath a.jar:b.jar` only when there is no pom. Without either, calls into unresolved dependencies degrade to "unknown" and the affected rules skip rather than guess.
+
+## Running in CI
+
+The Maven plugin binds to `verify`, so once it is in the pom, `mvn verify` gates the build the same way Checkstyle or Spotless would:
+
+```xml
+<plugin>
+  <groupId>dev.tenet</groupId>
+  <artifactId>tenet-maven-plugin</artifactId>
+  <version>0.1.0</version>
+  <executions><execution><goals><goal>check</goal></goals></execution></executions>
+</plugin>
+```
+
+The plugin reads the project's own source roots and classpath, so there is nothing else to configure. `-Dtenet.skip=true` skips a run; `-Dtenet.failOnFindings=false` reports without failing.
+
+For GitHub, emit SARIF and upload it; findings then annotate the PR diff inline:
+
+```yaml
+- run: java -jar tenet.jar check src/main/java --format sarif > tenet.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with: { sarif_file: tenet.sarif }
+```
+
+This repo's own [ci.yml](.github/workflows/ci.yml) does exactly that against Tenet's sources on every push.
+
+Two features make adoption on an existing codebase practical. `./bin/tenet baseline path/to/src` records every current finding as accepted debt in `.tenet-baseline`; from then on `check` fails only on new findings, so the ratchet only tightens. And `--changed` (optionally `--changed origin/develop`) still analyzes the whole program but reports only findings in files you touched, which is what a PR gate wants.
+
+## Suppressing a finding
+
+Exit code 0 means clean, 1 means findings. When a specific finding is wrong or accepted, suppress it at the class or method where it fires:
+
+```java
+@SuppressWarnings("tenet:TNT-A03")        // one rule, this scope only
+public void process(String key) { ... }
+
+@SuppressWarnings("tenet")                // every rule, this scope only
+class LegacyAdapter { ... }
+```
+
+Suppressions are visible in the diff and reviewable like any other code change, which is the point: silencing a finding costs one annotation someone has to defend in review.
 
 Every rule can be turned off or tuned. Put a `tenet.properties` at the root of the repo you are analyzing:
 
