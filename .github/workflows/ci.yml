@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and test (includes dogfood)
+        run: mvn -q install
+      - name: Self-scan to SARIF
+        run: >
+          java -jar tenet-core/target/tenet.jar check tenet-core/src/main/java
+          --format sarif --no-baseline > tenet.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tenet.sarif
