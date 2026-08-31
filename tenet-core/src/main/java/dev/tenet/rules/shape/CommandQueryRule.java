@@ -24,8 +24,9 @@ public final class CommandQueryRule implements Rule {
           Severity.STRONG,
           1,
           "commands act; queries answer; no method does both silently",
-          "Returns a computed value AND carries a proven state write, under a name that admits "
-              + "neither; fluent builders and conventional command verbs exempt.");
+          "Returns a computed value AND carries a proven escaping write (static or parameter), "
+              + "under a name that admits neither. Writes to the object's own state are exempt: "
+              + "iterators and parsers advance-and-return by design.");
 
   @Override
   public RuleDescriptor descriptor() {
@@ -56,8 +57,8 @@ public final class CommandQueryRule implements Rule {
         .filter(
             e ->
                 switch (e.kind()) {
-                  case WRITE_INSTANCE, WRITE_STATIC, PARAM_MUTATION -> true;
-                  case IO_CALL, LOG_CALL, UNKNOWN_EXTERNAL -> false;
+                  case WRITE_STATIC, PARAM_MUTATION -> true;
+                  case WRITE_INSTANCE, IO_CALL, LOG_CALL, UNKNOWN_EXTERNAL -> false;
                 })
         .findFirst();
   }

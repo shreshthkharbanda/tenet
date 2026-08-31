@@ -40,7 +40,7 @@ public final class SwallowedFailureRule implements Rule {
       for (CatchFact caught : method.catches()) {
         if (interruptMishandled(caught)) {
           findings.add(interruptFinding(method, caught));
-        } else if (caught.swallows() && !isBoundary(method)) {
+        } else if (caught.swallows() && !isBoundary(method) && !isNotificationIdiom(caught)) {
           findings.add(swallowFinding(method, caught));
         }
       }
@@ -52,6 +52,10 @@ public final class SwallowedFailureRule implements Rule {
     return caught.catchesInterrupted()
         && !caught.reinterrupts()
         && caught.disposal() != CatchFact.Disposal.RETHROWS;
+  }
+
+  private boolean isNotificationIdiom(CatchFact caught) {
+    return caught.insideLoop() && caught.disposal() == CatchFact.Disposal.LOG_ONLY;
   }
 
   private boolean isBoundary(MethodFacts method) {

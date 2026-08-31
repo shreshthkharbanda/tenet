@@ -21,19 +21,29 @@ public final class RefusedBequestRule implements Rule {
           Severity.STRONG,
           2,
           "subtypes honor the contract or the contract is wrong",
-          "Overrides whose entire body is throw new UnsupportedOperationException — "
-              + "implementation evidence that the supertype's contract is too fat.");
+          "Overrides whose entire body is throw new UnsupportedOperationException, excluding "
+              + "the JDK's documented optional operations (Iterator.remove, collection mutators) "
+              + "where refusing is the sanctioned contract.");
 
   @Override
   public RuleDescriptor descriptor() {
     return DESCRIPTOR;
   }
 
+  private static final java.util.Set<String> JDK_OPTIONAL_OPERATIONS =
+      java.util.Set.of(
+          "remove", "add", "set", "put", "addAll", "putAll", "removeAll", "retainAll", "clear",
+          "replace", "removeIf", "sort", "merge", "compute", "computeIfAbsent", "computeIfPresent");
+
   @Override
   public List<Finding> evaluate(Analysis analysis) {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
-      if (method.isOverrideAnnotated() && method.throwsUnsupportedOnly()) {
+      boolean refuses =
+          method.isOverrideAnnotated()
+              && method.throwsUnsupportedOnly()
+              && !JDK_OPTIONAL_OPERATIONS.contains(method.name());
+      if (refuses) {
         findings.add(finding(method));
       }
     }

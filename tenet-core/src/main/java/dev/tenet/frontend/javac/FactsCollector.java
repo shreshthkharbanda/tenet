@@ -278,6 +278,7 @@ final class FactsCollector extends TreePathScanner<Void, Void> {
               disposalOf(caught.disposal()),
               caught.interrupted(),
               caught.reinterrupts(),
+              caught.insideLoop(),
               new SourceRef(fileName, caught.line())));
     }
     for (BodySyntax.RawCheckAct race :

@@ -8,6 +8,7 @@ public record CatchFact(
     Disposal disposal,
     boolean catchesInterrupted,
     boolean reinterrupts,
+    boolean insideLoop,
     SourceRef site) {
 
   public enum Disposal {

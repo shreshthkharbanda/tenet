@@ -25,7 +25,8 @@ public final class EffectLeakRule implements Rule {
           2,
           "functional core, imperative shell",
           "Package effect profiles: in a pure-majority package, the minority method that "
-              + "transitively reaches an effect is flagged with its full call path.");
+              + "transitively reaches I/O is flagged with its full call path. Self-state writes "
+              + "are exempt: iterators and accumulators are stateful by design.");
 
   @Override
   public RuleDescriptor descriptor() {
@@ -38,10 +39,22 @@ public final class EffectLeakRule implements Rule {
     for (PackageProfiles.Profile profile : PackageProfiles.of(analysis).values()) {
       if (!profile.pureMajority()) continue;
       for (MethodFacts leak : profile.impure()) {
+        if (!reachesIo(leak, analysis)) continue;
         finding(profile.packageName(), leak, analysis).ifPresent(findings::add);
       }
     }
     return findings;
+  }
+
+  private boolean reachesIo(MethodFacts leak, Analysis analysis) {
+    List<MethodId> chain = analysis.callGraph().effectChain(leak.id());
+    if (chain.isEmpty()) return false;
+    return analysis
+        .facts()
+        .method(chain.get(chain.size() - 1))
+        .flatMap(MethodFacts::firstProvenEffect)
+        .map(effect -> effect.kind() == dev.tenet.facts.DirectEffect.Kind.IO_CALL)
+        .orElse(false);
   }
 
   private Optional<Finding> finding(String packageName, MethodFacts leak, Analysis analysis) {

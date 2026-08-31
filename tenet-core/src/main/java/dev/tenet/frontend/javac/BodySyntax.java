@@ -192,15 +192,35 @@ final class BodySyntax {
   }
 
   record RawCatch(
-      String typeText, Disposal disposal, boolean interrupted, boolean reinterrupts, long line) {}
+      String typeText,
+      Disposal disposal,
+      boolean interrupted,
+      boolean reinterrupts,
+      boolean insideLoop,
+      long line) {}
 
   static List<RawCatch> catches(MethodTree method, ToLongFunction<Tree> line) {
     List<RawCatch> result = new ArrayList<>();
     new TreeScanner<Void, Void>() {
+      private int loopDepth;
+
+      @Override
+      public Void scan(Tree tree, Void unused) {
+        boolean loops =
+            tree instanceof com.sun.source.tree.ForLoopTree
+                || tree instanceof com.sun.source.tree.EnhancedForLoopTree
+                || tree instanceof com.sun.source.tree.WhileLoopTree
+                || tree instanceof com.sun.source.tree.DoWhileLoopTree;
+        if (loops) loopDepth++;
+        Void ignored = super.scan(tree, unused);
+        if (loops) loopDepth--;
+        return ignored;
+      }
+
       @Override
       public Void visitTry(TryTree tree, Void unused) {
         for (CatchTree caught : tree.getCatches()) {
-          result.add(describeCatch(caught, line));
+          result.add(describeCatch(caught, loopDepth > 0, line));
         }
         return super.visitTry(tree, unused);
       }
@@ -208,7 +228,8 @@ final class BodySyntax {
     return result;
   }
 
-  private static RawCatch describeCatch(CatchTree caught, ToLongFunction<Tree> line) {
+  private static RawCatch describeCatch(
+      CatchTree caught, boolean insideLoop, ToLongFunction<Tree> line) {
     String typeText = caught.getParameter().getType().toString();
     boolean interrupted = typeText.contains("InterruptedException");
     boolean reinterrupts = containsCallNamed(caught.getBlock(), "interrupt");
@@ -217,6 +238,7 @@ final class BodySyntax {
         disposalOf(caught.getBlock()),
         interrupted,
         reinterrupts,
+        insideLoop,
         line.applyAsLong(caught));
   }
 
