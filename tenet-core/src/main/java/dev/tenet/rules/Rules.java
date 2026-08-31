@@ -53,32 +53,20 @@ public final class Rules {
     return List.of(
         new LyingQueryRule(),
         new BooleanFlagParameterRule(),
-        new CommandQueryRule(),
         new GuardClauseRule(config),
-        new ParameterSprawlRule(config),
         new AmbientStaticStateRule(),
         new ParameterMutationRule(),
-        new ReassignmentTheaterRule(),
         new StringlyTypedRule(config),
         new BooleanStateMachineRule(),
         new BagOfNullablesRule(),
-        new SilentNonExhaustiveRule(),
         new TypeLaunderingRule(),
         new SwallowedFailureRule(),
         new DiscardedFutureRule(),
-        new EffectLeakRule(),
         new DuplicateLogicRule(),
         new UnnamedConstantRule(config),
         new SplitBrainClassRule(config),
-        new ScatteredDispatchRule(config),
         new RefusedBequestRule(),
-        new RoommateTypesRule(),
-        new ConcreteReachDownRule(),
-        new PatternCosplayRule(),
         new SequentialIndependentCallsRule(),
-        new CheckThenActRule(),
-        new RetryWithoutPolicyRule(),
-        new CompoundingRetriesRule(),
-        new UnboundedWaitRule());
+        new RetryWithoutPolicyRule());
   }
 }

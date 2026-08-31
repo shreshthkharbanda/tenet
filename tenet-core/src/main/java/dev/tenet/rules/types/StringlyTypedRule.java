@@ -51,6 +51,10 @@ public final class StringlyTypedRule implements Rule {
   public List<Finding> evaluate(Analysis analysis) {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
+      boolean callSitesComplete =
+          method.visibility() == dev.tenet.facts.Visibility.PRIVATE
+              || method.visibility() == dev.tenet.facts.Visibility.PACKAGE_PRIVATE;
+      if (!callSitesComplete) continue;
       for (int i = 0; i < method.params().size(); i++) {
         if (!method.params().get(i).type().qualified().equals("java.lang.String")) continue;
         evaluateParam(method, i, analysis).ifPresent(findings::add);

@@ -19,7 +19,7 @@ public final class ParameterMutationRule implements Rule {
           "TNT-C02",
           "Parameter mutation",
           Dimension.STATE,
-          Severity.PROVEN,
+          Severity.STRONG,
           1,
           "inputs are read-only",
           "A write to a parameter's fields or collection contents in a non-private method; "
@@ -35,6 +35,7 @@ public final class ParameterMutationRule implements Rule {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
       if (!method.visibility().isAtLeastPackage()) continue;
+      if (dev.tenet.rules.support.Names.startsWithCommandVerb(method.name())) continue;
       method.effects().stream()
           .filter(e -> e.kind() == DirectEffect.Kind.PARAM_MUTATION)
           .forEach(effect -> findings.add(finding(method, effect)));

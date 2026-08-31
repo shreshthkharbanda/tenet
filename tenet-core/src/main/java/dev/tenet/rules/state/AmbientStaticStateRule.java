@@ -39,6 +39,7 @@ public final class AmbientStaticStateRule implements Rule {
     Map<FieldId, FieldFacts> mutableStatics = collectMutableStatics(analysis);
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
+      if (method.name().endsWith("ForTesting")) continue;
       for (FieldWrite write : method.staticWrites()) {
         FieldFacts field = mutableStatics.get(write.field());
         if (field != null) {

@@ -40,7 +40,7 @@ public final class SwallowedFailureRule implements Rule {
       for (CatchFact caught : method.catches()) {
         if (interruptMishandled(caught)) {
           findings.add(interruptFinding(method, caught));
-        } else if (caught.swallows() && !isBoundary(method) && !isNotificationIdiom(caught)) {
+        } else if (caught.swallows() && !isBoundary(method) && !isNotificationIdiom(caught) && !isProbeIdiom(caught)) {
           findings.add(swallowFinding(method, caught));
         }
       }
@@ -52,6 +52,25 @@ public final class SwallowedFailureRule implements Rule {
     return caught.catchesInterrupted()
         && !caught.reinterrupts()
         && caught.disposal() != CatchFact.Disposal.RETHROWS;
+  }
+
+  private static final java.util.Set<String> PROBE_EXCEPTIONS =
+      java.util.Set.of(
+          "NoSuchMethodException",
+          "NoSuchFieldException",
+          "ClassNotFoundException",
+          "NumberFormatException",
+          "ParseException",
+          "DateTimeParseException",
+          "URISyntaxException",
+          "MalformedURLException");
+
+  private boolean isProbeIdiom(CatchFact caught) {
+    boolean probeType =
+        PROBE_EXCEPTIONS.stream().anyMatch(name -> caught.caughtType().endsWith(name));
+    return probeType
+        && (caught.disposal() == CatchFact.Disposal.RETURNS_DEFAULT
+            || caught.disposal() == CatchFact.Disposal.EMPTY);
   }
 
   private boolean isNotificationIdiom(CatchFact caught) {

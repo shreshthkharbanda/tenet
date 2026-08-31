@@ -33,4 +33,12 @@ public record Report(List<Finding> findings, Stats stats) {
   public boolean clean() {
     return findings.isEmpty();
   }
+
+  public boolean hasErrors() {
+    return findings.stream().anyMatch(finding -> finding.severity().failsBuild());
+  }
+
+  public long errorCount() {
+    return findings.stream().filter(finding -> finding.severity().failsBuild()).count();
+  }
 }

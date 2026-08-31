@@ -12,18 +12,19 @@ import dev.tenet.rules.Rule;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class TypeLaunderingRule implements Rule {
+public final class UncheckedSuppressRule implements Rule {
 
   private static final RuleDescriptor DESCRIPTOR =
       new RuleDescriptor(
-          "TNT-D05",
-          "Type-system laundering",
+          "TNT-D06",
+          "Unchecked suppression",
           Dimension.TYPES,
-          Severity.PROVEN,
+          Severity.ADVISORY,
           1,
-          "the compiler stays hired",
-          "Raw-type uses recorded at extraction. Unchecked suppressions are the sanctioned "
-              + "escape hatch and live in the defensive profile (TNT-D06).");
+          "defensive doctrine: every unchecked suppression deserves a second look",
+          "@SuppressWarnings(\"unchecked\") sites. The suppression is the JDK's sanctioned "
+              + "escape hatch for generic internals, so this lives in the defensive profile, "
+              + "not the default.");
 
   @Override
   public RuleDescriptor descriptor() {
@@ -35,7 +36,7 @@ public final class TypeLaunderingRule implements Rule {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
       for (UncheckedUse use : method.uncheckedUses()) {
-        if (use.kind() == UncheckedUse.Kind.RAW_TYPE) {
+        if (use.kind() == UncheckedUse.Kind.SUPPRESS_UNCHECKED) {
           findings.add(finding(method, use));
         }
       }
@@ -44,22 +45,13 @@ public final class TypeLaunderingRule implements Rule {
   }
 
   private Finding finding(MethodFacts method, UncheckedUse use) {
-    String label =
-        switch (use.kind()) {
-          case RAW_TYPE -> "Raw type " + use.display();
-          case SUPPRESS_UNCHECKED -> "@SuppressWarnings(\"unchecked\")";
-        };
-    return Finding.builder(DESCRIPTOR.id(), label + " in " + method.id().display())
+    return Finding.builder(DESCRIPTOR.id(), "Unchecked suppression in " + method.id().display())
         .dimension(DESCRIPTOR.dimension())
         .severity(DESCRIPTOR.severity())
         .at(use.site())
         .witness("use", use.display())
-        .suggestion(
-            switch (use.kind()) {
-              case RAW_TYPE -> "parameterize the type; raw types erase every guarantee generics bought";
-              case SUPPRESS_UNCHECKED -> "confine the cast behind a checked helper, or restructure to avoid it";
-            })
-        .certificate(new Certificate.Syntactic(label, use.site()))
+        .suggestion("confine the cast behind a checked helper if the shape allows it")
+        .certificate(new Certificate.Syntactic("unchecked suppression", use.site()))
         .build();
   }
 }

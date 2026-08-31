@@ -37,16 +37,16 @@ class TenetConfigTest {
   @Test
   void propertiesOverrideAThreshold() {
     Properties properties = new Properties();
-    properties.setProperty("rules.TNT-B04.maxParams", "9");
+    properties.setProperty("rules.TNT-B03.maxNesting", "9");
     TenetConfig config = TenetConfig.fromProperties(properties);
 
-    assertEquals(9, config.intParam("TNT-B04", "maxParams", 4));
+    assertEquals(9, config.intParam("TNT-B03", "maxNesting", 3));
     Rule sprawl =
         Rules.all(config).stream()
-            .filter(rule -> rule.descriptor().id().equals("TNT-B04"))
+            .filter(rule -> rule.descriptor().id().equals("TNT-B03"))
             .findFirst()
             .orElseThrow();
-    assertTrue(sprawl.descriptor().mechanism().contains("More than 9"));
+    assertTrue(sprawl.descriptor().mechanism().contains("beyond 9"));
   }
 
   @Test

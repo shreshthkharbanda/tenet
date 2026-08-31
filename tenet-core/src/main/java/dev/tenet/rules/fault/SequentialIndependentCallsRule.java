@@ -19,7 +19,7 @@ public final class SequentialIndependentCallsRule implements Rule {
           "TNT-H01",
           "Sequential independent calls",
           Dimension.FAULT,
-          Severity.PROVEN,
+          Severity.STRONG,
           1,
           "independent work runs concurrently",
           "Def-use analysis proves the second blocking call reads nothing the first defines "
@@ -35,10 +35,18 @@ public final class SequentialIndependentCallsRule implements Rule {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
       for (IndependentBlockingPair pair : method.independentBlockingPairs()) {
-        findings.add(finding(method, pair));
+        if (readShaped(pair.firstCall()) && readShaped(pair.secondCall())) {
+          findings.add(finding(method, pair));
+        }
       }
     }
     return findings;
+  }
+
+  private boolean readShaped(String callText) {
+    int lastDot = callText.lastIndexOf('.');
+    String name = lastDot < 0 ? callText : callText.substring(lastDot + 1);
+    return dev.tenet.rules.support.Names.startsWithQueryVerb(name);
   }
 
   private Finding finding(MethodFacts method, IndependentBlockingPair pair) {

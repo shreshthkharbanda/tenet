@@ -42,12 +42,28 @@ public final class RefusedBequestRule implements Rule {
       boolean refuses =
           method.isOverrideAnnotated()
               && method.throwsUnsupportedOnly()
-              && !JDK_OPTIONAL_OPERATIONS.contains(method.name());
+              && !JDK_OPTIONAL_OPERATIONS.contains(method.name())
+              && contractOwnedInRepo(method, analysis);
       if (refuses) {
         findings.add(finding(method));
       }
     }
     return findings;
+  }
+
+  private boolean contractOwnedInRepo(MethodFacts method, Analysis analysis) {
+    return analysis
+        .facts()
+        .classOf(method.id().owner())
+        .map(
+            cls -> {
+              boolean superInRepo =
+                  cls.superType().map(analysis.facts()::isRepoType).orElse(false);
+              boolean interfaceInRepo =
+                  cls.interfaces().stream().anyMatch(analysis.facts()::isRepoType);
+              return superInRepo || interfaceInRepo;
+            })
+        .orElse(false);
   }
 
   private Finding finding(MethodFacts method) {

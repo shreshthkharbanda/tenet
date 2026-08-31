@@ -26,7 +26,7 @@ public final class GuardClauseRule implements Rule {
             ID,
             "Guard-clause inversion",
             Dimension.SHAPE,
-            Severity.PROVEN,
+            Severity.STRONG,
             1,
             "edge cases exit early; the happy path reads straight down",
             "Nesting depth beyond "

@@ -23,7 +23,7 @@ public final class BooleanStateMachineRule implements Rule {
           "TNT-D02",
           "Boolean state machine",
           Dimension.TYPES,
-          Severity.STRONG,
+          Severity.PROVEN,
           2,
           "illegal states are unrepresentable",
           "Construction/assignment-site analysis: every writer rewrites the whole flag group "

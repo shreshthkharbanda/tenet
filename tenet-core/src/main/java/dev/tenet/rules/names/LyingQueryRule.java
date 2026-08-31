@@ -25,7 +25,7 @@ public final class LyingQueryRule implements Rule {
           Severity.STRONG,
           1,
           "a name is a contract; the code must honor it",
-          "Cross-checks verb classification of the name against the transitive effect graph; "
+          "Cross-checks the JavaBeans accessor verbs (get, is, has) against the effect graph; "
               + "flags only when the proven terminal effect changes state or writes to the world. "
               + "Queries that read the world are the point of many libraries and are not lies. "
               + "Queries sharing one terminal effect report once, as a shared root cause.");
@@ -54,12 +54,16 @@ public final class LyingQueryRule implements Rule {
     return findings;
   }
 
+  private static final java.util.Set<String> CORE_QUERY_VERBS =
+      java.util.Set.of("get", "is", "has");
+
   private boolean looksLikeQuery(MethodFacts method) {
     return !method.isConstructor()
         && method.returnsValue()
         && !method.returnsThis()
         && method.visibility().isAtLeastPackage()
-        && Names.startsWithQueryVerb(method.name());
+        && CORE_QUERY_VERBS.contains(
+            Names.verbPrefix(method.name()).toLowerCase(java.util.Locale.ROOT));
   }
 
   private boolean terminalIsWriteShaped(List<MethodId> chain, Analysis analysis) {

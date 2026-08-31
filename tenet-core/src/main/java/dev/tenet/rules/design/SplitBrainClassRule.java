@@ -87,7 +87,23 @@ public final class SplitBrainClassRule implements Rule {
         }
       }
     }
-    return unionFind.components();
+    return withoutObligationIslands(unionFind.components(), cls, methods);
+  }
+
+  private List<Set<String>> withoutObligationIslands(
+      List<Set<String>> components, ClassFacts cls, List<MethodFacts> methods) {
+    Set<String> fieldNames = new java.util.TreeSet<>();
+    cls.instanceFields().forEach(f -> fieldNames.add(f.id().name()));
+    Set<String> overrideNames = new java.util.TreeSet<>();
+    methods.stream().filter(MethodFacts::isOverrideAnnotated).forEach(m -> overrideNames.add(m.name()));
+    List<Set<String>> kept = new ArrayList<>();
+    for (Set<String> component : components) {
+      boolean obligationOnly =
+          component.stream().noneMatch(fieldNames::contains)
+              && component.stream().allMatch(overrideNames::contains);
+      if (!obligationOnly) kept.add(component);
+    }
+    return kept.size() >= 2 ? List.copyOf(kept) : List.of();
   }
 
   private boolean isGraphNode(MethodId callee, Analysis analysis) {

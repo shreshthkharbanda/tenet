@@ -99,7 +99,15 @@ public final class ConsoleRenderer implements ReportRenderer {
   }
 
   private void appendSummary(StringBuilder out, Report report) {
-    out.append(paint(BOLD, "Summary: ")).append(report.findings().size()).append(" findings");
+    long errors = report.errorCount();
+    long warnings = report.findings().size() - errors;
+    out.append(paint(BOLD, "Summary: "))
+        .append(report.findings().size())
+        .append(" findings (")
+        .append(errors)
+        .append(" errors, ")
+        .append(warnings)
+        .append(" warnings/suggestions)");
     if (report.stats().rejectedCandidates() > 0) {
       out.append(" · ")
           .append(report.stats().rejectedCandidates())
@@ -115,11 +123,7 @@ public final class ConsoleRenderer implements ReportRenderer {
   }
 
   private String severityLabel(Severity severity) {
-    return switch (severity) {
-      case PROVEN -> "PROVEN  ";
-      case STRONG -> "STRONG  ";
-      case ADVISORY -> "ADVISORY";
-    };
+    return String.format(java.util.Locale.ROOT, "%-7s", severity.label());
   }
 
   private String severityColor(Severity severity) {

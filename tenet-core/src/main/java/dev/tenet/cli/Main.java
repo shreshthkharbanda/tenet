@@ -146,6 +146,12 @@ public final class Main {
     private boolean noBaseline;
 
     @Option(
+        names = "--fail-on",
+        defaultValue = "error",
+        description = "When to exit nonzero: error (default, theorem-tier only), any, or none.")
+    private String failOn;
+
+    @Option(
         names = "--changed",
         paramLabel = "BASE",
         arity = "0..1",
@@ -163,7 +169,11 @@ public final class Main {
         report = resolveBaseline().apply(report);
       }
       System.out.print(rendererFor(format).render(report));
-      return report.clean() ? 0 : 1;
+      return switch (failOn.toLowerCase(Locale.ROOT)) {
+        case "any" -> report.clean() ? 0 : 1;
+        case "none" -> 0;
+        default -> report.hasErrors() ? 1 : 0;
+      };
     }
 
     private Baseline resolveBaseline() throws IOException {

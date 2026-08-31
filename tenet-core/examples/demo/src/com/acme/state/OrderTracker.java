@@ -30,7 +30,7 @@ public final class OrderTracker {
     updatedAt = at;
   }
 
-    public void transition(String phase, int attempt) {
+    void transition(String phase, int attempt) {
     if (phase.equals("LOADING")) markLoading();
     if (phase.equals("FAILED")) markFailed("attempt " + attempt);
     if (phase.equals("COMPLETE")) markComplete(attempt);

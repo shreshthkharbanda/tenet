@@ -19,7 +19,7 @@ public final class DiscardedFutureRule implements Rule {
           "TNT-E02",
           "Discarded future",
           Dimension.EFFECTS,
-          Severity.PROVEN,
+          Severity.STRONG,
           1,
           "every async failure has an owner",
           "An expression statement discarding a returned Future/CompletableFuture with no "

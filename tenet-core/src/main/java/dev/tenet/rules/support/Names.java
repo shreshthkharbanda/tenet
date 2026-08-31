@@ -8,7 +8,7 @@ public final class Names {
   private static final Set<String> QUERY_VERBS =
       Set.of(
           "get", "is", "has", "find", "fetch", "load", "lookup", "peek", "query", "count",
-          "compute", "list");
+          "compute", "list", "read");
 
   private static final Set<String> COMMAND_VERBS =
       Set.of(

@@ -35,6 +35,7 @@ public final class RetryWithoutPolicyRule implements Rule {
     List<Finding> findings = new ArrayList<>();
     for (MethodFacts method : analysis.facts().methods().values()) {
       for (RetryScope scope : method.retryScopes()) {
+        if (!retriesRealWork(scope)) continue;
         List<String> missing = scope.missingPolicyFacts();
         if (!missing.isEmpty()) {
           findings.add(finding(method, scope, missing));
@@ -42,6 +43,16 @@ public final class RetryWithoutPolicyRule implements Rule {
       }
     }
     return findings;
+  }
+
+  private boolean retriesRealWork(RetryScope scope) {
+    boolean externalWork =
+        scope.externalCallsInTry().stream()
+            .anyMatch(
+                call ->
+                    !(call.owner().qualified().equals("java.lang.Thread")
+                        && call.method().equals("sleep")));
+    return externalWork || !scope.inRepoCallsInTry().isEmpty();
   }
 
   private Finding finding(MethodFacts method, RetryScope scope, List<String> missing) {

@@ -48,7 +48,11 @@ public final class BagOfNullablesRule implements Rule {
   private Optional<DisjointPair> disjointPair(ClassFacts cls, Analysis analysis) {
     List<MethodFacts> ctors = new ArrayList<>();
     for (var id : cls.constructors()) {
-      analysis.facts().method(id).ifPresent(ctors::add);
+      analysis
+          .facts()
+          .method(id)
+          .filter(ctor -> !delegates(ctor, cls))
+          .ifPresent(ctors::add);
     }
     for (int i = 0; i < ctors.size(); i++) {
       for (int j = i + 1; j < ctors.size(); j++) {
@@ -61,6 +65,11 @@ public final class BagOfNullablesRule implements Rule {
       }
     }
     return Optional.empty();
+  }
+
+  private boolean delegates(MethodFacts ctor, ClassFacts cls) {
+    return ctor.callees().stream()
+        .anyMatch(c -> c.owner().equals(cls.name()) && c.name().equals("<init>"));
   }
 
   private boolean disjoint(Set<String> first, Set<String> second) {

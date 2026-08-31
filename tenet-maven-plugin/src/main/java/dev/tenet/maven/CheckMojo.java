@@ -56,9 +56,9 @@ public final class CheckMojo extends AbstractMojo {
     }
     Report report = run(sourceRoots);
     getLog().info(System.lineSeparator() + new ConsoleRenderer(false).render(report));
-    if (!report.clean() && failOnFindings) {
+    if (report.hasErrors() && failOnFindings) {
       throw new MojoFailureException(
-          "Tenet found " + report.findings().size() + " issue(s); see the report above");
+          "Tenet found " + report.errorCount() + " error(s); see the report above");
     }
   }
 

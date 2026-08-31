@@ -5,8 +5,21 @@ import dev.tenet.rules.doctrine.ClassitisRule;
 import dev.tenet.rules.doctrine.DeepModulesRule;
 import dev.tenet.rules.doctrine.ShortMethodsRule;
 import dev.tenet.rules.doctrine.SmallClassesRule;
+import dev.tenet.rules.design.ConcreteReachDownRule;
+import dev.tenet.rules.design.PatternCosplayRule;
+import dev.tenet.rules.design.RoommateTypesRule;
+import dev.tenet.rules.design.ScatteredDispatchRule;
+import dev.tenet.rules.effects.EffectLeakRule;
+import dev.tenet.rules.fault.CheckThenActRule;
+import dev.tenet.rules.fault.CompoundingRetriesRule;
 import dev.tenet.rules.fault.RetriedNonIdempotentRule;
 import dev.tenet.rules.fault.UnboundedFanOutRule;
+import dev.tenet.rules.fault.UnboundedWaitRule;
+import dev.tenet.rules.shape.CommandQueryRule;
+import dev.tenet.rules.shape.ParameterSprawlRule;
+import dev.tenet.rules.state.ReassignmentTheaterRule;
+import dev.tenet.rules.types.SilentNonExhaustiveRule;
+import dev.tenet.rules.types.UncheckedSuppressRule;
 import dev.tenet.rules.names.BooleanPredicateRule;
 import dev.tenet.rules.names.VagueIdentifierRule;
 import dev.tenet.rules.names.VocabularyDriftRule;
@@ -25,10 +38,13 @@ public final class Profiles {
 
   private static final Map<String, Set<String>> DOCTRINE_RULES =
       Map.of(
-          CLEAN_CODE, Set.of("TNT-CC01", "TNT-CC02"),
+          CLEAN_CODE, Set.of("TNT-CC01", "TNT-CC02", "TNT-B04", "TNT-C03", "TNT-G02"),
           DEEP_MODULES, Set.of("TNT-DM01", "TNT-DM02"),
-          CONVENTIONS, Set.of("TNT-A02", "TNT-A03", "TNT-A04"),
-          DEFENSIVE, Set.of("TNT-H03", "TNT-H06"));
+          CONVENTIONS, Set.of("TNT-A02", "TNT-A03", "TNT-A04", "TNT-B02", "TNT-G05", "TNT-G06"),
+          DEFENSIVE,
+              Set.of(
+                  "TNT-H03", "TNT-H06", "TNT-D04", "TNT-D06", "TNT-E03", "TNT-G04", "TNT-H02",
+                  "TNT-H05", "TNT-H07"));
 
   private static final Map<String, String> CONFLICTS =
       Map.of(
@@ -83,7 +99,20 @@ public final class Profiles {
         new VagueIdentifierRule(),
         new VocabularyDriftRule(),
         new UnboundedFanOutRule(),
-        new RetriedNonIdempotentRule());
+        new RetriedNonIdempotentRule(),
+        new CommandQueryRule(),
+        new ParameterSprawlRule(config),
+        new ReassignmentTheaterRule(),
+        new SilentNonExhaustiveRule(),
+        new UncheckedSuppressRule(),
+        new EffectLeakRule(),
+        new ScatteredDispatchRule(config),
+        new ConcreteReachDownRule(),
+        new PatternCosplayRule(),
+        new RoommateTypesRule(),
+        new CheckThenActRule(),
+        new CompoundingRetriesRule(),
+        new UnboundedWaitRule());
   }
 
   private static void rejectConflicts(List<Rule> selected) {

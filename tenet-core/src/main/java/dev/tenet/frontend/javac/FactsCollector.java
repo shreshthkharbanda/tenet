@@ -522,7 +522,15 @@ final class FactsCollector extends TreePathScanner<Void, Void> {
         parent instanceof ExpressionStatementTree
             && ids.erasedQName(callee.getReturnType()).contains("Future");
     if (discarded) {
-      boolean handled = Set.of("whenComplete", "exceptionally", "handle").contains(name);
+      boolean handled =
+          Set.of(
+                  "whenComplete",
+                  "whenCompleteAsync",
+                  "exceptionally",
+                  "exceptionallyAsync",
+                  "handle",
+                  "handleAsync")
+              .contains(name);
       context.builder.addDiscardedFuture(new DiscardedFuture(callText(tree), handled, site));
     }
   }

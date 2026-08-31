@@ -92,13 +92,15 @@ Some quality questions have no consensus answer. Clean Code says extract until m
 Tenet does not pretend to settle this. The default `consensus` profile contains only rules both schools accept. The contested positions are available as opt-in profiles, and enabling rules from opposing schools in one config is an error, not a merge:
 
 ```properties
-profile=clean-code      # adds TNT-CC01 (method too long), TNT-CC02 (class too large)
-profile=deep-modules    # adds TNT-DM01 (shallow module), TNT-DM02 (classitis)
-profile=conventions     # naming rules: boolean predicates, vague names, vocabulary drift
-profile=defensive       # extra-caution ops rules: unbounded fan-out, retried sends
+profile=clean-code      # small methods and classes, parameter limits, centralized dispatch
+profile=deep-modules    # fewer, deeper modules; flags thin wrappers and fragmented packages
+profile=conventions     # naming and structure conventions: predicates, vocabulary, one type per file
+profile=defensive       # extra-caution rules: races, unbounded waits, layered retries, partial switches
 ```
 
-Profiles combine (`profile=conventions,clean-code`) and opposing schools still reject. The default profile holds only rules whose findings are proven facts with universal judgments; anything resting on a convention or a threshold lives behind an explicit opt-in.
+Profiles combine (`profile=conventions,clean-code`) and opposing schools still reject.
+
+Findings carry three severities with different consequences. ERROR marks a violation of an exceptionless theorem and fails the build. WARN marks a strong default that admits rare, legitimate exceptions; it reports without failing (suppress the exception where it lives, or gate on warnings too with `--fail-on any`). SUGGEST is advice from an opt-in profile. The standard behind the split: a rule that needs an exemption list is a strong default, not a theorem, so it may warn but never break your build.
 
 Doctrine rules are ADVISORY and fully tunable (`rules.TNT-CC01.maxStatements=15`). A single doctrine rule can also be opted into the consensus profile with `rules.TNT-DM01.enabled=true`. The foundations stay objective: whichever school you pick, every finding still rests on extracted evidence, and the verifier still checks it.
 
