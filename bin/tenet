@@ -2,9 +2,9 @@
 # Tenet CLI launcher. Builds once if the jar is missing, then delegates.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-JAR="$ROOT/target/tenet.jar"
+JAR="$ROOT/tenet-core/target/tenet.jar"
 if [[ ! -f "$JAR" ]]; then
   echo "tenet: building (first run)..." >&2
-  (cd "$ROOT" && mvn -q -DskipTests package)
+  (cd "$ROOT" && mvn -q -DskipTests -pl tenet-core package)
 fi
 exec java -jar "$JAR" "$@"
