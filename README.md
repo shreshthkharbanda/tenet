@@ -1,114 +1,79 @@
 # Tenet
 
-**The deterministic evidence engine for Java code quality.**
+Tenet is a static analyzer for Java that finds the problems a principal engineer finds in code review: methods whose names lie about their side effects, types that allow illegal states, retry layers that multiply into thundering herds, the same business logic pasted into four files. Every finding ships with machine-checked evidence. If Tenet cannot prove a claim from your code, it stays quiet.
 
-Tenet finds the defects only a principal engineer's review finds today — names that lie
-about effects, types that permit illegal states, retry layers that multiply, duplicated
-business logic, classes that are two classes — and proves every finding with a
-machine-checkable certificate before it is allowed to reach you.
+Try it in under two minutes:
 
-No LLM in the trusted path. No configuration. No scores. Only evidence.
+```bash
+git clone https://github.com/shreshthkharbanda/tenet && cd tenet
+./bin/tenet check examples/demo
+```
+
+The first run builds the jar (needs JDK 21+ and Maven), then prints findings from a demo project seeded with 28 kinds of planted defects. Each finding shows the rule, the file and line, the evidence, and a suggested fix:
 
 ```
 TNT-H05  PROVEN  resilientRead() retries around callUntilItWorks(), which also retries
-         src/com/acme/client/RetryingClient.java:43
+         examples/demo/src/com/acme/client/RetryingClient.java:43
          callPath: RetryingClient#resilientRead -> RetryingClient#callUntilItWorks
          attemptProduct: attempts multiply across the layers (m x n)
          -> retry at exactly one layer; remove the outer loop or the inner policy
 ```
 
-## Quickstart
+## Using it
 
-Requires a JDK (21+) and Maven.
-
-```bash
-./bin/tenet check examples/demo        # see 43 findings on the seeded demo
-./bin/tenet check path/to/your/src     # analyze your code
-./bin/tenet check src --format json    # agent- and CI-consumable output
-./bin/tenet rules                      # the catalog
-./bin/tenet explain TNT-H05            # one rule: principle, mechanism, precision
-```
-
-Exit code `0` means clean, `1` means findings, so `tenet check` drops straight into CI.
-Pass `--classpath dep.jar:dep2.jar` for dependencies; without it, unresolvable calls
-degrade to UNKNOWN honestly instead of guessing.
-
-### As an agent hook
-
-Tenet is built to sit inside a coding agent's loop. In Claude Code, add a hook that runs
-`tenet check --format json` on changed modules after edits; the JSON findings — each with
-a witness and a suggestion — are structured repair instructions, not lint prose.
-
-## What it checks
-
-Thirty-three rules across eight dimensions of how senior engineers write:
-
-| | Dimension | Flagship rules |
-|---|---|---|
-| A | Names tell the truth | Lying query (name vs. proven effect path), vocabulary drift |
-| B | Methods do one thing | Boolean flag parameters, command-query violations, guard clauses |
-| C | State is minimized | Ambient static state, parameter mutation |
-| D | Types tell the truth | String-that-wants-to-be-an-enum (call-site evidence), boolean state machines (mutual exclusion proven), silent non-exhaustive switches |
-| E | Effects live at boundaries | Swallowed failures, discarded futures, effect leaks into pure packages |
-| F | One fact, one place | Duplicate logic (normalized-AST hashing), unnamed shared constants |
-| G | Design at scale | Split-brain classes (LCOM4), scattered dispatch, refused bequest, pattern cosplay |
-| H | Concurrency & fault tolerance | Compounding retries (call graph), sequential independent calls (def-use proof), check-then-act races, unbounded waits |
-
-`tenet rules` lists them all; `tenet explain <id>` gives each rule's principle,
-mechanism, and precision class (`PROVEN` ~0% false positives, `STRONG` <1%,
-`ADVISORY` corpus-tuned).
-
-## How it works
-
-```
-javac frontend  ->  ProgramFacts  ->  33 searchers  ->  certificate kernel  ->  findings
-  (adapter)        (immutable,        (untrusted        (small, trusted:       (only what
-                 compiler-free)        rules)          re-verifies every        verified)
-                                                          certificate)
-```
-
-- **Certificate architecture (the de Bruijn criterion).** Rules are untrusted searchers;
-  every candidate finding carries a certificate — an effect path, a call-site set, a
-  cohesion partition, a reachability chain — that a small trusted kernel re-derives from
-  the fact store before emission. A buggy rule can only miss, never lie.
-- **Evidence over syntax.** The flagship rules need whole-program facts no single-file
-  linter has: a transitive effect graph, repo-wide call-site and construction-site
-  indexes, normalized body hashing, an in-repo call graph.
-- **Deterministic.** Same sources, same version, byte-identical output. Sorted
-  everything, no clocks, no randomness, no network.
-- **Honest.** "Found" is a proof about your program. "Found nothing" is a statement
-  about the search — Tenet never claims absence, and unresolvable code degrades to
-  UNKNOWN instead of a guess.
-
-## The codebase holds its own bar
-
-`DogfoodTest` runs Tenet against Tenet's own sources and fails the build on any finding.
-`ArchitectureTest` enforces the hexagonal boundary mechanically: only
-`dev.tenet.frontend.javac` may import a compiler API, and the domain never depends on an
-adapter. Several rules were sharpened by their own findings against this repo — the
-check-then-act race the H02 rule found in the call-graph walker is fixed with the exact
-`putIfAbsent` its suggestion names.
-
-```
-src/main/java/dev/tenet/
-  model/      findings, severity, rule metadata          (pure domain)
-  facts/      immutable program facts — compiler-free    (pure domain)
-  analysis/   purity fixpoint, call graph                (pure domain)
-  kernel/     certificates + the trusted verifier        (pure domain)
-  rules/      33 searchers, one file per rule            (pure domain)
-  engine/     ports + the application service            (pure domain)
-  frontend/   the javac adapter — the only compiler code (adapter)
-  report/     console + json renderers                   (adapter)
-  cli/        picocli entry point                        (adapter)
-```
-
-## Development
+Point `check` at any source root. Analysis of a 250-file repo takes one to three seconds.
 
 ```bash
-mvn test        # unit + kernel + architecture + demo fixtures + dogfood
-mvn package     # builds target/tenet.jar (used by bin/tenet)
+./bin/tenet check path/to/src                  # human-readable report
+./bin/tenet check path/to/src --format json    # for CI and coding agents
+./bin/tenet check src --classpath a.jar:b.jar  # resolve your dependencies
+./bin/tenet rules                              # list all 34 rules
+./bin/tenet explain TNT-A01                    # one rule in depth
 ```
 
-Tests must stay green in this order of importance: dogfood (Tenet clean on itself),
-demo fixtures (every seeded violation found, zero kernel rejections), architecture
-(the dependency rule), kernel (well-formed lies rejected).
+Exit code 0 means clean, 1 means findings, so `tenet check` drops into CI as-is. Without a classpath, calls into unresolved dependencies degrade to "unknown" and the affected rules skip rather than guess.
+
+Every rule can be turned off or tuned. Put a `tenet.properties` at the root of the repo you are analyzing:
+
+```properties
+rules.TNT-A03.enabled=false
+rules.TNT-B04.maxParams=5
+```
+
+Or override per run with `--disable TNT-A03,TNT-F02` or `--only TNT-H05`. The defaults are deliberately opinionated; the config file is the escape hatch, not the starting point.
+
+Findings are grouped into eight dimensions, A through H: names that tell the truth, methods that do one thing, minimized state, types that make illegal states unrepresentable, failures handled at boundaries, one fact in one place, design at scale (SOLID, measured), and concurrency and fault tolerance. Severity is a precision class, not a guess about impact: PROVEN rules are mechanically decidable, STRONG rules are evidence-gated heuristics, ADVISORY rules need judgment. `tenet explain` shows the exact mechanism behind any rule.
+
+One thing Tenet will not tell you: whether a true finding is worth fixing. A raced HashMap that only misbehaves during warmup and a raced listener registry in a class built for concurrent use produce the same rule ID with very different urgency. The witness gives you the facts; the judgment call stays yours.
+
+## Learning from it
+
+The interesting idea in this codebase is the trust model. Rules are untrusted searchers. A rule cannot emit a finding directly; it proposes a candidate along with a certificate, which is a small structured proof: a call chain ending in a side effect, the complete set of call sites for a parameter, a partition of a class into disconnected components. A separate kernel re-derives every certificate from the extracted program facts before anything reaches the report. A buggy rule can miss things, but it cannot lie to you. Proof assistants like Coq work this way; linters generally do not.
+
+A reading order that follows the data:
+
+1. `dev.tenet.facts` holds the immutable model of an analyzed program. No compiler types appear here, which is what will let other language frontends plug in later.
+2. `dev.tenet.analysis` derives purity and reachability. `PurityAnalyzer` runs a two-phase fixpoint: effects that escape an object (I/O, static writes, parameter mutation) propagate through the whole call graph, while writes to an object's own fields propagate only along same-class call chains. That second phase exists because an earlier version flagged every method that used a locally built builder.
+3. `dev.tenet.kernel` is the trusted core: a sealed `Certificate` interface and a `Kernel` that verifies each variant with an exhaustive switch. It is deliberately small. This is where the guarantee lives, so this is where the testing budget goes.
+4. `dev.tenet.rules` has one file per rule, grouped by dimension. `LyingQueryRule` and `CompoundingRetriesRule` are good first reads: each is under a hundred lines because the facts layer already did the hard work.
+5. `dev.tenet.frontend.javac` is the only package allowed to import compiler APIs. It runs javac to full attribution, then reduces the typed AST into facts. `ArchitectureTest` fails the build if compiler imports leak anywhere else.
+
+Two tests are worth reading on their own. `DogfoodTest` runs Tenet against Tenet's own sources and fails on any finding, so the analyzer is held to its own standard on every build. It has caught real bugs here: a check-then-act race in the call-graph walker, and a parameter-mutating fixpoint that poisoned the purity results (twice, embarrassingly). `KernelTest` feeds the kernel well-formed lies, such as effect paths through methods that do not exist, and asserts they are rejected.
+
+Known limits, so you do not have to discover them: analysis is source-only (no bytecode bodies for dependencies), reflection and dynamic dispatch widen results to "unknown" rather than being resolved, and "no findings" means the searchers found nothing, which is a weaker statement than "nothing is wrong."
+
+## Contributing
+
+The fastest useful contribution is adjudication: run Tenet on a Java repo you know well and report findings that are wrong or noisy, with the file and line. Four false-positive classes have already been found and fixed this way, and each one made a rule permanently sharper.
+
+To add or change a rule:
+
+1. Write the rule as a single class in `dev.tenet.rules.<dimension>`, implementing `Rule`. Look at a neighbor in the same package for the shape.
+2. Give every finding a certificate the kernel can verify. If no existing `Certificate` variant fits, extending the kernel is part of the change, and the hard part.
+3. Plant a positive case in `examples/demo` and add your rule ID to `DemoFindingsTest`. The test also asserts the kernel rejects nothing, so an unverifiable certificate fails loudly.
+4. Register the rule in `Rules.java`. If it has thresholds, read them from `TenetConfig` so users can tune them.
+5. Run `mvn test`. All five suites must pass, including dogfood. If your rule flags Tenet's own code, either the code gets fixed or the rule gets an exemption you can defend in the PR.
+
+House rules: one top-level type per file, no comments (the code has to carry the explanation; if it cannot, rename until it can), no wildcard imports, and hexagonal boundaries enforced by `ArchitectureTest`. Tenet enforces most of this on itself, which makes review arguments short.
+
+Current backlog, roughly in order of value: exempt interface-obligation methods from the cohesion and refused-bequest rules, record field initializer types so a `ConcurrentHashMap` behind a `Map`-typed field stops flagging as unsafe ambient state, and investigate the 19 certificate rejections that show up when scanning Apache Commons Lang. Open an issue before starting anything large.
