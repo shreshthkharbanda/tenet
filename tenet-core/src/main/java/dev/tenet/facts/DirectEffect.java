@@ -34,6 +34,19 @@ public record DirectEffect(Kind kind, String description, SourceRef site) {
     };
   }
 
+  public boolean writeShaped(java.util.function.Predicate<String> readsAsQuery) {
+    return switch (kind) {
+      case WRITE_INSTANCE, WRITE_STATIC, PARAM_MUTATION -> true;
+      case IO_CALL -> !readsAsQuery.test(calleeName());
+      case LOG_CALL, UNKNOWN_EXTERNAL -> false;
+    };
+  }
+
+  private String calleeName() {
+    int lastDot = description.lastIndexOf('.');
+    return lastDot < 0 ? description : description.substring(lastDot + 1);
+  }
+
   public String describe() {
     return switch (kind) {
       case WRITE_INSTANCE -> "writes field " + description + " [STATE]";
