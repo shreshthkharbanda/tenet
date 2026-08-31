@@ -1,6 +1,6 @@
 # Tenet
 
-Tenet is a static analyzer for Java. It checks what single-file linters cannot see, because its 34 rules read the whole program: a method named `getBalance()` that provably writes to the database, a `String` parameter that only ever receives the same four literals and wants to be an enum, a retry loop wrapped around a client that already retries, the same predicate pasted into four files, a class whose fields and methods split into two disconnected halves.
+Tenet is a static analyzer for Java. It checks what single-file linters cannot see, because its rules read the whole program: a method named `getBalance()` that provably writes to the database, a `String` parameter that only ever receives the same four literals and wants to be an enum, a retry loop wrapped around a client that already retries, the same predicate pasted into four files, a class whose fields and methods split into two disconnected halves.
 
 The premise: most of what makes code hard to own is checkable, if you check evidence across the program (call sites, effect paths, construction sites) instead of patterns in one file. The goal: a gate that fails only on what it can prove. Every finding carries the evidence it was derived from, and a verifier re-checks that evidence before the finding is reported. If Tenet cannot prove a claim from your code, it stays quiet.
 
@@ -29,7 +29,7 @@ Point `check` at any source root. Analysis of a 250-file repo takes one to three
 ./bin/tenet check path/to/src                  # human-readable report
 ./bin/tenet check path/to/src --format json    # for coding agents and scripts
 ./bin/tenet check path/to/src --format sarif   # for GitHub code scanning
-./bin/tenet rules                              # list all 34 rules
+./bin/tenet rules                              # list the rule catalog
 ./bin/tenet explain TNT-A01                    # one rule in depth
 ```
 
@@ -94,7 +94,11 @@ Tenet does not pretend to settle this. The default `consensus` profile contains 
 ```properties
 profile=clean-code      # adds TNT-CC01 (method too long), TNT-CC02 (class too large)
 profile=deep-modules    # adds TNT-DM01 (shallow module), TNT-DM02 (classitis)
+profile=conventions     # naming rules: boolean predicates, vague names, vocabulary drift
+profile=defensive       # extra-caution ops rules: unbounded fan-out, retried sends
 ```
+
+Profiles combine (`profile=conventions,clean-code`) and opposing schools still reject. The default profile holds only rules whose findings are proven facts with universal judgments; anything resting on a convention or a threshold lives behind an explicit opt-in.
 
 Doctrine rules are ADVISORY and fully tunable (`rules.TNT-CC01.maxStatements=15`). A single doctrine rule can also be opted into the consensus profile with `rules.TNT-DM01.enabled=true`. The foundations stay objective: whichever school you pick, every finding still rests on extracted evidence, and the verifier still checks it.
 
