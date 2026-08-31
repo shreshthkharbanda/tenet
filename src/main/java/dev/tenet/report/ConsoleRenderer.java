@@ -105,6 +105,12 @@ public final class ConsoleRenderer implements ReportRenderer {
           .append(report.stats().rejectedCandidates())
           .append(" candidates rejected by the kernel (searcher bugs, not shown)");
     }
+    if (report.stats().suppressedFindings() > 0) {
+      out.append(" · ").append(report.stats().suppressedFindings()).append(" suppressed");
+    }
+    if (report.stats().baselinedFindings() > 0) {
+      out.append(" · ").append(report.stats().baselinedFindings()).append(" baselined");
+    }
     out.append('\n');
   }
 

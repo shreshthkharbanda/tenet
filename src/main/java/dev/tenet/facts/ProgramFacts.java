@@ -19,6 +19,7 @@ public final class ProgramFacts {
   private final Map<TypeName, List<SwitchOverEnum>> switchesByEnum;
   private final Map<String, List<SourceRef>> literalOccurrences;
   private final Map<String, List<MethodId>> bodyHashGroups;
+  private final List<SuppressionScope> suppressions;
   private final int fileCount;
   private final int errorCount;
 
@@ -31,6 +32,7 @@ public final class ProgramFacts {
     this.switchesByEnum = groupSwitches(this.enumSwitches);
     this.literalOccurrences = sortedLiterals(b.literalOccurrences);
     this.bodyHashGroups = groupBodyHashes(this.methods);
+    this.suppressions = List.copyOf(b.suppressions);
     this.fileCount = b.fileCount;
     this.errorCount = b.errorCount;
   }
@@ -57,6 +59,14 @@ public final class ProgramFacts {
 
   public Map<String, List<MethodId>> bodyHashGroups() {
     return bodyHashGroups;
+  }
+
+  public List<SuppressionScope> suppressions() {
+    return suppressions;
+  }
+
+  public boolean suppressed(String file, long line, String ruleId) {
+    return suppressions.stream().anyMatch(scope -> scope.covers(file, line, ruleId));
   }
 
   public int fileCount() {
@@ -162,6 +172,7 @@ public final class ProgramFacts {
     private final List<CallSite> callSites = new ArrayList<>();
     private final List<SwitchOverEnum> enumSwitches = new ArrayList<>();
     private final Map<String, List<SourceRef>> literalOccurrences = new LinkedHashMap<>();
+    private final List<SuppressionScope> suppressions = new ArrayList<>();
     private int fileCount;
     private int errorCount;
 
@@ -184,6 +195,11 @@ public final class ProgramFacts {
 
     public Builder addEnumSwitch(SwitchOverEnum s) {
       this.enumSwitches.add(s);
+      return this;
+    }
+
+    public Builder addSuppression(SuppressionScope scope) {
+      this.suppressions.add(scope);
       return this;
     }
 

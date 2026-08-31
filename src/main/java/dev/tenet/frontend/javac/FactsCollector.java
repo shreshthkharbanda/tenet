@@ -37,6 +37,7 @@ import dev.tenet.facts.MethodId;
 import dev.tenet.facts.Param;
 import dev.tenet.facts.ProgramFacts;
 import dev.tenet.facts.RetryScope;
+import dev.tenet.facts.SuppressionScope;
 import dev.tenet.facts.TypeName;
 import dev.tenet.facts.Visibility;
 import dev.tenet.facts.patterns.BooleanFlagBranch;
@@ -153,6 +154,7 @@ final class FactsCollector extends TreePathScanner<Void, Void> {
                 .abstractType(type.getModifiers().contains(Modifier.ABSTRACT)));
     recordSupertypes(type, context.builder);
     recordEnumConstants(type, context.builder);
+    recordTenetSuppressions(type.getAnnotation(SuppressWarnings.class), tree);
     classStack.push(context);
     super.visitClass(tree, unused);
     classStack.pop();
@@ -200,6 +202,7 @@ final class FactsCollector extends TreePathScanner<Void, Void> {
     Element element = trees.getElement(getCurrentPath());
     if (classContext == null || !(element instanceof ExecutableElement executable)) return null;
 
+    recordTenetSuppressions(executable.getAnnotation(SuppressWarnings.class), tree);
     MethodContext context = openMethodContext(tree, executable, classContext);
     methodStack.push(context);
     super.visitMethod(tree, unused);
@@ -767,6 +770,26 @@ final class FactsCollector extends TreePathScanner<Void, Void> {
   private boolean isConstant(ModifiersTree modifiers) {
     var flags = modifiers.getFlags();
     return flags.contains(Modifier.STATIC) && flags.contains(Modifier.FINAL);
+  }
+
+  private void recordTenetSuppressions(SuppressWarnings annotation, Tree tree) {
+    if (annotation == null) return;
+    Set<String> rules = new LinkedHashSet<>();
+    boolean tenetScoped = false;
+    for (String value : annotation.value()) {
+      if (value.equals("tenet")) {
+        tenetScoped = true;
+        rules.clear();
+        break;
+      }
+      if (value.startsWith("tenet:")) {
+        tenetScoped = true;
+        rules.add(value.substring("tenet:".length()));
+      }
+    }
+    if (tenetScoped) {
+      program.addSuppression(new SuppressionScope(fileName, lineOf(tree), endLineOf(tree), rules));
+    }
   }
 
   private Visibility visibilityOf(Set<Modifier> modifiers) {

@@ -31,12 +31,15 @@ public final class EvidenceEngine {
 
     List<Finding> verified = new ArrayList<>();
     int rejected = 0;
+    int suppressed = 0;
     for (Rule rule : sortedRules()) {
       for (Finding candidate : rule.evaluate(analysis)) {
-        if (kernel.verify(candidate.certificate(), facts)) {
-          verified.add(candidate);
-        } else {
+        if (!kernel.verify(candidate.certificate(), facts)) {
           rejected++;
+        } else if (facts.suppressed(candidate.file(), candidate.line(), candidate.ruleId())) {
+          suppressed++;
+        } else {
+          verified.add(candidate);
         }
       }
     }
@@ -52,6 +55,8 @@ public final class EvidenceEngine {
             facts.classes().size(),
             facts.methods().size(),
             rejected,
+            suppressed,
+            0,
             facts.errorCount(),
             elapsedMillis);
     return new Report(verified, stats);

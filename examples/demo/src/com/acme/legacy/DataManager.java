@@ -10,7 +10,8 @@ public class DataManager {
   static Map<String, String> temp = new HashMap<>();
   static int flag;
 
-    public void process(String key, String value) {
+  @SuppressWarnings("tenet:TNT-A03")
+  public void process(String key, String value) {
     temp.put(key, value);
     flag = flag + 1;
   }
