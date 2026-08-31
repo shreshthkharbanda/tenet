@@ -85,6 +85,19 @@ rules.TNT-B04.maxParams=5
 
 Or override per run with `--disable TNT-A03,TNT-F02` or `--only TNT-H05`. The defaults are deliberately opinionated; the config file is the escape hatch, not the starting point.
 
+## Picking a school
+
+Some quality questions have no consensus answer. Clean Code says extract until methods are tiny; A Philosophy of Software Design says every extraction adds an interface and interfaces are the cost, so prefer fewer, deeper modules. Both positions are coherent, held by serious people, and mutually exclusive.
+
+Tenet does not pretend to settle this. The default `consensus` profile contains only rules both schools accept. The contested positions are available as opt-in profiles, and enabling rules from opposing schools in one config is an error, not a merge:
+
+```properties
+profile=clean-code      # adds TNT-CC01 (method too long), TNT-CC02 (class too large)
+profile=deep-modules    # adds TNT-DM01 (shallow module), TNT-DM02 (classitis)
+```
+
+Doctrine rules are ADVISORY and fully tunable (`rules.TNT-CC01.maxStatements=15`). A single doctrine rule can also be opted into the consensus profile with `rules.TNT-DM01.enabled=true`. The foundations stay objective: whichever school you pick, every finding still rests on extracted evidence, and the verifier still checks it.
+
 Findings are grouped into eight dimensions, A through H: names that tell the truth, methods that do one thing, minimized state, types that make illegal states unrepresentable, failures handled at boundaries, one fact in one place, design at scale (SOLID, measured), and concurrency and fault tolerance. Severity is a precision class, not a guess about impact: PROVEN rules are mechanically decidable, STRONG rules are evidence-gated heuristics, ADVISORY rules need judgment. `tenet explain` shows the exact mechanism behind any rule.
 
 One thing Tenet will not tell you: whether a true finding is worth fixing. A raced HashMap that only misbehaves during warmup and a raced listener registry in a class built for concurrent use produce the same rule ID with very different urgency. The witness gives you the facts; the judgment call stays yours.
