@@ -1,6 +1,8 @@
 # Tenet
 
-Tenet is a static analyzer for Java that finds the problems a principal engineer finds in code review: methods whose names lie about their side effects, types that allow illegal states, retry layers that multiply into thundering herds, the same business logic pasted into four files. Every finding ships with machine-checked evidence. If Tenet cannot prove a claim from your code, it stays quiet.
+Tenet is a static analyzer for Java. It checks what single-file linters cannot see, because its 34 rules read the whole program: a method named `getBalance()` that provably writes to the database, a `String` parameter that only ever receives the same four literals and wants to be an enum, a retry loop wrapped around a client that already retries, the same predicate pasted into four files, a class whose fields and methods split into two disconnected halves.
+
+The premise: most of what makes code hard to own is checkable, if you check evidence across the program (call sites, effect paths, construction sites) instead of patterns in one file. The goal: a gate that fails only on what it can prove. Every finding carries the evidence it was derived from, and a verifier re-checks that evidence before the finding is reported. If Tenet cannot prove a claim from your code, it stays quiet.
 
 Try it in under two minutes:
 
