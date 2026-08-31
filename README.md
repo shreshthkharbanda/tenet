@@ -107,7 +107,7 @@ Known limits, so you do not have to discover them: analysis is source-only (no b
 
 ## Contributing
 
-The fastest useful contribution is adjudication: run Tenet on a Java repo you know well and report findings that are wrong or noisy, with the file and line. Four false-positive classes have already been found and fixed this way, and each one made a rule permanently sharper.
+The fastest useful contribution is adjudication: run Tenet on a Java repo you know well and report findings that are wrong or noisy, with the file and line.
 
 To add or change a rule:
 
@@ -119,4 +119,3 @@ To add or change a rule:
 
 House rules: one top-level type per file, no comments (the code has to carry the explanation; if it cannot, rename until it can), no wildcard imports, and hexagonal boundaries enforced by `ArchitectureTest`. Tenet enforces most of this on itself, which makes review arguments short.
 
-Current backlog, roughly in order of value: exempt interface-obligation methods from the cohesion and refused-bequest rules, record field initializer types so a `ConcurrentHashMap` behind a `Map`-typed field stops flagging as unsafe ambient state, and investigate the 19 certificate rejections that show up when scanning Apache Commons Lang. Open an issue before starting anything large.
