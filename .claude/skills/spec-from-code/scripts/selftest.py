@@ -495,11 +495,16 @@ def main() -> int:
     edir = meta / "evidence" / "big-a"
     edir.mkdir(parents=True)
     txt = next(c["text"] for c in __import__("_common").parse_claims((specs / "modules" / "big-a.md").read_text()) if c["id"] == "BIGA-001")
-    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys; sys.exit(0)\n")
-    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
+    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys\nsys.path.insert(0, {str(repo)!r})\n"
+                                           "from pkg.big import Big\nassert Big().x == 1\n")
+    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable, "--repo", str(repo))
     ev_r = json.loads((meta / "evidence-report.json").read_text())["modules"]["big-a"]
     check("L61 a passing check backs its claim", rc == 0 and ev_r["passed"] == ["BIGA-001"], out)
-    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys; sys.exit(1)\n")
+    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nassert True\n")
+    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable, "--repo", str(repo))
+    check("L71 a hollow check (assert True) fails G7", rc == 1 and "is hollow" in out, out)
+    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys\nsys.path.insert(0, {str(repo)!r})\n"
+                                           "from pkg.big import Big\nassert Big().x == 2\n")
     rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
     check("L61 a failing check fails G7", rc == 1 and "check for BIGA-001 fails" in out, out)
     (edir / "check_BIGA-001.py").write_text("# claim: BIGA-001\n# text: some older wording\nimport sys; sys.exit(0)\n")

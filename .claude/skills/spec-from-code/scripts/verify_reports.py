@@ -24,7 +24,8 @@ Role rules (dispatch role wins over the report's):
   judge: no spec text; judge-auditor: no spec text and no judgments
   rebuilder: nothing outside its rebuild copy (the dir holding its brief), no test files
 A finding judged harmless on evidence (e.g. an `ls` of a file that did not exist yet) is waived only by
-a row in _meta/g5-waivers.jsonl: {"report": "<report file>", "match": "<text in the error>", "reason":
+a row in <eval dir>/g5-waivers.jsonl (never under the specs dir, which workers can write; match 12+
+characters): {"report": "<report file>", "match": "<text in the error>", "reason":
 "...", "evidence": "..."}. Waived findings print as WAIVED and stay in verify-report.json for the human.
 Usage: verify_reports.py <specs_dir> --repo <root> [--transcripts DIR ...]
 """
@@ -268,6 +269,12 @@ def main() -> int:
         if drow and drow.get("brief"):
             own.append(Path(drow["brief"]))  # its own brief
         own += [Path(x) for x in r.get("legacy_outputs", [])]  # where outputs were before a layout migration
+        # a declared output may never whitelist a directory, a protected root or anything above one, and a
+        # writer's declared output may not sit in the eval dir (L71: declaring $EVAL or "/" as an output
+        # made the own-output pass bless every read under it)
+        protected = [ev, specs, repo, *snapshots, *controls]
+        own = [o for o in own if o.suffix and not any(under(pr, o) for pr in protected)
+               and not (role in WRITERS and under(o, ev))]
 
         def own_or_ancestor(how: str, p: Path, extra: list) -> bool:
             roots = own + extra
@@ -279,6 +286,8 @@ def main() -> int:
                 shown = sorted({f"{h}:{p}" for h, p in hits})[:5]
                 errors.append(f"{rf.name}: {why}: {shown}")
 
+        flag("worker touched the G5 waivers file (only the orchestrator writes waivers)",
+             [(h, p) for h, p in accesses if p.name == "g5-waivers.jsonl"])
         brief_home = Path(drow["brief"]).parent if drow and drow.get("brief") else None
         if brief_home and brief_home == specs / "_meta" / "briefs":
             brief_home = None  # a brief rendered before L53 placement: fall back to the declared root
@@ -332,6 +341,9 @@ def main() -> int:
             if role == "judge-auditor":
                 flag("judge auditor read the original judgments (blindness broken)",
                      [(h, p) for h, p in accesses if under(p, ev / "judgments")])
+        elif role == "reader":
+            flag("reader read source or the eval dir (it must explain the system from the spec alone)",
+                 [(h, p) for h, p in accesses if (under(p, repo) or under(p, ev)) and not under(p, skill_dir)])
         elif role == "rebuilder":
             root = brief_home or (resolve(r["snapshot"], repo) if r.get("snapshot") else None)
             if root is None:
@@ -351,14 +363,21 @@ def main() -> int:
     if not tdirs and rows:
         warnings.append("no --transcripts given: isolation rests on self-reported read lists (pass the subagent "
                         "transcript dir to check what workers actually opened)")
-    wf = specs / "_meta" / "g5-waivers.jsonl"
+    wf = ev / "g5-waivers.jsonl"  # outside the specs dir: a worker cannot waive its own findings (L71)
     waivers = [json.loads(l) for l in wf.read_text().splitlines() if l.strip()] if wf.exists() else []
     waived = []
     for w in waivers:
         if not (w.get("reason") and w.get("evidence")):
             errors.append(f"g5-waivers.jsonl: waiver for {w.get('report')} lacks a reason or evidence")
+        if len(str(w.get("match", ""))) < 12:
+            errors.append(f"g5-waivers.jsonl: waiver for {w.get('report')} has a match shorter than 12 characters; "
+                          f"a waiver must name the specific finding it covers")
+    if (specs / "_meta" / "g5-waivers.jsonl").exists():
+        errors.append("_meta/g5-waivers.jsonl exists inside the specs dir, where workers can write; waivers are read "
+                      "only from the eval dir")
     for e in list(errors):
-        w = next((w for w in waivers if w.get("reason") and w.get("evidence") and e.startswith(str(w.get("report")) + ":")
+        w = next((w for w in waivers if w.get("reason") and w.get("evidence") and len(str(w.get("match", ""))) >= 12
+                  and e.startswith(str(w.get("report")) + ":")
                   and str(w.get("match", "")) in e), None)
         if w:
             errors.remove(e)

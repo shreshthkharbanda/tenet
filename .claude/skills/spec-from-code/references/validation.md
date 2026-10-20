@@ -140,9 +140,20 @@ limitations below in one short paragraph. Point at `specs/INDEX.md` as the entry
 ## 7. Known limitations
 
 - Isolation is instruction-based plus verification, not a sandbox. With transcripts, G5 sees every
-  path a worker's tools touched, including paths inside shell commands and files listed by searches;
-  it cannot see code reached indirectly (importing an installed package, a script that opens files
-  it does not name). Without transcripts, isolation rests on self-reported read lists. Say which.
+  path a worker's tools spell out (Read/Grep/Glob arguments, literal paths in shell commands after
+  variable expansion, files listed by searches). It does not see paths built at runtime, globs,
+  symlinks, files a helper script opens without naming them, or code reached by importing an installed
+  package: the round-2 red team got 16 of 18 deliberately evasive key-reading workers past it. G5
+  catches honest-but-careless reads, not a worker trying to cheat. Where isolation must hold against
+  that, run isolated roles where the eval dir and the repo do not exist (a separate container or user
+  with only the snapshot mounted). Without transcripts, isolation rests on self-reported read lists.
+  Say which applies in the final report.
+- score_probes cannot tell an honest answer from a copy of the answer key reworded to keep its
+  literals (the red team's "smartpara"): when the spec already contains every literal, the leak and
+  copy checks have nothing to see. The blind judge auditor is the backstop.
+- The reconcile worklist is a ranked list: pairs most likely to disagree (shared code, differing
+  values) are always included, the rest are sampled. A human reading the spec is still the last check
+  for contradictions.
 - Probes sample behavior; a validated module can still have unprobed gaps. The implicit-decisions
   checklist and symbol coverage reduce this; they do not eliminate it.
 - Reference answers can be wrong; judges can mark `probe_invalid`, and invalid rates are reported.

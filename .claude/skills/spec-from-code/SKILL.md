@@ -139,7 +139,8 @@ the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if t
   the worker the discrepancy; its output is untrusted until the report verifies. A writer that
   touched `$EVAL` contaminates its module's held-out score: discard its output and re-dispatch. A
   finding that is harmless on evidence (an `ls` of a file that did not exist yet) may be waived by a
-  row in `_meta/g5-waivers.jsonl` with the reason and the evidence; waivers print in every G5 run.
+  row in `$EVAL/g5-waivers.jsonl` (outside the specs dir, so no worker can waive its own findings) with
+  a specific `match` (12+ characters), the reason and the evidence; waivers print in every G5 run.
 
 Spot check (`references/validation.md` section 4): per module, open two random `{confirmed}` claims at
 their refs. A miss sends the module back with the miss named. This is cheap and it changes how

@@ -33,7 +33,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from _common import eprint, parse_claims, parse_frontmatter, read_json, read_jsonl, write_json
+from _common import anchor_tokens, eprint, parse_claims, parse_frontmatter, read_json, read_jsonl, ref_span, write_json
 
 NORMATIVE = {"Behaviors", "Validation rules", "Error handling", "State and data", "External interactions",
              "Configuration", "Concurrency and ordering", "Public surface"}
@@ -73,6 +73,9 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--jobs", type=int, default=6, help="checks run in parallel, each in its own working directory")
     ap.add_argument("--list-unbacked", action="store_true")
+    ap.add_argument("--repo", default=None, help="repo root, to resolve claim refs (default: _meta/run.json 'repo')")
+    ap.add_argument("--no-coverage", action="store_true",
+                    help="skip the executed-a-cited-line test (only if coverage.py is unavailable in the run env)")
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
     edir = specs / "_meta" / "evidence"
@@ -87,6 +90,9 @@ def main() -> int:
                 if c["confidence"] == "confirmed" and c["section"] in NORMATIVE and cid not in have:
                     print(f"{mid}\t{cid}")
         return 0
+    run_cfg = read_json(specs / "_meta" / "run.json") if (specs / "_meta" / "run.json").exists() else {}
+    repo = Path(a.repo or run_cfg.get("repo") or ".").resolve()
+    use_cov = not a.no_coverage and subprocess.run([a.python, "-m", "coverage", "--version"], capture_output=True).returncode == 0
     env = dict(os.environ)
     for kv in a.env:
         k, _, v = kv.partition("=")
@@ -111,22 +117,63 @@ def main() -> int:
                 continue
             runnable.append((cid, fp))
 
+        def spans_of(cid):
+            out = []
+            for r in mc[cid].get("refs", []):
+                sp = ref_span(repo, r)
+                if sp:
+                    out.append(((repo / sp[0]).resolve(), sp[1], sp[2]))
+            return out
+
+        def hollow_reason(cid, fp) -> str | None:
+            """A check binds to its claim only if it names something the claim states (L71: assert True,
+            a never-called verify(), a self-agreeing reimplementation all passed G7)."""
+            body = "\n".join(l for l in fp.read_text(encoding="utf-8", errors="replace").splitlines()
+                             if not re.match(r"#\s*(claim|text):", l))
+            toks = anchor_tokens(mc[cid]["text"]) | {r.split("::", 1)[1].split(".")[-1] for r in mc[cid].get("refs", []) if "::" in r}
+            if toks and not any(t in body for t in toks):
+                return "names nothing the claim states (no backticked literal or cited symbol of the claim)"
+            return None
+
         def run_one(item):
             cid, fp = item
             # each check gets its own working directory, so parallel checks never share scratch files
             wd = Path(a.cwd or ".") / f"evidence-{mid}-{cid}"
             wd.mkdir(parents=True, exist_ok=True)
+            spans = spans_of(cid)
+            cmd = [a.python, "-P", str(fp)]
+            if use_cov and spans:
+                for old in wd.glob(".coverage*"):
+                    old.unlink()
+                cmd = [a.python, "-P", "-m", "coverage", "run", "--data-file", str(wd / ".coverage"),
+                       "--include", ",".join(sorted({str(sp[0]) for sp in spans})), str(fp)]
             try:
-                p = subprocess.run([a.python, "-P", str(fp)], cwd=wd, env=env, capture_output=True, text=True,
-                                   timeout=a.timeout)
-                return cid, p.returncode == 0, (p.stderr or p.stdout).strip().splitlines()[-1:]
+                p = subprocess.run(cmd, cwd=wd, env=env, capture_output=True, text=True, timeout=a.timeout)
             except subprocess.TimeoutExpired:
                 return cid, False, ["timeout"]
+            ok, tail = p.returncode == 0, (p.stderr or p.stdout).strip().splitlines()[-1:]
+            if ok and use_cov and spans:
+                # the check must execute at least one line inside a span its claim cites
+                j = subprocess.run([a.python, "-m", "coverage", "json", "--data-file", str(wd / ".coverage"),
+                                    "-o", str(wd / "cov.json")], cwd=wd, env=env, capture_output=True, text=True)
+                executed = {}
+                if j.returncode == 0 and (wd / "cov.json").exists():
+                    for f, d in json.loads((wd / "cov.json").read_text()).get("files", {}).items():
+                        executed[str((wd / f).resolve() if not os.path.isabs(f) else Path(f).resolve())] = set(d.get("executed_lines", []))
+                hit = any(lo <= ln <= hi for path, lo, hi in spans for ln in executed.get(str(path), ()))
+                if not hit:
+                    return cid, None, ["executed no line of the code its claim cites"]
+            return cid, ok, tail
 
         with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
             results = list(pool.map(run_one, runnable))
         by_id = dict(runnable)
         for cid, ok, tail in results:
+            why = hollow_reason(cid, by_id[cid]) if ok else None
+            if ok is None or why:
+                res.setdefault("hollow", []).append(cid)
+                errors.append(f"{mid}: check for {cid} is hollow: {why or tail[0]}")
+                continue
             if not ok:  # one serial re-run separates a flaky check (load, a port clash) from a wrong claim
                 _, ok2, tail2 = run_one((cid, by_id[cid]))
                 if ok2:
@@ -159,6 +206,9 @@ def main() -> int:
         write_json(rp, {"modules": merged, "errors": kept + errors})
     else:
         write_json(rp, {**report, "errors": errors})
+    if not use_cov:
+        eprint("WARN: coverage.py is not available to the run interpreter: checks were not required to execute a "
+               "cited line, only to name the claim (install coverage in the run env for the full test)")
     for e in errors[:100]:
         eprint("ERROR:", e)
     for mid, r in report["modules"].items():

@@ -131,7 +131,8 @@ def main() -> int:
                 score = len(li & lj) * 2 + (3 if (ni and nj and ni != nj) else 0) + (2 if (li ^ lj) and (li & lj) else 0)
                 sim = jaccard(ti, tj)
                 kind = "duplicate" if sim >= 0.45 else "same-code"
-                pairs.append({"score": score, "similarity": round(sim, 3), "kind": kind, "path": p,
+                differs = bool((ni and nj and ni != nj) or ((li ^ lj) and (li & lj)))
+                pairs.append({"score": score, "similarity": round(sim, 3), "kind": kind, "path": p, "differs": differs,
                               "same_file": claims[i][0] == claims[j][0], "via": "lines" if narrow else "wide-ref+identifier",
                               "a": {"file": claims[i][0], "id": claims[i][1]["id"], "refs": claims[i][1]["refs"], "text": ti},
                               "b": {"file": claims[j][0], "id": claims[j][1]["id"], "refs": claims[j][1]["refs"], "text": tj}})
@@ -152,8 +153,14 @@ def main() -> int:
         else:
             ranked.append(same[si])
             si += 1
-    head, tail = ranked[: a.max], ranked[a.max:]
-    sample = random.Random(a.seed).sample(tail, min(a.tail_sample, len(tail)))
+    # pairs on shared code that state different values are the likeliest contradictions: they always go
+    # to the judges, however long the list (L71: a planted contradiction scored 7 and ranked 507th of
+    # 7,890, below the cut); the tail sample grows with the tail
+    must = lambda r: r["kind"] == "duplicate" and r["differs"] and r["score"] >= 3
+    forced = [r for r in ranked[a.max:] if must(r)]
+    head = ranked[: a.max] + forced
+    tail = [r for r in ranked[a.max:] if not must(r)]
+    sample = random.Random(a.seed).sample(tail, min(max(a.tail_sample, len(tail) // 50), len(tail)))
     for r in sample:
         r["tail_sample"] = True
     write_jsonl(specs / "_meta" / "overlaps.jsonl", head + sample)
