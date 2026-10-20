@@ -327,7 +327,8 @@ def main() -> int:
                 rnd = r.get("round")
                 flag("judge read another round's judgments or answers (verdicts must be independent per round)",
                      [(h, p) for h, p in accesses if any(under(p, ev / k) for k in ("judgments", "answers"))
-                      and rnd is not None and f"round-{rnd}" not in p.parts])
+                      and rnd is not None and f"round-{rnd}" not in p.parts
+                      and p.suffix])  # a file; listing a directory shows names, not verdicts
             if role == "judge-auditor":
                 flag("judge auditor read the original judgments (blindness broken)",
                      [(h, p) for h, p in accesses if under(p, ev / "judgments")])
