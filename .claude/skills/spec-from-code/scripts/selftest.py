@@ -209,6 +209,14 @@ def main() -> int:
     rc, out = run("snapshot_for_answerers.py", str(specs), "--out", str(snap))
     q = (snap / "_meta" / "probes" / "big-a.questions.jsonl").read_text()
     check("snapshot strips reference answers", rc == 0 and "reference_answer" not in q and not (snap / "_meta" / "probes" / "big-a.jsonl").exists(), out)
+    (meta / "probe-corrections.jsonl").write_text(json.dumps({"id": "BIGA-P01", "new": "secret reference"}) + "\n")
+    (meta / "reconcile").mkdir(exist_ok=True)
+    (meta / "reconcile" / "decisions-zz.jsonl").write_text(json.dumps({"evidence": "code says 42"}) + "\n")
+    run("snapshot_for_answerers.py", str(specs), "--out", str(tmp / "snap-leak"))
+    leaked = sorted(str(p.relative_to(tmp / "snap-leak")) for p in (tmp / "snap-leak").rglob("*") if p.is_file()
+                    and not (p.suffix == ".md" or p.name in ("modules.json",) or p.name.endswith(".questions.jsonl")))
+    check("L43 snapshot is an allowlist (no _meta leaks)", leaked == [], str(leaked))
+    (meta / "probe-corrections.jsonl").unlink(); (meta / "reconcile" / "decisions-zz.jsonl").unlink()
     for rnd, agree_n in ((1, 20), (2, 17)):
         ad, jd = meta / "answers" / f"round-{rnd}", meta / "judgments" / f"round-{rnd}"
         ad.mkdir(parents=True); jd.mkdir(parents=True)

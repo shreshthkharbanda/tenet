@@ -31,14 +31,24 @@ def main() -> int:
         pass
     if out.exists():
         shutil.rmtree(out)
-    shutil.copytree(specs, out, ignore=shutil.ignore_patterns(
-        "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "briefs", "skill-refs", "audit", "survey.md", "env.md", "dispatch.jsonl", "queue.txt",
-        "inventory.json", "shards-report.json", "coverage.json", "lint-report.json", "validation.json",
-        "verify-report.json", "status.json", "traceability.md", "validation-report.md"))
-    if args.questions_only:
-        for f in list(out.rglob("*")):
-            if f.is_file() and not (f.suffix == ".jsonl" and "probes" in f.parts):
-                f.unlink()
+    # ALLOWLIST, never a denylist: spec text, the module map, and questions. A denylist leaked every new
+    # _meta file added later (probe corrections carry reference answers; reconcile decisions carry code
+    # evidence), which is how answerers would learn what the spec does not say.
+    out.mkdir(parents=True)
+    keep = [specs / "INDEX.md"] + sorted(specs.glob("0*.md")) + sorted((specs / "modules").glob("*.md"))
+    if not args.questions_only:
+        for f in keep:
+            if f.exists():
+                dst = out / f.relative_to(specs)
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(f, dst)
+        (out / "_meta").mkdir(exist_ok=True)
+        if (specs / "_meta" / "modules.json").exists():
+            shutil.copy2(specs / "_meta" / "modules.json", out / "_meta" / "modules.json")
+    (out / "_meta" / "probes").mkdir(parents=True, exist_ok=True)
+    for pf in sorted((specs / "_meta" / "probes").glob("*.jsonl")):
+        if not pf.name.endswith(".questions.jsonl"):
+            shutil.copy2(pf, out / "_meta" / "probes" / pf.name)
     pdir = out / "_meta" / "probes"
     n = 0
     if pdir.exists():

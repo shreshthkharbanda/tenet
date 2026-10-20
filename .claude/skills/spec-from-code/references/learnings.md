@@ -313,3 +313,10 @@ mentioned in passing and the orchestrator recorded was a false positive (the mod
 `RoutingArgs` with `ttl = 60`); the Reconciler disproved it. Fix: `--bug` entries carry how the worker
 knows (read, executed, test), the Reconciler verifies every collected defect against code before it
 becomes a claim, and suspected defects in the final report are only those that exist as claims.
+
+**L43. A denylist snapshot leaked every new metadata file.** Found: building the LiteLLM round-1
+answerer snapshot; `probe-corrections.jsonl` (a corrected reference answer) and the pair judges'
+decision files (code-derived evidence not in the spec) were copied in, because the snapshot excluded
+known-bad names and these were new. Caught before any answerer ran. Fix: the snapshot is an allowlist
+(INDEX.md, 0*.md, modules/*.md, _meta/modules.json, question files); a self-test plants a correction and
+a decision file and asserts neither reaches the snapshot. Rule: isolation boundaries are allowlists.
