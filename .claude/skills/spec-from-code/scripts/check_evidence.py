@@ -86,6 +86,7 @@ def main() -> int:
     # never the caller's cwd, which may be the repo or the skill (L71: a relative default broke child
     # coverage and left check dirs in the skill)
     run_root = Path(a.cwd).resolve() if a.cwd else Path(tempfile.mkdtemp(prefix="sfc-evidence-"))
+    run_root.mkdir(parents=True, exist_ok=True)
     claims = module_claims(specs)
     mods = a.module or sorted(claims)
     if a.list_unbacked:
@@ -99,7 +100,10 @@ def main() -> int:
         return 0
     run_cfg = read_json(specs / "_meta" / "run.json") if (specs / "_meta" / "run.json").exists() else {}
     repo = Path(a.repo or run_cfg.get("repo") or ".").resolve()
-    use_cov = not a.no_coverage and subprocess.run([a.python, "-m", "coverage", "--version"], capture_output=True).returncode == 0
+    # -P and a neutral cwd: run from this skill's scripts dir, `-m coverage` found the G3 gate's
+    # coverage.py, and G7 fell back to the name-only test with a warning (L71)
+    use_cov = not a.no_coverage and subprocess.run([a.python, "-P", "-m", "coverage", "--version"], cwd=run_root,
+                                                   capture_output=True).returncode == 0
     env = dict(os.environ)
     for kv in a.env:
         k, _, v = kv.partition("=")
@@ -174,9 +178,9 @@ def main() -> int:
             ok, tail = p.returncode == 0, lines[-1:]
             if ok and use_cov and spans:
                 # the check must execute at least one line inside a span its claim cites
-                subprocess.run([a.python, "-m", "coverage", "combine", "--rcfile", str(wd / ".coveragerc")],
+                subprocess.run([a.python, "-P", "-m", "coverage", "combine", "--rcfile", str(wd / ".coveragerc")],
                                cwd=wd, env=env, capture_output=True, text=True)
-                j = subprocess.run([a.python, "-m", "coverage", "json", "--rcfile", str(wd / ".coveragerc"),
+                j = subprocess.run([a.python, "-P", "-m", "coverage", "json", "--rcfile", str(wd / ".coveragerc"),
                                     "-o", str(wd / "cov.json")], cwd=wd, env=env, capture_output=True, text=True)
                 executed = {}
                 if j.returncode == 0 and (wd / "cov.json").exists():

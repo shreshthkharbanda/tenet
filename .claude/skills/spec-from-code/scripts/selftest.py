@@ -512,8 +512,10 @@ def main() -> int:
             f"# claim: BIGA-001\n# text: {txt}\nimport subprocess, sys\n"
             f"code = {f'import sys; sys.path.insert(0, {str(repo)!r}); from pkg.big import Big; assert Big().x == 1'!r}\n"
             "sys.exit(subprocess.run([sys.executable, '-c', code]).returncode)\n")
-        rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", covpy, "--repo", str(repo))
+        # run from the scripts dir, where the G3 gate's coverage.py sits beside it and must not shadow coverage.py
+        rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", covpy, "--repo", str(repo), cwd=HERE)
         check("L71 a check that drives the code in a child process is not hollow", rc == 0 and "hollow" not in out, out)
+        check("L71 the skill's own coverage.py never shadows coverage.py", "not available" not in out, out)
     else:
         print("  SKIP L71 child-process coverage: no interpreter with coverage.py (set SELFTEST_COVERAGE_PYTHON)")
     (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nassert True\n")

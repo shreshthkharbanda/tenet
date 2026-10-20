@@ -591,5 +591,8 @@ Found: LiteLLM round-2 red team (B1-B7) and the runs that measured the fixes.
   and check dirs were left inside the skill; they are now absolute, in a temp dir by default. A failing
   check's reported reason was coverage's "no data was collected" warning, hiding a SyntaxError; tool
   warnings are skipped when picking the reason. build_revise parsed lint's stderr, which prints only
-  the first 200 warnings; it reads the JSON report.
+  the first 200 warnings; it reads the JSON report. And G7, launched from the skill's scripts dir,
+  probed `python -m coverage` without `-P`: it found the G3 gate's own `coverage.py`, concluded
+  coverage was missing, and ran all 293 checks on the weaker name-only test with one warning line.
+  Every interpreter call that loads a module by name now uses `-P` from a neutral directory.
 
