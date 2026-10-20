@@ -219,3 +219,79 @@ Report: write your worker report with the CLI, not by hand (the gate verifies it
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
 ```
+
+## Story audit (Phase 9, before anyone reviews from the site)
+
+A story is written over the claims; G8 proves its literals and citations mechanically. Two things G8
+cannot see: a sentence whose words match its claims but whose meaning does not ("always" where the
+claim says "when Redis is attached"), and a story that, read alone, leads a reader to a wrong answer.
+Per module: one story judge (sentences against claims), one story-only reader (answers the probes
+from the story alone, in a snapshot), one scorer (answers against reference answers). Then
+`story_probe.py score --specs $SPECS`; it fails on any distorted or unsupported sentence, more than
+10% overstated sentences, or any contradicted answer, and the narrator revises with those rows.
+```
+python3 $SKILL_DIR/scripts/story_probe.py snapshot --specs $SPECS --module <m> --out $SCRATCH/story-snap-<m>
+python3 $SKILL_DIR/scripts/render_briefs.py --role story-reader --module <m> --snapshot $SCRATCH/story-snap-<m> ...
+python3 $SKILL_DIR/scripts/render_briefs.py --role story-judge --module <m> ...   # and --role story-scorer
+```
+
+<!-- brief:story-judge -->
+```
+You are checking a chapter story against the specification claims it cites. The story is the part
+of the spec people will actually read, so a sentence that says more, less or other than its claims
+misleads every reader. Repo: {{REPO}} (commit {{COMMIT}}). Story: {{SPECS}}/_meta/story/{{MODULE_ID}}.md.
+Claims: {{SPECS}}/modules/{{MODULE_ID}}.md and, for IDs of other prefixes, the spec file that holds
+them under {{SPECS}}. You may read the code a claim cites. Never read anything under the eval dir.
+
+For every sentence of the story (the minute, every paragraph, every At-a-glance row read as one
+sentence, every Watch-out bullet, every figure step), find the claims it cites (a range
+[X-010]-[X-014] cites all of them) and label it:
+- supported: the cited claims say this, with the same conditions and scope;
+- overstated: the claims say less (a condition dropped, "always" or "every" where they say "when",
+  a default stated as the only behavior);
+- distorted: the claims say something different (wrong order, wrong actor, wrong value, wrong cause);
+- unsupported: no cited claim says it (it may be true; the story still may not say it uncited).
+Write one row per sentence to {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl:
+{"sentence": "<the sentence>", "ids": ["..."], "verdict": "supported|overstated|distorted|unsupported",
+ "note": "for anything but supported: what the claims actually say, quoting them"}
+Do not edit the story or the spec. Reply with the counts per verdict and the three worst rows.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-judge --module {{MODULE_ID}} --round {{ROUND}} \
+  --output {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl --read-from <a file listing every path you read>
+This replaces any other instruction above about the report's file name or format.
+```
+
+<!-- brief:story-reader -->
+```
+You are an engineer who has just read one chapter of a system's specification: the chapter story in
+{{SPEC_SNAPSHOT}}/story.md. Read it once, fully. Then answer every question in
+{{SPEC_SNAPSHOT}}/questions.jsonl using only what the story says. Read nothing else: no other file,
+no code, no web; the story is all you have, and the point is to measure what it teaches.
+For each question write one row to {{EVAL}}/answers/story/{{MODULE_ID}}.jsonl:
+{"id": "<question id>", "answer": "<your answer, specific: values, names, order>",
+ "basis": "story" | "not_in_story", "cites": ["<claim IDs from the story sentences you used>"]}
+Use "not_in_story" when the story does not say enough to answer; then give your best guess in
+"answer" anyway and say it is a guess. Do not guess silently: a confident wrong answer is the worst
+outcome. Keep scratch notes, if any, under {{SPEC_SNAPSHOT}}/_work/.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-reader --module {{MODULE_ID}} --round {{ROUND}} \
+  --snapshot {{SPEC_SNAPSHOT}} --output {{EVAL}}/answers/story/{{MODULE_ID}}.jsonl --read-from <a file listing every path you read>
+This replaces any other instruction above about the report's file name or format.
+```
+
+<!-- brief:story-scorer -->
+```
+You are scoring answers that a reader gave from a short chapter story, against reference answers
+established from the code. Questions and reference answers: {{EVAL}}/probes/{{MODULE_ID}}.jsonl.
+Answers: {{EVAL}}/answers/story/{{MODULE_ID}}.jsonl. Do not read the story or any spec file: you
+judge the answers, not the text behind them. For every question write one row to
+{{EVAL}}/judgments/story/{{MODULE_ID}}.jsonl:
+{"id": "...", "verdict": "agree|partial|contradict|not_in_story", "note": "..."}
+- agree: the answer matches the reference on every point the question asks.
+- partial: correct as far as it goes, but missing part of what the reference states.
+- contradict: the answer states something the reference contradicts, whatever its "basis" says.
+- not_in_story: the reader said the story does not cover it and did not commit to a wrong answer
+  (a guess labelled as a guess that happens to be wrong is not_in_story, not contradict).
+In "note", for contradict, quote the conflicting part of the answer and of the reference.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-scorer --module {{MODULE_ID}} --round {{ROUND}} \
+  --output {{EVAL}}/judgments/story/{{MODULE_ID}}.jsonl --read-from <a file listing every path you read>
+This replaces any other instruction above about the report's file name or format.
+```

@@ -65,7 +65,7 @@ def write_json(p: Path, obj: object) -> None:
         f.write("\n")
 
 
-EVAL_ROLES = {"prober", "answerer", "judge", "control", "judge-auditor"}
+EVAL_ROLES = {"prober", "answerer", "judge", "control", "judge-auditor", "story-reader", "story-scorer"}
 
 
 def eval_dir(specs: Path) -> Path:

@@ -176,7 +176,13 @@ def main() -> int:
                 path = snap / "_briefs" / f"answerer-{mid}-round-{args.round}.md"
             elif role in ("judge", "reviser"):
                 path = out_dir / f"{role}-{mid}-round-{args.round}.md"
-            elif role in ("falsifier", "omission"):
+            elif role == "story-reader":
+                if not args.snapshot:
+                    raise SystemExit("--snapshot required for story-reader (story_probe.py snapshot makes it)")
+                snap = Path(args.snapshot).resolve()
+                vals["SPEC_SNAPSHOT"] = snap
+                path = snap / "_briefs" / f"story-reader-{mid}-round-{args.round}.md"
+            elif role in ("falsifier", "omission", "story-judge", "story-scorer"):
                 path = out_dir / f"audit-{role}-{mid}-round-{args.round}.md"
             elif role == "verifier":
                 # one brief per chunk of confirmed normative claims that have no evidence yet

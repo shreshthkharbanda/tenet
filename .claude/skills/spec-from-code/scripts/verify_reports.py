@@ -21,7 +21,8 @@ Role rules (dispatch role wins over the report's):
   prober: no spec text; in the eval dir only its own probe file
   answerer / control: everything under the snapshot that holds its rendered brief, nothing in the repo,
       the specs dir, or the eval dir beyond its own answers file
-  judge: no spec text; judge-auditor: no spec text and no judgments
+  judge, story-scorer: no spec text; judge-auditor: no spec text and no judgments
+  story-reader: like an answerer, inside its story snapshot (story.md and questions.jsonl only)
   rebuilder: nothing outside its rebuild copy (the dir holding its brief), no test files
 A finding judged harmless on evidence (e.g. an `ls` of a file that did not exist yet) is waived only by
 a row in <eval dir>/g5-waivers.jsonl (never under the specs dir, which workers can write; match 12+
@@ -44,7 +45,7 @@ SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs",
               ".swift", ".c", ".cc", ".cpp", ".h", ".hpp", ".ex", ".exs", ".sh", ".sql"}
 SPEC_KINDS = {"module", "overview", "interfaces", "data", "config", "operations"}
 WRITERS = {"surveyor", "extractor", "extractor-fix", "crosscut", "interfaces", "data", "config", "operations",
-           "reconciler", "pairjudge", "reviser", "verifier", "narrator"}
+           "reconciler", "pairjudge", "reviser", "verifier", "narrator", "story-judge"}
 XC_KINDS = {"interfaces", "data", "config", "operations"}
 PATH_TOKEN = re.compile(r"(?<![\w$])(/[^\s'\"`;|&<>(){}]+)")
 ASSIGN = re.compile(r"(?:^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
@@ -180,7 +181,8 @@ def main() -> int:
     rows = [json.loads(l) for l in log.read_text().splitlines() if l.strip()] if log.exists() else []
 
     # roots every rule refers to
-    snapshots = {Path(r["brief"]).parent.parent for r in rows if r.get("role") == "answerer" and r.get("brief")}
+    # answerer and story-reader snapshots hold held-out questions: no writer may touch them
+    snapshots = {Path(r["brief"]).parent.parent for r in rows if r.get("role") in ("answerer", "story-reader") and r.get("brief")}
     controls = {Path(r["brief"]).parent for r in rows if r.get("role") == "control" and r.get("brief")}
 
     # 1. dispatch reconciliation
@@ -308,10 +310,10 @@ def main() -> int:
             flag("prober touched the eval dir beyond its own probe file",
                  [(h, p) for h, p in accesses if under(p, ev) and p != own_probe and not under(p, ev / "worker-reports")
                   and p != ev and p != ev / "probes"])
-        elif role in ("answerer", "control"):
-            home = (brief_home.parent if role == "answerer" else brief_home) if brief_home else None
+        elif role in ("answerer", "control", "story-reader"):
+            home = (brief_home.parent if role != "control" else brief_home) if brief_home else None
             declared = resolve(r["snapshot"], repo) if r.get("snapshot") else None
-            if role == "answerer" and not r.get("snapshot"):
+            if role != "control" and not r.get("snapshot"):
                 errors.append(f"{rf.name}: answerer report lacks 'snapshot'")
             if home and declared and declared != home:
                 errors.append(f"{rf.name}: declared snapshot {declared} is not the dir holding its brief ({home})")
@@ -329,7 +331,7 @@ def main() -> int:
                 flag(f"{role} read outside its snapshot (isolation broken)",
                      [(h, p) for h, p in accesses if not own_or_ancestor(h, p, allowed)
                       and (under(p, repo) or under(p, specs) or under(p, ev) or (h == "reported"))])
-        elif role in ("judge", "judge-auditor"):
+        elif role in ("judge", "judge-auditor", "story-scorer"):
             flag(f"{role} read spec text (judges compare answers with code, not with the spec)",
                  [(h, p) for h, p in accesses if (p.is_file() and is_spec_text(p)) or under(p, specs / "modules")])
             if role == "judge":

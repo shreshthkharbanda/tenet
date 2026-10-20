@@ -114,7 +114,7 @@ def main() -> int:
             continue  # needs an overlaps file; rendered in the L33 case
         extra = ["--kind", "interfaces"] if mk == "crosscut" else (["--module", "big-a"] if mk not in (
             "surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker") else [])
-        if mk == "answerer":
+        if mk in ("answerer", "story-reader"):
             extra += ["--snapshot", str(tmp / "snap-x")]
         rc_, out_ = run("render_briefs.py", "--role", mk, *extra, *sets, "--specs", str(specs), "--repo", str(repo),
                         "--scratch", str(tmp / "scratch"))
@@ -671,6 +671,30 @@ def main() -> int:
     check("L72 a passing story is compiled with chips as claim links and its figure",
           fa["story"] and 'data-id="BIGA-001"' in fa["story"]["minute"][0]
           and fa["story"]["sections"][0]["blocks"][1]["kind"] == "flow", json.dumps(fa.get("story"))[:600])
+    # L72 story audit: the reader's snapshot holds the story and the questions, never the answers; a
+    # contradicted answer or a distorted sentence fails the score
+    from _common import eval_dir as _evd
+    evx = _evd(specs)
+    (evx / "probes").mkdir(parents=True, exist_ok=True)
+    (evx / "probes" / "big-a.jsonl").write_text(json.dumps({"id": "BIGA-P01", "question": "What does Big store in x?",
+                                                            "reference_answer": "SECRET-REFERENCE 1", "split": "holdout"}) + "\n")
+    snapx = tmp / "story-snap"
+    rc, out = run("story_probe.py", "snapshot", "--specs", str(specs), "--module", "big-a", "--out", str(snapx))
+    blob = "".join(f.read_text() for f in snapx.rglob("*") if f.is_file())
+    check("L72 a story snapshot carries the story and questions but no reference answers",
+          rc == 0 and "What does Big store" in blob and "SECRET-REFERENCE" not in blob and (snapx / "story.md").exists(), out)
+    (evx / "judgments" / "story").mkdir(parents=True, exist_ok=True)
+    (evx / "judgments" / "story" / "big-a.jsonl").write_text(json.dumps({"id": "BIGA-P01", "verdict": "contradict", "note": "x"}) + "\n")
+    (meta / "audit" / "story").mkdir(parents=True, exist_ok=True)
+    (meta / "audit" / "story" / "big-a.jsonl").write_text(json.dumps({"sentence": "s", "ids": ["BIGA-001"], "verdict": "distorted"}) + "\n")
+    rc, out = run("story_probe.py", "score", "--specs", str(specs))
+    check("L72 a contradicted story answer and a distorted sentence each fail the story audit",
+          rc == 1 and "contradicted answer" in out and "distorted or unsupported" in out, out)
+    (evx / "judgments" / "story" / "big-a.jsonl").write_text(json.dumps({"id": "BIGA-P01", "verdict": "agree"}) + "\n")
+    (meta / "audit" / "story" / "big-a.jsonl").write_text(json.dumps({"sentence": "s", "ids": ["BIGA-001"], "verdict": "supported"}) + "\n")
+    rc, out = run("story_probe.py", "score", "--specs", str(specs))
+    check("L72 a faithful story that answers its probe passes", rc == 0 and "coverage 100%" in out, out)
+    shutil.rmtree(evx / "judgments" / "story"); shutil.rmtree(meta / "audit" / "story"); (evx / "probes" / "big-a.jsonl").unlink()
     shutil.rmtree(sdir)
     # red team B6: a table row citing a claim states a value found in neither the claim nor its code
     rows = ("\n| Claim | Value |\n|---|---|\n| [BIGA-001] | `made_up_setting` |\n"
