@@ -210,8 +210,10 @@ def main() -> int:
     # every worker writes files and nothing else (L74: a narrator published its story as a web page)
     footer = ("Boundaries: you only read and write files on this machine, in the paths above. Never publish a "
               "page or artifact, push or commit, call a connector or web service that changes anything, message "
-              "anyone, or schedule anything; edit files with the file tools. If a step seems to need one of "
-              "these, stop and say so in your report.")
+              "anyone, or schedule anything. Edit files only with Write and Edit (or a shell command): never with "
+              "the Artifact tool, not even its `edits` option, because every Artifact publish puts the file on "
+              "the web (L74: two workers did this). If a step seems to need one of these, stop and say so in "
+              "your report.")
     for r, mid, path, text in rendered:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text + "\n" + footer + "\n", encoding="utf-8")

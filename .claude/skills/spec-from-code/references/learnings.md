@@ -660,3 +660,8 @@ module's story-judge rows; persona readers (a sales engineer, a CTO) read only t
 and explain the module back, and a teach-back judge checks every statement; claims are written
 natural language first and lint flags dense ones for the reviser. The reader site has an Everyone /
 Engineer / Expert switch, plain labels for its own metrics, and plain module names.
+Recurred: after the footer shipped, the router-setup narrator still applied a one-line edit through
+the page tool's `edits` option, publishing its story; that tool's own guidance recommends `edits` for
+small file changes, and a sentence in a brief lost to it. Fix (structural, not wording): workers are
+dispatched as the `spec-worker` agent type, whose tool list has no publishing, messaging, scheduling
+or connector tools at all; the footer names the page tool and its `edits` option explicitly.
