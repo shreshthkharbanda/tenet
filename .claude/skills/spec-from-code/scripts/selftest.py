@@ -41,7 +41,7 @@ def main() -> int:
     for i in range(60):
         big += [f"    def m{i}(self, v):\n", f"        if v > {i}:\n", f"            return v - {i}\n", f"        return {i}\n", "\n"]
     (repo / "pkg" / "big.py").write_text("".join(big))
-    (repo / "pkg" / "small.py").write_text("def add(a, b):\n    return a + b\n\n\ndef _hidden():\n    return 0\n")
+    (repo / "pkg" / "small.py").write_text("def add(\n    a,\n    b,\n):\n    def local_helper():\n        return 0\n    return a + b\n\n\ndef _hidden():\n    return 0\n")
     (repo / "pkg" / "other.py").write_text("def out_of_scope():\n    return 1\n")
     (repo / "tests" / "test_small.py").write_text("from pkg.small import add\n\ndef test_add():\n    assert add(1, 2) == 3\n")
     git(repo, "init", "-q"); git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
@@ -74,6 +74,13 @@ def main() -> int:
     rc, out = run("check_shards.py", "--inventory", str(meta / "inventory.json"), "--modules", str(meta / "modules.json"),
                   "--out", str(meta / "shards-report.json"), "--min-loc", "1")
     check("G1 passes a complete range plan", rc == 0, out)
+    mid_fn = json.loads(json.dumps(mods))
+    a0 = rs[0]["end"] + 2  # one line inside the next definition
+    mid_fn["modules"][0]["globs"] = [f"pkg/big.py:1-{a0 - 1}"]
+    mid_fn["modules"][1]["globs"] = [f"pkg/big.py:{a0}-{sp['lines']}", "pkg/small.py"]
+    (tmp / "midfn.json").write_text(json.dumps(mid_fn))
+    rc, out = run("check_shards.py", "--inventory", str(meta / "inventory.json"), "--modules", str(tmp / "midfn.json"), "--min-loc", "1")
+    check("L27 G1 fails a cut inside a definition", rc == 1 and "definition boundary" in out, out)
     gap = json.loads(json.dumps(mods)); gap["modules"][1]["globs"] = ranges[2:] + ["pkg/small.py"] if len(ranges) > 2 else ["pkg/small.py"]
     (tmp / "gap.json").write_text(json.dumps(gap))
     rc, out = run("check_shards.py", "--inventory", str(meta / "inventory.json"), "--modules", str(tmp / "gap.json"), "--min-loc", "1")
@@ -135,7 +142,7 @@ def main() -> int:
     git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "readme")
     rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
     check("L08 unrelated commit is not stale", rc == 0 and "stale" not in out, out)
-    (repo / "pkg" / "small.py").write_text("def add(a, b):\n    return a + b  # changed\n\n\ndef _hidden():\n    return 0\n")
+    (repo / "pkg" / "small.py").write_text("def add(a, b):\n    def local_helper():\n        return 0\n    return a + b  # changed\n\n\ndef _hidden():\n    return 0\n")
     rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
     check("L08 cited-file change is stale", "stale" in out, out)
 
@@ -144,6 +151,8 @@ def main() -> int:
     cov = json.loads((meta / "coverage.json").read_text())
     check("G3 range coverage computed per module", cov["modules"]["big-b"]["file_rate"] == 1.0, json.dumps(cov["modules"]["big-b"])[:400])
     check("G3 private symbols ignored", not any("_hidden" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]))
+    check("L29 nested definitions are not public surface", not any("local_helper" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]),
+          json.dumps(cov["modules"]["big-b"]["unmentioned_symbols"]))
 
     # G4 probes: exact split, leak detection (true positive and template false positive), side notes, regression
     probes = [{"id": f"BIGA-P{i:02d}", "module": "big-a", "category": "branch", "edge": False,

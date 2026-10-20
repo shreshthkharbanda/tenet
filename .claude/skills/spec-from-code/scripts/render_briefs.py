@@ -69,6 +69,7 @@ def main() -> int:
     ap.add_argument("--n-probes", type=int, default=25)
     ap.add_argument("--test-cmd", default="(see 04-operations.md; if absent, find the project's test command)")
     ap.add_argument("--scope-note", default="")
+    ap.add_argument("--refresh-refs", action="store_true", help="re-copy references into _meta/skill-refs")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
                     help="extra placeholder values (audit roles: SAMPLE_FILE, CONTROL_DIR, READER_SCENARIO)")
     args = ap.parse_args()
@@ -83,6 +84,14 @@ def main() -> int:
     commit = mods.get("commit") or git_head(repo) or "unknown"
     base = {"REPO": repo, "SPECS": specs, "SKILL_DIR": SKILL_DIR, "COMMIT": commit, "SCRATCH": scratch,
             "ROUND": args.round, "N_PROBES": args.n_probes, "TEST_CMD": args.test_cmd}
+    # Freeze the references workers read, once per run: editing the skill mid-run must not change the
+    # rules under workers already running. --refresh-refs re-copies deliberately.
+    refs = meta / "skill-refs"
+    if args.refresh_refs or not refs.exists():
+        refs.mkdir(parents=True, exist_ok=True)
+        for name in ("templates.md", "implicit-decisions.md"):
+            (refs / name).write_text((SKILL_DIR / "references" / name).read_text(encoding="utf-8"), encoding="utf-8")
+    base["REFS"] = refs
     env_md = meta / "env.md"
     base["RUN_ENV"] = (env_md.read_text(encoding="utf-8").strip() if env_md.exists() else
                        "no verified way to run this project's code was recorded (_meta/env.md is missing); "

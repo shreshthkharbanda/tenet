@@ -111,12 +111,14 @@ When all return:
 ```
 python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO
 ```
-- G2 lint errors: re-dispatch the owning extractor with the error lines pasted in. Lint is strict on
+Send every gate failure back to the worker that wrote the file: SendMessage to its agent id (from
+`dispatch.py`), with the failing lines or the uncited list. It still holds the module in context, so
+the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if the resume fails.
+- G2 lint errors: send the owning extractor the error lines. Lint is strict on
   purpose; an unresolvable ref or a duplicate ID is how specs rot.
-- G3 coverage below threshold: re-dispatch that extractor in revise mode with the uncited files and
-  unmentioned symbols. "Trivial" files must be named as such in Scope and boundaries, not ignored.
-- G5 discrepancies: a worker reported outputs that do not exist or counts that do not match. Re-run it;
-  its output is untrusted until the report verifies.
+- G3 coverage below threshold: send that extractor the uncited files and unmentioned symbols. "Trivial" files must be named as such in Scope and boundaries, not ignored.
+- G5 discrepancies: a worker reported outputs that do not exist or counts that do not match. Send it
+  the discrepancy; its output is untrusted until the report verifies.
 
 Spot check (`references/validation.md` section 4): per module, open two random `{confirmed}` claims at
 their refs. A miss sends the module back with the miss named. This is cheap and it changes how

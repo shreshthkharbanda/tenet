@@ -32,7 +32,7 @@ def main() -> int:
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(specs, out, ignore=shutil.ignore_patterns(
-        "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "briefs", "survey.md",
+        "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "briefs", "skill-refs", "audit", "survey.md", "env.md", "dispatch.jsonl", "queue.txt",
         "inventory.json", "shards-report.json", "coverage.json", "lint-report.json", "validation.json",
         "verify-report.json", "status.json", "traceability.md", "validation-report.md"))
     if args.questions_only:

@@ -55,9 +55,12 @@ LOC (one extractor must hold it in context) and preferably none under 150.
 
 Files too large for one module are split into line ranges: a "globs" entry may be "path:START-END"
 for one exact file. The ranges of a file must be contiguous, non-overlapping, and cover every line.
-If the Scope above already lists cut points, use those. Otherwise get them from
-`python3 {{SKILL_DIR}}/scripts/split_file.py {{REPO}} <path> --max-loc 3500` (cuts only at definition
-boundaries); you may merge adjacent ranges, never cut elsewhere. A module may
+Get proposed cut points from `python3 {{SKILL_DIR}}/scripts/split_file.py {{REPO}} <path> --max-loc 3500`
+(or use those the Scope lists). They are cut at definition boundaries and chosen to keep calling
+neighbors together, but size drives them, not meaning. Read the method names around each cut: if a
+cut separates definitions that form one responsibility (a shared name prefix, a helper and its only
+caller), move it to another boundary from the `boundaries` list in `split_file.py --json`. The gate
+rejects a range that starts anywhere else. You may also merge adjacent ranges. A module may
 mix ranges and whole files when they share a responsibility.
 
 Check your plan before finishing:
@@ -82,7 +85,7 @@ surface; cross-cutting concerns you noticed (auth, retries, logging, errors); ri
 (huge files, metaprogramming, generated code, dynamic dispatch); a suggested reading order.
 
 Finish by writing {{SPECS}}/_meta/worker-reports/surveyor-all.json per the format in
-{{SKILL_DIR}}/references/templates.md section 7, then reply with: module count, total in-scope LOC,
+{{REFS}}/templates.md section 7, then reply with: module count, total in-scope LOC,
 modules over 6000 LOC (if any), and the three biggest risks.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
@@ -107,9 +110,9 @@ Tests for this module:
 Context: {{SPECS}}/_meta/survey.md (read it first for the system map).
 
 Before writing, read all of:
-- {{SKILL_DIR}}/references/templates.md (claim grammar, confidence rules, precision ladder, writing
+- {{REFS}}/templates.md (claim grammar, confidence rules, precision ladder, writing
   rules, and the modules/<id>.md template; copy the template's frontmatter and section headings exactly)
-- {{SKILL_DIR}}/references/implicit-decisions.md (walk every item for this module)
+- {{REFS}}/implicit-decisions.md (walk every item for this module)
 
 Method:
 1. Read the tests first; they pin behavior. A test file over ~2000 lines is not read whole: grep it for
@@ -171,9 +174,9 @@ Module map: {{SPECS}}/_meta/modules.json. System survey: {{SPECS}}/_meta/survey.
 Focus:
 {{XC_FOCUS}}
 
-Before writing, read {{SKILL_DIR}}/references/templates.md (grammar, confidence, precision ladder,
+Before writing, read {{REFS}}/templates.md (grammar, confidence, precision ladder,
 writing rules, and the template for {{XC_FILE}}; copy its frontmatter and headings exactly) and
-{{SKILL_DIR}}/references/implicit-decisions.md.
+{{REFS}}/implicit-decisions.md.
 
 Every fact is a claim {{XC_PREFIX}}-001, -002, ... with a verified ref (path:L1-L2 or path::Symbol,
 relative to the repo root). You may read any source in the repo. Do not read {{SPECS}}/modules/
@@ -243,7 +246,7 @@ Tasks, in order:
 2. Cross-links. Where a module spec says "see module X" or describes a dependency's behavior, add the
    concrete claim ID cross-reference `[X-NNN]` so a reader can jump. Do not duplicate claims across
    modules; one fact lives in the module that decides it, and other modules point at it.
-3. Write {{SPECS}}/00-overview.md per the template in {{SKILL_DIR}}/references/templates.md: purpose,
+3. Write {{SPECS}}/00-overview.md per the template in {{REFS}}/templates.md: purpose,
    system map table, 3-7 main paths as ordered steps citing claim IDs end to end, global invariants as
    SYS claims with refs, cross-cutting concerns, glossary, reading order. Write for an engineer new to
    the codebase who has 15 minutes; this is the short book the module specs are appendices to.
@@ -414,8 +417,8 @@ refs, the spec-only answer, verdict, judge note). These are the revision-split p
 held-out set you will never see is scored afterwards, so fixing exactly these questions is not the
 goal. Fixing what they reveal is.
 
-Read {{SKILL_DIR}}/references/templates.md (grammar, rules) and
-{{SKILL_DIR}}/references/implicit-decisions.md first.
+Read {{REFS}}/templates.md (grammar, rules) and
+{{REFS}}/implicit-decisions.md first.
 
 For each failure:
 1. Open the cited code and confirm the reference answer (execute it if unsure: {{RUN_ENV}}). If the

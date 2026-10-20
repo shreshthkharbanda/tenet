@@ -182,3 +182,32 @@ defect is real, and nothing surfaced it. Fix: `collect_defects.py` counts, for e
 modules or roles that flagged overlapping lines, and ranks by it. The Reconciler harvests suspected
 defects from gaps, implementation notes, and worker reports into each module's `## Suspected
 defects`, so runs that predate the section (or workers that only mention a bug in prose) lose nothing.
+
+**L27. Size-driven cuts split one responsibility across modules.** Found: LiteLLM router-deployments
+extractor; the price-inheritance logic straddled the cut at line 9865, so it was half-specified by two
+modules and marked inferred in both. `split_file.py` cut wherever size dictated, and the Surveyor
+could only merge ranges, never move a cut. Fix: `split_file.py` considers every boundary between 70%
+and 100% of the size cap and picks the most cohesive one (fewest calls crossing between the three
+definitions on each side, least shared name prefix); it also prints all boundaries. The Surveyor may
+move any cut to another boundary to keep one responsibility together, and G1 rejects a range that
+starts anywhere but a definition boundary.
+
+**L28. The rules changed under running workers.** Found: LiteLLM router-selection extractor noticed
+`templates.md` change on disk mid-run (this loop edits the skill while workers run, as will anyone
+improving it between phases). Workers in one run could follow different rules. Fix: `render_briefs.py`
+copies the references workers read into `_meta/skill-refs/` on first render and briefs point there;
+`--refresh-refs` re-copies deliberately. Scripts stay live, because gate fixes are meant to apply.
+
+**L29. Coverage counted closures as public surface.** Found: LiteLLM coverage gate flagged
+router-calls (65%) and router-dispatch (79%); every "missing" symbol was a wrapper class or closure
+defined inside a method. A second bug hid behind the first: the nesting tracker popped a method at
+the `) -> T:` line closing its multi-line signature, so everything inside looked class-level. Fix:
+public symbols are definitions whose every enclosing block is a class; lines starting with `)` or `]`
+do not close blocks (`}` does). The same run shows the gate's real catch: request-targets omitted 17
+reachable public methods, and only that module now fails. A gate that fires on noise gets ignored when
+it fires on signal.
+
+**L30. Gate failures went to fresh workers.** Found: LiteLLM coverage failure on request-targets. A
+fresh extractor would re-read 1800 LOC to name 17 methods. Fix: SKILL.md says to send gate failures
+to the worker that wrote the file (SendMessage to its agent id from `dispatch.py`), which still holds
+the module in context; re-dispatch fresh only when that agent cannot be resumed.

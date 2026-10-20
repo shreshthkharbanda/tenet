@@ -36,27 +36,46 @@ SYMBOL_RES["typescript"] = SYMBOL_RES["javascript"]
 PRIVATE_HINT = re.compile(r"^_")
 
 
+CLASSY = re.compile(r"^\s*(?:export\s+)?(?:public\s+|private\s+|protected\s+|internal\s+|abstract\s+|final\s+|sealed\s+|"
+                    r"static\s+|data\s+|open\s+|partial\s+)*(?:class|interface|object|trait|struct|enum|record|module|impl|defmodule)\b")
+OPENER = re.compile(r"^\s*(?:@|(?:async\s+)?def\s|class\s|func\s|fn\s|function\s|fun\s|defmodule\s|def\s|"
+                    r"(?:export\s+)?(?:public|private|protected|internal|static|abstract|final|sealed|override|suspend|async)\s)")
+
+
 def public_symbols(fp: Path, lang: str, start: int = 1, end: int = 10**9) -> list[str]:
+    """Names a caller can reach: top-level definitions and members of classes nested only in classes.
+    A definition inside a function body (closures, local wrapper classes) is not public surface, so it is
+    skipped; nesting is read from indentation, which tracks it in every mainstream language's style."""
     rxs = SYMBOL_RES.get(lang)
     if not rxs:
         return []
     out = []
+    stack: list[tuple[int, str]] = []  # (indent, "class" | "func")
     try:
-        for i, ln in enumerate(fp.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-            if i < start or i > end:
-                continue
+        lines = fp.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return []
+    for i, ln in enumerate(lines, 1):
+        if not ln.strip() or ln.lstrip().startswith(("#", "//", "*", "/*", "@")):
+            continue
+        ind = len(ln) - len(ln.lstrip())
+        if ln.lstrip().startswith((")", "]")):
+            continue  # end of a multi-line signature or literal, not the end of a block ("}" still is)
+        while stack and stack[-1][0] >= ind:
+            stack.pop()
+        is_open = bool(OPENER.match(ln)) or bool(CLASSY.match(ln))
+        kind = "class" if CLASSY.match(ln) else "func"
+        reachable = all(k == "class" for _, k in stack)
+        if is_open and start <= i <= end and reachable:
             for rx in rxs:
                 m = rx.match(ln)
                 if m:
                     name = m.group(1)
-                    if PRIVATE_HINT.match(name):
-                        continue
-                    if name in ("if", "for", "while", "switch", "return", "new", "else", "catch"):
-                        continue
-                    out.append(name)
+                    if not PRIVATE_HINT.match(name) and name not in ("if", "for", "while", "switch", "return", "new", "else", "catch"):
+                        out.append(name)
                     break
-    except OSError:
-        pass
+        if is_open:
+            stack.append((ind, kind))
     return sorted(set(out))
 
 

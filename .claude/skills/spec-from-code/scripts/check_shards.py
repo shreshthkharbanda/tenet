@@ -13,7 +13,8 @@ import argparse
 import re
 from pathlib import Path
 
-from _common import build_ownership, eprint, in_scope, read_json, scope_label, write_json
+from _common import build_ownership, eprint, in_scope, parse_scope_entry, read_json, scope_label, write_json
+from split_file import boundaries
 
 RESERVED = {"IF", "DATA", "CFG", "OPS", "SYS"}
 
@@ -61,6 +62,23 @@ def main() -> int:
 
     own = build_ownership(mods, inv["files"], repo)
     errors += own["range_errors"]
+    # Every range must start at a definition boundary (never inside a function), so extractors get whole
+    # definitions. The Surveyor may move cuts to any boundary to keep one responsibility in one module.
+    bcache: dict[str, set] = {}
+    for m in modules:
+        for g in m.get("globs", []):
+            path, a, _ = parse_scope_entry(g)
+            if a is None or a == 1:
+                continue
+            if path not in bcache:
+                try:
+                    lines = (repo / path).read_text(encoding="utf-8", errors="replace").splitlines()
+                    bcache[path] = {b for b, _ in boundaries(lines)}
+                except OSError:
+                    bcache[path] = set()
+            if a not in bcache[path]:
+                errors.append(f"module {m.get('id')} range {path}:{a}-... does not start at a definition boundary; "
+                              f"use a cut point from split_file.py --json (its 'boundaries' list)")
     in_scope_files = [f for f in inv["files"] if in_scope(f)]
     per_mod = {}
     for mid, items in own["assign"].items():
