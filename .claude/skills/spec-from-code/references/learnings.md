@@ -211,3 +211,12 @@ it fires on signal.
 fresh extractor would re-read 1800 LOC to name 17 methods. Fix: SKILL.md says to send gate failures
 to the worker that wrote the file (SendMessage to its agent id from `dispatch.py`), which still holds
 the module in context; re-dispatch fresh only when that agent cannot be resumed.
+
+**L31. A correct spec rewritten to satisfy a broken gate.** Found: the request-targets coverage
+failure (L29, L30). The 17 "missing" methods were described all along as `PatternMatchRouter.add_pattern`
+and the like; the symbol matcher refused any name preceded by `.`, so qualified mentions never
+counted. The orchestrator (this loop) misread the gate as signal and sent the worker to fix the spec;
+the worker found the real cause. Fix: qualified mentions (`Class.method`, `module.func`,
+`Type::method`) count; self-test case added. Rule for the orchestrator: before sending a gate failure
+to a worker, open two of the flagged items in the spec and confirm they are really absent. A gate
+false positive that a worker "fixes" is worse than none: it bends correct specs toward the checker.

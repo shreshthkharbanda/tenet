@@ -111,6 +111,8 @@ When all return:
 ```
 python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO
 ```
+Before sending a G3 failure anywhere, open two of the flagged items in the spec and confirm they are
+really absent; a gate false positive that a worker "fixes" bends correct specs toward the checker.
 Send every gate failure back to the worker that wrote the file: SendMessage to its agent id (from
 `dispatch.py`), with the failing lines or the uncited list. It still holds the module in context, so
 the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if the resume fails.

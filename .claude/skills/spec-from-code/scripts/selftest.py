@@ -151,6 +151,12 @@ def main() -> int:
     cov = json.loads((meta / "coverage.json").read_text())
     check("G3 range coverage computed per module", cov["modules"]["big-b"]["file_rate"] == 1.0, json.dumps(cov["modules"]["big-b"])[:400])
     check("G3 private symbols ignored", not any("_hidden" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]))
+    (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b.replace("`add` returns", "`small.add` returns")))
+    run("coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
+    cq = json.loads((meta / "coverage.json").read_text())["modules"]["big-b"]
+    check("L31 qualified mention Class.method counts", not any(s.endswith("::add") for s in cq["unmentioned_symbols"]),
+          json.dumps(cq["unmentioned_symbols"]))
+    (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b))
     check("L29 nested definitions are not public surface", not any("local_helper" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]),
           json.dumps(cov["modules"]["big-b"]["unmentioned_symbols"]))
 

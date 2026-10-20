@@ -145,7 +145,8 @@ def main() -> int:
             syms = public_symbols(repo / it["path"], lang_by_path.get(it["path"], ""), it["start"], it["end"])
             for s_ in syms:
                 total_syms += 1
-                if re.search(r"(?<![\w.])" + re.escape(s_) + r"(?![\w])", body):
+                # Qualified mentions count: `Class.method`, `module.func`, `Type::method`.
+                if re.search(r"(?<![\w])" + re.escape(s_) + r"(?![\w])", body):
                     hit_syms += 1
                 else:
                     missed.append(f"{it['path']}::{s_}")
