@@ -547,3 +547,10 @@ overwritten the owner's work after it finished. Fix: apply_claim_edits applies a
 shared files (and its own module); a row against another module's spec is diverted to
 `reconcile/diverted.jsonl`, and build_revise hands it to that module's next reviser as a note with
 the proposed text and evidence.
+
+**L69. A reviser deleted claims it had resolved.** Found: LiteLLM round-2 revision; the router-calls
+reviser deleted a resolved gap and a disproved suspected defect (the brief allowed deleting a resolved
+gap). Deleted IDs break answers, pointers and evidence that cite them, and silently shrink the spec.
+Fix: IDs are never deleted; a resolved gap becomes {confirmed} with the answer, a disproved defect
+becomes a claim of what the code does. Lint compares IDs with the latest `_meta/rounds/round-*`
+backup (or `--baseline`) and fails on any that disappeared.

@@ -205,6 +205,13 @@ def main() -> int:
     check("L68 cross-module reviser row is diverted, not applied", "DIVERTED" in out and dv and dv[-1]["owner"] == "big-a"
           and "overwritten by another module" not in (specs / "modules" / "big-a.md").read_text(), out)
     (meta / "reconcile" / "decisions-revise-big-b-round-1.jsonl").unlink(); (meta / "reconcile" / "diverted.jsonl").unlink()
+    # L69: claim IDs are permanent: one in the last round's backup that is gone fails lint
+    rb = meta / "rounds" / "round-1"
+    rb.mkdir(parents=True, exist_ok=True)
+    (rb / "big-a.md").write_text(spec("BIGA", "big-a", good_a + "- [BIGA-002] {gap} Does m59 ever raise?\n"))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("L69 a deleted claim ID fails lint", rc == 1 and "BIGA-002 existed at round-1 and was deleted" in out, out)
+    shutil.rmtree(meta / "rounds")
     # L58: applied decision files are ledgered and never replayed; a ledgered file that changed is an error
     rc, out = run("apply_claim_edits.py", str(specs))
     check("L58 ledgered decision files are not re-applied", rc == 0 and "none (all in ledger.json)" in out

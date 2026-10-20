@@ -68,6 +68,9 @@ def main() -> int:
     ap.add_argument("--out", default=None)
     ap.add_argument("--strict-fresh", action="store_true", help="stale commit is an error, not a warning")
     ap.add_argument("--max-fence-lines", type=int, default=20)
+    ap.add_argument("--baseline", default=None,
+                    help="a directory of earlier spec files (e.g. _meta/rounds/round-N): any claim ID there that no "
+                         "longer exists is an error (IDs are never deleted; default: the latest _meta/rounds/round-*)")
     ap.add_argument("--only", action="append", default=[],
                     help="lint only these spec paths (relative to specs dir); unresolved cross-refs become warnings")
     args = ap.parse_args()
@@ -251,6 +254,18 @@ def main() -> int:
             if xid not in known:
                 errors.append(f"{relp}: cross-reference [{xid}] does not resolve to any claim")
 
+    # IDs are permanent: one present at the last round's backup must still exist (L69)
+    rounds = sorted((specs / "_meta" / "rounds").glob("round-*"), key=lambda d: int(d.name.split("-")[1])
+                    if d.name.split("-")[1].isdigit() else -1) if (specs / "_meta" / "rounds").exists() else []
+    base = Path(args.baseline).resolve() if args.baseline else (rounds[-1] if rounds else None)
+    if base and base.exists():
+        linted = {fp.name for fp in files}
+        for bf in sorted(base.glob("*.md")):
+            if args.only and bf.name not in linted:
+                continue
+            gone = {c["id"] for c in parse_claims(bf.read_text(encoding="utf-8", errors="replace"))} - known
+            for cid in sorted(gone):
+                errors.append(f"{bf.name}: claim {cid} existed at {base.name} and was deleted; rewrite it in place instead")
     report = {"errors": errors, "warnings": warnings, "files": per_file, "total_claims": len(all_ids), "head": head}
     if args.out:
         write_json(Path(args.out), report)

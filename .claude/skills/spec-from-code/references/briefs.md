@@ -633,7 +633,10 @@ For each failure:
    was missing, are the other error messages present?) and fix those too.
 4. Do not touch claims unrelated to the failures. Edits elsewhere are how revisions regress.
 
-Never renumber or reuse IDs. Never delete a {gap} unless you resolved it from code. Run
+Never renumber, reuse or delete a claim ID (answers, pointers and evidence checks cite them; lint
+fails on an ID that existed at the last round's backup and is gone). Rewrite in place instead: a gap
+you resolved from code becomes {confirmed} with the answer; a suspected defect that proves false
+becomes a claim stating what the code actually does. Run
 `python3 {{SKILL_DIR}}/scripts/lint_specs.py {{SPECS}} --repo {{REPO}} --only modules/{{MODULE_ID}}.md`
 (add `--only 01-interfaces.md` etc. for any other file you edited) until clean. Write
 {{SPECS}}/_meta/worker-reports/reviser-{{MODULE_ID}}-round-{{ROUND}}.json. Reply with: failures by
