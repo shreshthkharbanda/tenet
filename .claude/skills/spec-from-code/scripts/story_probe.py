@@ -23,14 +23,22 @@ SENTENCE = ("supported", "overstated", "distorted", "unsupported")
 
 
 def everyone_text(story_md: str) -> str:
-    """The Everyone layer of a story as plain text: what a reader who picked "Everyone" sees."""
-    from check_story import parse_story
+    """The Everyone layer of a story as plain text: exactly what a reader who picked "Everyone" sees on the
+    reader site. Which blocks belong to it is check_story.block_layer, the definition the site uses too
+    (L77: a hand-kept copy here dropped every section lead, and persona readers met bare headings)."""
+    from check_story import block_layer, parse_story
     st, _ = parse_story(story_md)
     out = [f"# {st['headline']}", "", "## In plain words", *st["plain"], ""]
+    if st["words_table"]:
+        out += ["## Words you'll see", *[f"- {r['term']}: {r['means']} [{', '.join(r['ids'])}]" for r in st["words_table"]], ""]
     for sec in st["sections"]:
         out += [f"## {sec['title']}", ""]
         for b in sec["blocks"]:
-            if b["t"] == "fig":
+            if block_layer(b) != "everyone":
+                continue
+            if b["t"] == "p":
+                out += [b["md"], ""]
+            elif b["t"] == "fig":
                 out.append(f"Figure: {b['title']}")
                 if b["kind"] == "timeline":
                     lanes = {x["id"]: x["label"] for x in b["lanes"]}
@@ -39,10 +47,12 @@ def everyone_text(story_md: str) -> str:
                     names = {x["id"]: x["label"] for x in b["nodes"] + b["actors"]}
                     out += [f"- {names.get(e['a'], e['a'])} -> {names.get(e['b'], e['b'])}" + (f" ({e['label']})" if e["label"] else "")
                             for e in b["edges"]]
-                    out += [f"  Step: {x['title']}: {x['md']}" for x in b["steps"]]
+                out += [f"  Step: {x['title']}: {x['md']}" for x in b["steps"]]
                 out.append("")
             elif b["t"] == "path":
                 out += [f"{x['n']}. {x['md']}" for x in b["steps"]] + [""]
+            else:
+                raise ValueError(f"story_probe has no plain rendering for an Everyone block of type {b['t']!r}")
     out += ["## Watch out", *[f"- {w}" for w in st["watch"]]]
     return "\n".join(out) + "\n"
 

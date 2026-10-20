@@ -49,8 +49,8 @@ that bridge is held to. Every rule below is checked by `check_story.py` (G8) unl
 
 | Layer | Reader | Contains | Code allowed |
 | --- | --- | --- | --- |
-| **Everyone** | anyone, including a CTO or a sales engineer | the headline, "In plain words", figures, the example timeline, the plain half of Watch out | none: no identifiers, no code formatting, no claim jargon |
-| **Engineer** | someone who will work near this code | adds "In one minute", "Words you'll see", "At a glance", the mechanism sections | a few exact names, each defined in "Words you'll see" |
+| **Everyone** | anyone, including a CTO or a sales engineer | the headline, "In plain words", the terms and meanings of "Words you'll see", each section's heading and lead, figures and paths, the example timeline, Watch out | none: no identifiers, no code formatting, no claim jargon |
+| **Engineer** | someone who will work near this code | adds "In one minute", the code names in "Words you'll see", "At a glance", the mechanism prose after each lead | a few exact names, each defined in "Words you'll see" |
 | **Expert** | someone who will change this code or review it | adds the ledger: every claim, its conditions and its source lines | as the claims need |
 
 The reader site shows the layer the reader picks (the switch remembers the choice) and never hides

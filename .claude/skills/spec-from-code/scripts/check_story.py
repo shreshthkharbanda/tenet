@@ -170,6 +170,14 @@ def overview_flows(specs: Path) -> dict[str, int]:
     return out
 
 
+def block_layer(b: dict) -> str:
+    """The one definition of the layer a section block belongs to: a section's lead, its figures and its
+    paths are Everyone; the rest of its prose is Engineer. The reader site (site_data tags each block)
+    and the persona snapshot (story_probe) both read it, so a persona reader is tested on exactly what an
+    Everyone reader sees (L77)."""
+    return "engineer" if b["t"] == "ul" or (b["t"] == "p" and not b.get("lead")) else "everyone"
+
+
 def parse_story(text: str) -> tuple[dict, list[str]]:
     """Story markdown -> structure. Returns (story, parse errors)."""
     fm, body = parse_frontmatter(text)
@@ -313,6 +321,9 @@ def parse_story(text: str) -> tuple[dict, list[str]]:
                 para.append(ln)
         i += 1
     flush()
+    for s_ in st["sections"]:  # a section's first paragraph is its lead (block_layer)
+        if s_["blocks"] and s_["blocks"][0]["t"] == "p":
+            s_["blocks"][0]["lead"] = True
     prose = st["plain"] + st["minute"] + [b["md"] for s_ in st["sections"] for b in s_["blocks"] if b["t"] == "p"] \
         + [x for s_ in st["sections"] for b in s_["blocks"] if b["t"] == "ul" for x in b["items"]] + st["watch"] \
         + [r["when"] + " " + r["then"] for r in (st["glance"] or {}).get("rows", [])]

@@ -179,7 +179,12 @@ def render_story(st: dict) -> dict:
                 "edges": [{"a": e["a"], "b": e["b"], "label": e["label"], "ids": e["ids"]} for e in f["edges"]],
                 "steps": [{"target": x["target"], "title": html.escape(x["title"]), "h": inline(x["md"]), "ids": x["ids"]} for x in f["steps"]]}
 
+    from check_story import block_layer
+
     def block(b):
+        return {"layer": block_layer(b), **body(b)}
+
+    def body(b):
         if b["t"] == "p":
             return {"t": "p", "h": inline(b["md"]), "lead": bool(b.get("lead"))}
         if b["t"] == "ul":

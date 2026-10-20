@@ -75,7 +75,7 @@ Prose: what happens, in the order it happens, each sentence ending with its chip
 | `# headline` | Everyone | none | the chapter's thesis as one assertion, at most 14 words |
 | `@plain` "In plain words" | Everyone | none, no code names at all | what this part of the system is for, how it works in one picture, what a customer or the business would notice when it goes wrong; spell out every acronym |
 | `@minute` "In one minute" | Engineer | at most 3 names | the mechanism in one paragraph, for an engineer who reads nothing else |
-| `## Words you'll see` | Engineer | names in the third column only | the bridge: plain term, plain meaning, the names it goes by in the code, the claims that define it. Every code name the story uses appears here. Order rows by first use. |
+| `## Words you'll see` | term and meaning: Everyone; code names: Engineer | names in the third column only | the bridge: plain term, plain meaning, the names it goes by in the code, the claims that define it. Every code name the story uses appears here, and every term the Everyone layer leans on (a persona reader names each undefined one). Order rows by first use. |
 | `## At a glance` | Engineer | values and defined names | the module's conditional behavior as When/Then rows, most common case first (required when the module has 5 or more conditional claims) |
 | section lead (the first paragraph of every section) | Everyone | none | at most 60 words: the section's point in plain words, so a reader who chose Everyone sees heading, lead and figure and never a bare heading |
 | `## <assertion>` sections | heading and figure: Everyone; prose after the lead: Engineer | prose: at most 4 code spans per 100 words, each a value or a defined name | 3 to 6 sections in the order the mechanism runs, each answering one question a newcomer asks |
@@ -152,6 +152,10 @@ steps that target nothing, a timeline whose events go back in time or whose titl
 "Example:", and a system story missing a path or with the wrong number of steps. Warnings: headings
 that read as labels, passive voice over 15%, grade level over 10, a story citing none of the module's
 suspected defects, length outside 700 to 1,800 words (3,000 for the system story).
+
+Which blocks belong to which layer is defined once, in `check_story.block_layer`: the site tags each
+block with it and the persona snapshot (`story_probe.py --lens everyone`) prints exactly the Everyone
+blocks, so a persona reader is tested on what an Everyone reader sees (L77).
 
 `site_data.py` compiles a story that passes; one that fails is left out, with the gate's errors in
 `_meta/story/<name>.check.json`, so the site never shows an unchecked story.

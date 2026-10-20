@@ -674,3 +674,20 @@ reader site showed them as a loose list after the ledger. Fix: `parse_claims` ke
 indented lines as its `detail`; the story checker counts detail as what the claim says; the site
 shows detail under its claim and searches it. The claim's first line is still its text (evidence
 `# text:` lines and stale checks compare it), so no evidence went stale.
+
+**L77. The Everyone layer was defined twice, and the copy the audit used dropped every section lead.**
+Found: LiteLLM Phase 9 story audit round 2, by both persona readers (a sales engineer reading only
+the Everyone layer): "four headings have no text under them, I thought my copy had been cut off"
+(failure-handling), "two empty sections" (router-selection). The reader site decided the layer of
+each block with CSS classes in app.js; `story_probe.py` kept its own hand-written list of Everyone
+blocks, which predated the section-lead rule and printed only figures and paths. The gate, the site
+and the audit each agreed with the standard; the audit was testing a page no reader ever sees. The
+same readers named every term the Everyone layer used without defining it ("allowance", "tier",
+"lone deployment"), because "Words you'll see" was Engineer-only although its terms and meanings
+are plain by rule (Mayer's pre-training principle: teach the terms before the mechanism). Class: a
+view consumed by both a renderer and an auditor, defined in each. Fix: `check_story.block_layer` is
+the only definition; `parse_story` marks leads structurally; `site_data` tags every block with its
+layer and app.js reads the tag; `story_probe` prints exactly the Everyone-tagged blocks and fails on
+a block type it cannot print; the terms and meanings of "Words you'll see" are Everyone (their code
+names stay Engineer). Selftest: every lead and every plain term reaches the persona snapshot, and the
+site's layer tags match.

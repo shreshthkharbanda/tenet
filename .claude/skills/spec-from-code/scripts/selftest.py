@@ -741,6 +741,13 @@ def main() -> int:
     check("L75 the Everyone-layer snapshot holds the plain layer only: no code, no Engineer prose, no questions",
           rc == 0 and "remembers one number" in etext and "`" not in etext and "In one minute" not in etext
           and "puts the number" not in etext and not (snape / "questions.jsonl").exists(), etext[:400] + out)
+    check("L77 the Everyone snapshot carries every section lead and every plain term the site shows Everyone",
+          all(x in etext for x in ("Every new object starts with the same number", "Each method compares a number with a bound",
+                                   "Every method in a chunk follows that rule", "stored value: the number a Big object keeps")),
+          etext[:900])
+    check("L77 the site tags each story block with the same layer",
+          [b.get("layer") for b in fa["story"]["sections"][0]["blocks"]][:3] == ["everyone", "engineer", "everyone"],
+          json.dumps(fa["story"]["sections"][0]["blocks"])[:400])
     (evx / "judgments" / "story").mkdir(parents=True, exist_ok=True)
     (evx / "judgments" / "story" / "big-a.jsonl").write_text(json.dumps({"id": "BIGA-P01", "verdict": "contradict", "note": "x"}) + "\n")
     (meta / "audit" / "story").mkdir(parents=True, exist_ok=True)

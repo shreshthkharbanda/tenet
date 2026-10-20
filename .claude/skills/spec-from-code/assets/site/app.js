@@ -524,8 +524,11 @@
   const chips = (ids) => ids.map((x) => `<a class="xr" href="#${x}" data-id="${x}">${x}</a>`).join(" ");
   function storyHTML(st, f) {
     const n = f ? f.claims.confirmed + f.claims.inferred + f.claims.gap : 0;
+    // each block carries its layer from the story gate (check_story.block_layer), the same definition the
+    // persona readers are tested on; the lens hides Engineer blocks from Everyone
+    const lay = (b) => (b.layer === "everyone" ? "" : "L2");
     const sec = st.sections.map((x, k) => `<section class="st-sec" id="story-${k}"><h3>${x.title}</h3>${x.blocks.map((b) =>
-      b.t === "p" ? `<p class="${b.lead ? "lead" : "L2"}">${b.h}</p>` : b.t === "ul" ? `<ul class="L2">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
+      b.t === "p" ? `<p class="${b.lead ? "lead " : ""}${lay(b)}">${b.h}</p>` : b.t === "ul" ? `<ul class="${lay(b)}">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
         : b.t === "path" ? pathBlock(b) : figureShell(b)).join("")}</section>`).join("");
     const mins = Math.max(1, Math.round((st.words_n || st.words || 0) / 238));
     return `<section class="story" aria-label="Chapter in brief">
@@ -533,8 +536,8 @@
       <h2 class="headline">${st.headline}</h2>
       ${st.plain.length ? `<div class="plain L1"><span class="label">In plain words</span>${st.plain.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
       ${st.minute.length ? `<div class="minute L2"><span class="label">In one minute</span>${st.minute.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
-      ${st.words.length ? `<details class="words L2" open><summary class="label">Words you'll see (${st.words.length})</summary><dl>${st.words.map((w) =>
-        `<div><dt>${w.term}</dt><dd>${w.means}<span class="code-names">${w.code} ${chips(w.ids)}</span></dd></div>`).join("")}</dl></details>` : ""}
+      ${st.words.length ? `<details class="words" open><summary class="label">Words you'll see (${st.words.length})</summary><dl>${st.words.map((w) =>
+        `<div><dt>${w.term}</dt><dd>${w.means}<span class="code-names"><span class="L2">${w.code}</span> ${chips(w.ids)}</span></dd></div>`).join("")}</dl></details>` : ""}
       ${st.glance.length ? `<div class="glance L2"><span class="label">At a glance</span><div class="tbl"><table><thead><tr><th>When</th><th>Then</th><th>Claims</th></tr></thead><tbody>${st.glance.map((r) => `<tr><td>${r.when}</td><td>${r.then}</td><td class="ids">${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
       ${sec}
       ${st.watch.length ? `<div class="watch"><span class="label">Watch out</span><ul>${st.watch.map((w) => `<li>${w}</li>`).join("")}</ul></div>` : ""}
