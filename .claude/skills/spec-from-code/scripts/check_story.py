@@ -511,11 +511,23 @@ class Checker:
                 errors.append(f"section heading over 14 words: {where(sec['title'])}")
             if len(sec["title"].split()) < 4 or not VERB_HINT.search(sec["title"]):
                 warnings.append(f"heading reads as a label, not an assertion: {sec['title']}")
+            # every section opens with a plain lead (Everyone layer): readers who chose Everyone see the
+            # heading, this lead and the figure, so no section is a bare heading for them
+            lead = sec["blocks"][0] if sec["blocks"] else None
+            if not lead or lead["t"] != "p":
+                errors.append(f"section '{where(sec['title'])}' must open with a plain lead paragraph (no code, at most 60 words)")
+            else:
+                lead["lead"] = True
+                everyone(lead["md"], f"lead of '{where(sec['title'])}'")
+                if words(lead["md"]) > 60:
+                    errors.append(f"lead of '{where(sec['title'])}' is {words(lead['md'])} words (at most 60)")
             figs = [b for b in sec["blocks"] if b["t"] == "fig"]
             if len(figs) > 1:
                 errors.append(f"section '{where(sec['title'])}' has {len(figs)} figures (at most 1)")
             for b in sec["blocks"]:
-                if b["t"] == "p":
+                if b["t"] == "p" and b.get("lead"):
+                    evidence(b["md"], "lead paragraph")
+                elif b["t"] == "p":
                     engineer(b["md"], "paragraph")
                     evidence(b["md"], "paragraph")
                 elif b["t"] == "ul":

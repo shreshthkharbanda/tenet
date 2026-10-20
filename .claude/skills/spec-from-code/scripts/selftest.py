@@ -657,13 +657,13 @@ def main() -> int:
                   f"## Words you'll see\n| Term | Means | In the code | Claims |\n| --- | --- | --- | --- |\n"
                   f"| Big object | the class this chapter describes | `Big` | BIGA-001 |\n| stored value | the number a Big object keeps | `x` | BIGA-001 |\n"
                   f"| method with bound {k} | one of the comparing methods | `m{k}` | BIGA-002 |\n| the result | what the method gives back | `v - {k}` | BIGA-002 |\n\n"
-                  f"## Construction always stores one value\nWhen a Big object is built, it puts the number `1` into its stored value, `x` [BIGA-001]. "
+                  f"## Construction always stores one value\nEvery new object starts with the same number [BIGA-001].\n\nWhen a Big object is built, it puts the number `1` into its stored value, `x` [BIGA-001]. "
                   f"Nothing in the class changes that number afterwards [BIGA-001]. So every object starts and stays the same [BIGA-001].\n\n"
                   f"@figure flow id=m-rule title=\"How a method picks its result\"\n| node in | Input number | BIGA-002 |\n"
                   f"| node test | Above the bound? | BIGA-002 |\n| node out | Return the difference | BIGA-002 |\n| in > test | compare | BIGA-002 |\n"
                   f"| test > out | yes | BIGA-002 |\n\n@steps m-rule\n| test | Above the bound? | The method compares the number with its bound [BIGA-002]. |\n"
                   f"| test>out | Return the difference | It gives back the number minus the bound [BIGA-002]. |\n\n"
-                  f"## Each method returns the number minus its bound above the bound\nThe method with bound `{k}` looks at the number it is given [BIGA-002]. "
+                  f"## Each method returns the number minus its bound above the bound\nEach method compares a number with a bound of its own [BIGA-002].\n\nThe method with bound `{k}` looks at the number it is given [BIGA-002]. "
                   f"It gives back the number minus that bound, written `v - {k}`, when the number is larger [BIGA-002]. "
                   f"For any smaller number it gives back the bound itself [BIGA-002].\n\n"
                   f"@figure timeline id=ex title=\"Example: one object, two calls\"\n| lane obj | The object |\n"
@@ -685,7 +685,7 @@ def main() -> int:
     # L75: the readability standard: no code in the Everyone layer, every code name bridged to a plain term,
     # acronyms spelled out, timelines move forward and are labelled as examples
     worse = (good_story.replace("| node out | Return the difference |", "| node out | Return `v - 1` |")
-             .replace("Every method in a chunk follows that rule [BIGA-010].", "Every method in a chunk calls `big_helper` [BIGA-010].")
+             .replace("For any smaller number it gives back the bound itself [BIGA-002].", "For any smaller number it calls `big_helper` [BIGA-002].")
              .replace("- A Big object always starts with the number one [BIGA-001].", "- A Big object keeps its TPM at one [BIGA-001].")
              .replace("| 1s | obj | method called |", "| 0.5s | obj | method called |").replace("| 0s | obj | made |", "| 2s | obj | made |")
              .replace('title=\"Example: one object, two calls\"', 'title=\"One object, two calls\"'))
@@ -721,7 +721,8 @@ def main() -> int:
     fa = json.loads((site / "data" / "f-modules-big-a.json").read_text())
     check("L72 a passing story is compiled with chips as claim links and its figure",
           fa["story"] and 'data-id="BIGA-001"' in fa["story"]["minute"][0]
-          and fa["story"]["sections"][0]["blocks"][1]["kind"] == "flow", json.dumps(fa.get("story"))[:600])
+          and any(b.get("kind") == "flow" for b in fa["story"]["sections"][0]["blocks"])
+          and fa["story"]["sections"][0]["blocks"][0].get("lead"), json.dumps(fa.get("story"))[:600])
     # L72 story audit: the reader's snapshot holds the story and the questions, never the answers; a
     # contradicted answer or a distorted sentence fails the score
     from _common import eval_dir as _evd

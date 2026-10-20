@@ -456,3 +456,5 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .tl-events li.future { opacity: 0.45; }
 .sfig:has(.tl-events) { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
 @media (max-width: 900px) { .sfig:has(.tl-events) { grid-template-columns: minmax(0, 1fr); } }
+.st-sec p.lead { font-size: 1.04em; }
+:root[data-lens="everyone"] .st-sec p.lead { margin-bottom: 14px; }

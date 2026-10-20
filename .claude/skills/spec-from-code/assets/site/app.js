@@ -525,7 +525,7 @@
   function storyHTML(st, f) {
     const n = f ? f.claims.confirmed + f.claims.inferred + f.claims.gap : 0;
     const sec = st.sections.map((x, k) => `<section class="st-sec" id="story-${k}"><h3>${x.title}</h3>${x.blocks.map((b) =>
-      b.t === "p" ? `<p class="L2">${b.h}</p>` : b.t === "ul" ? `<ul class="L2">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
+      b.t === "p" ? `<p class="${b.lead ? "lead" : "L2"}">${b.h}</p>` : b.t === "ul" ? `<ul class="L2">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
         : b.t === "path" ? pathBlock(b) : figureShell(b)).join("")}</section>`).join("");
     const mins = Math.max(1, Math.round((st.words_n || st.words || 0) / 238));
     return `<section class="story" aria-label="Chapter in brief">
@@ -552,26 +552,29 @@
   function drawTimeline(fig, fg) {
     const art = $(".sfig-art", fig);
     const lanes = fg.lanes, evs = fg.events;
-    const tmax = Math.max(1, ...evs.map((e) => e.t)) * 1.12;
-    const LW = 128, W = 680, LH = 52, TOP = 26, H = TOP + lanes.length * LH + 34;
-    const x = (t) => LW + (t / tmax) * (W - LW - 16);
+    const times = [...new Set(evs.map((e) => e.t))].sort((a, b) => a - b);
+    const tmax = times.length;  // the playhead runs over event slots: distinct times evenly spaced, in order
+    const LW = 128, W = Math.max(680, LW + 110 * times.length), LH = 52, TOP = 26, H = TOP + lanes.length * LH + 34;
+    const slot = (t) => times.indexOf(t);
+    const x = (u) => LW + 10 + (u / tmax) * (W - LW - 26);
+    evs.forEach((e) => (e.u = slot(e.t)));
     const states = [...new Set(evs.map((e) => e.state))];
     const hue = (st) => `var(--l${(states.indexOf(st) % 6) + 1})`;
     let out = `<line class="tl-axis" x1="${LW}" y1="${H - 26}" x2="${W - 10}" y2="${H - 26}"/>`;
-    [...new Set(evs.map((e) => e.t))].forEach((t) => {
+    times.forEach((t, u) => {
       const lab = evs.find((e) => e.t === t).time;
-      out += `<line class="tl-tick" x1="${x(t)}" y1="${TOP - 6}" x2="${x(t)}" y2="${H - 26}"/><text class="tl-time" x="${x(t)}" y="${H - 10}" text-anchor="middle">${lbl(lab)}</text>`;
+      out += `<line class="tl-tick" x1="${x(u)}" y1="${TOP - 6}" x2="${x(u)}" y2="${H - 26}"/><text class="tl-time" x="${x(u)}" y="${H - 10}" text-anchor="middle">${lbl(lab)}</text>`;
     });
     lanes.forEach((ln, k) => {
       const y = TOP + k * LH;
       out += `<text class="tl-lane" x="8" y="${y + LH / 2 + 4}">${lbl(ln.label)}</text>`;
       const le = evs.filter((e) => e.lane === ln.id);
       le.forEach((e, j) => {
-        const x0 = x(e.t), x1 = j + 1 < le.length ? x(le[j + 1].t) : W - 12;
+        const x0 = x(e.u), x1 = j + 1 < le.length ? x(le[j + 1].u) : W - 12;
         out += `<rect class="tl-band" data-k="${evs.indexOf(e)}" x="${x0}" y="${y + 10}" width="${Math.max(2, x1 - x0)}" height="${LH - 20}" rx="6" style="fill:${hue(e.state)}"/>`;
-        if (x1 - x0 > 60) out += `<text class="tl-state" x="${x0 + 8}" y="${y + LH / 2 + 4}">${lbl(e.state)}</text>`;
+        if (x1 - x0 > 46) out += `<text class="tl-state" x="${x0 + 8}" y="${y + LH / 2 + 4}">${lbl(e.state.length > Math.floor((x1 - x0 - 14) / 6.2) ? e.state.slice(0, Math.max(3, Math.floor((x1 - x0 - 14) / 6.2) - 1)) + "…" : e.state)}<title>${lbl(e.state)}</title></text>`;
       });
-      le.forEach((e) => { out += `<circle class="tl-ev" data-k="${evs.indexOf(e)}" cx="${x(e.t)}" cy="${y + 10}" r="6"><title>${lbl(e.time)}: ${lbl(e.label)}</title></circle>`; });
+      le.forEach((e) => { out += `<circle class="tl-ev" data-k="${evs.indexOf(e)}" cx="${x(e.u)}" cy="${y + 10}" r="6"><title>${lbl(e.time)}: ${lbl(e.label)}</title></circle>`; });
     });
     out += `<line class="tl-head" x1="${LW}" y1="${TOP - 10}" x2="${LW}" y2="${H - 26}"/>`;
     art.innerHTML = `<svg class="sfig-svg tl" viewBox="0 0 ${W} ${H}" role="img" aria-label="${lbl(fg.title.replace(/<[^>]+>/g, ""))}" style="min-width:${Math.min(W, 520)}px">${out}</svg>
@@ -580,17 +583,17 @@
     if (steps) steps.remove();
     fig.insertAdjacentHTML("beforeend", `<ol class="tl-events">${evs.map((e, k) => `<li data-k="${k}"><b>${lbl(e.time)}</b><span><strong>${lbl(lanes.find((l) => l.id === e.lane)?.label || e.lane)}:</strong> ${lbl(e.label)} → <em>${lbl(e.state)}</em> ${chips(e.ids)}</span></li>`).join("")}</ol>`);
     const svg = $("svg", art), head = $(".tl-head", svg), range = $("input", art), now = $(".tl-now", art), items = $$(".tl-events li", fig);
-    const show = (t) => {
-      head.setAttribute("x1", x(t)); head.setAttribute("x2", x(t));
-      $$(".tl-band", svg).forEach((b) => b.classList.toggle("future", evs[+b.dataset.k].t > t + 1e-9));
-      $$(".tl-ev", svg).forEach((c) => c.classList.toggle("future", evs[+c.dataset.k].t > t + 1e-9));
+    const show = (u) => {
+      head.setAttribute("x1", x(u)); head.setAttribute("x2", x(u));
+      $$(".tl-band", svg).forEach((b) => b.classList.toggle("future", evs[+b.dataset.k].u > u + 1e-9));
+      $$(".tl-ev", svg).forEach((c) => c.classList.toggle("future", evs[+c.dataset.k].u > u + 1e-9));
       let last = -1;
-      evs.forEach((e, k) => { if (e.t <= t + 1e-9) last = k; });
-      items.forEach((li, k) => { li.classList.toggle("on", k === last); li.classList.toggle("future", evs[k].t > t + 1e-9); });
-      now.textContent = t >= tmax / 1.12 - 1e-9 ? "end" : `${(Math.round(t * 10) / 10)}s`;
+      evs.forEach((e, k) => { if (e.u <= u + 1e-9) last = k; });
+      items.forEach((li, k) => { li.classList.toggle("on", k === last); li.classList.toggle("future", evs[k].u > u + 1e-9); });
+      now.textContent = u >= tmax - 1 + 1e-9 ? "end" : last >= 0 ? evs[last].time : "start";
     };
     range.addEventListener("input", () => show((range.value / 1000) * tmax));
-    items.forEach((li) => li.addEventListener("click", (e) => { if (e.target.closest("a")) return; const t = evs[+li.dataset.k].t; range.value = (t / tmax) * 1000; show(t); }));
+    items.forEach((li) => li.addEventListener("click", (e) => { if (e.target.closest("a")) return; const u = evs[+li.dataset.k].u; range.value = (u / tmax) * 1000; show(u); }));
     let raf = 0;
     const btn = $('[data-act="tl-play"]', art);
     const stop = () => { cancelAnimationFrame(raf); btn.textContent = "Play"; btn.setAttribute("aria-pressed", "false"); };

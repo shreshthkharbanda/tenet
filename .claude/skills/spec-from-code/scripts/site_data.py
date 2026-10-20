@@ -174,7 +174,7 @@ def render_story(st: dict) -> dict:
 
     def block(b):
         if b["t"] == "p":
-            return {"t": "p", "h": inline(b["md"])}
+            return {"t": "p", "h": inline(b["md"]), "lead": bool(b.get("lead"))}
         if b["t"] == "ul":
             return {"t": "ul", "items": [{"h": inline(x)} for x in b["items"]]}
         if b["t"] == "path":

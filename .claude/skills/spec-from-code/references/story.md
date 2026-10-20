@@ -77,7 +77,8 @@ Prose: what happens, in the order it happens, each sentence ending with its chip
 | `@minute` "In one minute" | Engineer | at most 3 names | the mechanism in one paragraph, for an engineer who reads nothing else |
 | `## Words you'll see` | Engineer | names in the third column only | the bridge: plain term, plain meaning, the names it goes by in the code, the claims that define it. Every code name the story uses appears here. Order rows by first use. |
 | `## At a glance` | Engineer | values and defined names | the module's conditional behavior as When/Then rows, most common case first (required when the module has 5 or more conditional claims) |
-| `## <assertion>` sections | heading and figure: Everyone; prose: Engineer | prose: at most 4 code spans per 100 words, each a value or a defined name | 3 to 6 sections in the order the mechanism runs, each answering one question a newcomer asks |
+| section lead (the first paragraph of every section) | Everyone | none | at most 60 words: the section's point in plain words, so a reader who chose Everyone sees heading, lead and figure and never a bare heading |
+| `## <assertion>` sections | heading and figure: Everyone; prose after the lead: Engineer | prose: at most 4 code spans per 100 words, each a value or a defined name | 3 to 6 sections in the order the mechanism runs, each answering one question a newcomer asks |
 | `@figure` | Everyone | none in titles, labels, steps | the mechanism a sentence cannot carry (see Figures) |
 | `## Watch out` | Everyone | none | 2 to 8 bullets: what surprises a caller, in plain words, including the most consequential suspected defects |
 
