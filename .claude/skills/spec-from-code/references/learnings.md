@@ -155,3 +155,22 @@ execution that `set_cooldown_deployments` writes the cooldown and then raises wi
 then left it out as "too much of a gotcha". Self-censoring surprising behavior biases fidelity upward
 on exactly the behaviors a reader most needs. Fix: the prober brief says gotchas, bugs, and sync/async
 divergences make the best probes; probe what the code does, not what it should do.
+
+**L24. Suspected defects had no home.** Found: LiteLLM iteration 1; probers and extractors found
+likely bugs (`default_priority` makes every `acompletion` raise `TypeError`; a named credential may
+survive a caller-redirected `api_base`; TPM counters read and written under different keys) and could
+only mention them in prose replies the orchestrator might drop. A spec writer facing a bug either
+"fixes" it in the spec (misleading the reviewer, failing a rebuild) or buries it. Fix: the rule is
+specify what the code does, then flag it; module specs have an optional `## Suspected defects` section
+of claims with the evidence; `collect_defects.py` builds `_meta/suspected-defects.md` from those
+sections and from worker reports' `suspected_bugs`. Reviewing specs instead of code needs this list
+most of all.
+
+**L25. How to run the code was rediscovered per worker.** Found: LiteLLM iteration 1; probers found
+the venv and executed every reference answer, while an extractor used the system interpreter, could
+not import the package, and fell back to reading. The same environment knowledge was re-derived (or
+not) by every worker. Fix: Phase 0 writes `_meta/env.md` (interpreter, env vars, test command,
+baseline failures); `render_briefs.py` injects it as `{{RUN_ENV}}` into extractor, prober, reviser,
+judge, and falsifier briefs. Phase 0 must also install the project's declared test environment
+(extras and dependency groups) and confirm the scoped tests collect without import errors, not just
+that some tests run.

@@ -115,6 +115,10 @@ inclusive or exclusive. Ordering says stable or unstable. Defaults say where the
 - **Callers tell you the contract.** Grep for callers of the public surface. What callers rely on is
   behavior even when it looks incidental.
 - **Do not edit source.** Workers write only under the specs directory (and a scratch copy for rebuilds).
+- **Specify bugs, then flag them.** If the code does something that looks unintended, the normative
+  sections state what it does (a spec that silently "fixes" a bug misleads a reviewer and fails a
+  rebuild), and the optional Suspected defects section says why it looks wrong. Suspected defects are
+  collected across modules into `_meta/suspected-defects.md` for the human review.
 
 ## 5. Layout
 
@@ -347,6 +351,13 @@ List of the `{gap}` claims with one line each on what would resolve them.
 ## Test evidence
 | Claim | Test | What it pins |
 |---|---|---|
+
+## Suspected defects
+Optional. Behavior that looks unintended: it contradicts its own docstring or name, a sibling path
+(sync vs async), a caller's evident expectation, or the module's purpose. The normative sections
+still state what the code DOES; this section says why it looks wrong, as claims:
+- [PFX-0xx] {confirmed} `path:L1-L2` <what happens>. Looks unintended because <evidence>. Impact: <who
+  hits it and how>.
 ```
 
 ### _meta/gaps.md, _meta/questions.md, _meta/confidence-report.md (Reconciler, from scripts + specs)

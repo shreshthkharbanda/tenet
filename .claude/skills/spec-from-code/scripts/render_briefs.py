@@ -83,6 +83,10 @@ def main() -> int:
     commit = mods.get("commit") or git_head(repo) or "unknown"
     base = {"REPO": repo, "SPECS": specs, "SKILL_DIR": SKILL_DIR, "COMMIT": commit, "SCRATCH": scratch,
             "ROUND": args.round, "N_PROBES": args.n_probes, "TEST_CMD": args.test_cmd}
+    env_md = meta / "env.md"
+    base["RUN_ENV"] = (env_md.read_text(encoding="utf-8").strip() if env_md.exists() else
+                       "no verified way to run this project's code was recorded (_meta/env.md is missing); "
+                       "work from reading, and mark execution-dependent facts {inferred}.")
     for kv in args.set:
         if "=" not in kv:
             raise SystemExit(f"--set expects KEY=VALUE, got {kv!r}")

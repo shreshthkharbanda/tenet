@@ -126,8 +126,9 @@ set is ready to be reviewed instead of the code. Then:
 
 | Module | Claims (c/i/g) | Files | Symbols | Held-out fidelity | Contradictions | Rebuild | Rounds | Status |
 
-Then: the five most important gaps (from `_meta/gaps.md`, chosen for impact on the main paths), the
-contradictions left as questions, the cost actually spent (agents launched, rounds run), and the
+Then: the suspected defects (from `_meta/suspected-defects.md`, most consequential first), the five
+most important gaps (from `_meta/gaps.md`, chosen for impact on the main paths), the contradictions
+left as questions, the cost actually spent (agents launched, rounds run), and the
 limitations below in one short paragraph. Point at `specs/INDEX.md` as the entry point. Do not commit.
 
 ## 7. Known limitations

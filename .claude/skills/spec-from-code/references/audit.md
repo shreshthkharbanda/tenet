@@ -27,7 +27,8 @@ For every claim:
    vs async twin of the function, a caller that passes something the claim ignores, a literal that
    differs by one character, an ordering that differs, "always"/"never" where a condition exists.
 2. Where cheap, execute: copy what you need to {{SCRATCH}}/falsify-{{MODULE_ID}}/ and run a harness
-   there (never in the repo). An executed counterexample is the strongest evidence.
+   there (never in the repo). An executed counterexample is the strongest evidence. How to run this
+   project's code here: {{RUN_ENV}}
 3. Verdict, one of:
    - holds: you tried and could not break it.
    - false: the code does something else in a case a caller can reach. Give the case.

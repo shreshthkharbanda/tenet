@@ -47,6 +47,13 @@ rev-parse HEAD)`. If the tree is dirty, say so; specs are stamped with a commit 
 freshness meaningless. Confirm the test command from build hints actually runs (try it once, with a
 timeout); rebuilds need it and `04-operations.md` cites it.
 
+Record how to run the project's code in `$SPECS/_meta/env.md`: interpreter, environment variables
+(anything that avoids network calls at import), the test command, and the baseline failures. Install
+the project's declared test environment (extras, dependency groups, dev requirements) rather than
+chasing import errors one package at a time, and confirm the scoped tests collect with no import
+errors. Workers get this file through `{{RUN_ENV}}` and use it to execute what they would otherwise
+guess.
+
 Agent estimate: 1 Surveyor + 4 cross-cutting + M extractors + M probers + M answerers + M judges per
 round + revisers for failing modules + rebuilders. For M modules and R rounds that is roughly
 5 + 2M + 2M·R + 0.5M·(R-1) + rebuilds. Say the number.
@@ -192,6 +199,7 @@ outside it, with briefs in `references/audit.md` (rendered like any other) and o
 
 ```
 python3 $SKILL_DIR/scripts/apply_status.py $SPECS      # stamps status/fidelity in frontmatter, refreshes INDEX table
+python3 $SKILL_DIR/scripts/collect_defects.py $SPECS   # _meta/suspected-defects.md for the human review
 python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round <last>
 ```
 Dispatch the Reconciler once more only if revisions touched cross-module facts (it re-checks
@@ -242,5 +250,5 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
   Gates: `lint_specs.py`, `coverage.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
   Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
-  Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`.
+  Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`, `collect_defects.py`.
   Gate regression tests: `selftest.py`.

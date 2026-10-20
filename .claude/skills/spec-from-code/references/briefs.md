@@ -121,7 +121,11 @@ Method:
    these names never appear as definitions and a reader cannot find them otherwise.
 2. Grep for callers of each public symbol outside the module (what callers rely on is contract).
 3. Open dependencies only as far as needed to state this module's behavior; what you did not trace is
-   {inferred} or {gap}, never {confirmed}.
+   {inferred} or {gap}, never {confirmed}. Where reading leaves you unsure, execute: copy what you need
+   to {{SCRATCH}}/extract-{{MODULE_ID}}/ and run a throwaway harness there (never in the repo). How to
+   run this project's code here: {{RUN_ENV}}
+   If behavior looks unintended, state what the code does in the normative sections anyway, and add it
+   under "## Suspected defects" with the evidence (see templates.md).
 4. Write {{SPECS}}/modules/{{MODULE_ID}}.md. Every fact is a claim with an ID {{PREFIX}}-001, -002, ...
    and a verified ref (path:L1-L2 relative to the repo root, or path::Symbol). Aim for one claim per
    10-30 lines of non-trivial logic; a 2000-LOC module typically needs 60-150 claims. Every in-scope
@@ -303,7 +307,8 @@ that prove them; a reference answer you cannot cite is not a probe, drop it.
 
 Read the tests: behaviors pinned by tests make the best probes, and tests often reveal edge cases.
 Where it is cheap, confirm reference answers by executing the code: copy what you need into
-{{SCRATCH}}/probe-harness-{{MODULE_ID}}/ and run a throwaway harness there (never in the repo). An
+{{SCRATCH}}/probe-harness-{{MODULE_ID}}/ and run a throwaway harness there (never in the repo).
+How to run this project's code here: {{RUN_ENV}} An
 executed reference answer beats a read one; mark it verified_by: execution.
 
 Do not read other modules' probes. Do not modify any file outside _meta/probes/. Write
@@ -369,7 +374,8 @@ For each probe, decide one verdict:
 - gap: the answer is unanswerable or so partial that the distinguishing fact is missing. This is a
   spec omission.
 - probe_invalid: the reference answer is wrong or the question is unobservable or ambiguous. Verify by
-  opening the cited lines; you may read source for this purpose only. Use sparingly and explain.
+  opening the cited lines (and executing if needed: {{RUN_ENV}}); you may read source for this purpose
+  only. Use sparingly and explain.
 
 A spec that is more precise than the reference (gives the exact message where the reference gives the
 code) still agrees. A spec that hedges ("usually", "may") where the code is deterministic does not
@@ -406,8 +412,8 @@ Read {{SKILL_DIR}}/references/templates.md (grammar, rules) and
 {{SKILL_DIR}}/references/implicit-decisions.md first.
 
 For each failure:
-1. Open the cited code and confirm the reference answer. If the reference is wrong, say so in your
-   report notes and change nothing for it.
+1. Open the cited code and confirm the reference answer (execute it if unsure: {{RUN_ENV}}). If the
+   reference is wrong, say so in your report notes and change nothing for it.
 2. Classify the root cause: a wrong claim (contradiction), a missing claim (gap), a claim that exists
    but is too vague to answer from (hedging, missing literal), or a claim in the wrong file.
 3. Fix the root cause, not the symptom: rewrite the wrong claim in place (same ID), add the missing
