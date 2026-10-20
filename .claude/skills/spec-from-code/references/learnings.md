@@ -817,3 +817,17 @@ sees. The Everyone layer warns over 2,400 words (about 10 minutes) for a chapter
 the system story. The site's reading time follows the lens, so "In brief" means the Everyone layer
 and the Engineer lens shows the whole story. The prose limit stays a warning: putting back a dropped
 condition adds words, and accuracy wins that trade.
+
+**L87. Fixer plus recheck converged where rewrites did not.** Result: LiteLLM Phase 9. After
+round 3, each story went through a story fixer (L84), then a recheck of the repaired rows; a second,
+smaller pass covered the five rows the first left. Units supported per story, out of every sentence,
+glossary row, At-a-glance row, figure step, timeline row and Watch-out bullet: round 2 (narrator v2)
+1,088 of 1,219 (89%); round 3 (narrator rewrites) 87% to 98% per story; after fixer and recheck, all
+1,454 units in all ten module stories (100%), with none overstated, distorted or unsupported. Cost: a
+fixer took 70k to 135k tokens and a recheck 100k to 160k, against 300k to 420k for a resumed narrator
+and about 170k for a full judge. The probe readers and teach-back judges were not re-run after the
+last repairs. Their latest numbers (failure-handling: 2 contradicted answers, teach-back 20 correct
+and 1 vague; router-selection: 1 contradicted answer, 3 wrong teach-back statements, since repaired)
+measure earlier versions. Comprehension needs its own re-measurement before it can be claimed for the
+final stories. Order that worked: narrator writes; judge, probe reader and persona reader measure;
+narrator rewrites once for comprehension; then fixer and recheck until faithful.

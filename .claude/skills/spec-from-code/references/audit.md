@@ -290,7 +290,8 @@ Keep every other previous row as it is, with its sentence updated only if its wo
 
 Write the full current rows file, in the same format as the previous one, to
 {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl: every previous row, with each rechecked row replaced
-by the current text and your verdict, and a "rechecked": true field on the rows you judged. Do not
+by the current text and your verdict, and a "rechecked": {{ROUND}} field on the rows you judged (a
+row an earlier recheck judged keeps its own round number). Do not
 edit the story or the spec. Reply with the counts per verdict over the whole file, and one line per
 rechecked row that is still not supported.
 Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-recheck --module {{MODULE_ID}} --round {{ROUND}} \
