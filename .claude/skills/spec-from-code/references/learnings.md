@@ -639,3 +639,24 @@ instead); G5 reads each transcript for such tool calls (page publishing other th
 connector tool, messaging and scheduling tools, `git push|commit|tag`, `gh`, mutating `curl`) and
 fails the worker's report. On the real transcripts it flags exactly the one publish. Anything a worker
 published is the user's to keep or delete; tell them, never delete it unasked.
+
+**L75. Readable is a measured property, and the first stories failed it.** Found: LiteLLM Phase 9
+pilot, judged three ways. (1) Story judges labelled every sentence of three G8-clean stories against
+their claims: 99, 110 and 108 sentences; 2, 1 and 1 distorted; 5, 9 and 9 overstated, almost all by a
+dropped condition ("the check applies" where the claim says "when the router was built with it").
+(2) Story-only readers answered each module's 25 probes from the story alone and scorers compared the
+answers with the references: 7/11/7 (agree/partial/not covered) with 0 contradicted for one module,
+8/9/5 with 3 contradicted and 5/3/16 with 1 for the others. Every contradiction came from a reader
+extending a rule the story stated for the usual case to an edge case it never mentioned. (3) The
+readability standard measured the same stories at 7.5 to 9.8 code spans per 100 words, with no
+plain-language layer at all, and the ledger at 9.2 per 100 words with 466 of 2,795 claims over 6.
+The stories were correct and still unreadable to anyone but an engineer, and still misleading at the
+edges. Fix: references/readability.md (the standard, from reading research) and story v2: an
+Everyone layer with no code at all, Words you'll see bridging every code name to a plain term, plain
+figure labels, an example timeline per module, the system story with every main path told in plain
+steps; G8 v2 enforces the layers, code density, sentence length, grade level and acronyms; the
+narrator brief carries the audit's lesson (keep every condition, name the edge cases) and its
+module's story-judge rows; persona readers (a sales engineer, a CTO) read only the Everyone layer
+and explain the module back, and a teach-back judge checks every statement; claims are written
+natural language first and lint flags dense ones for the reviser. The reader site has an Everyone /
+Engineer / Expert switch, plain labels for its own metrics, and plain module names.

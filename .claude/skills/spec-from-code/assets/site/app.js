@@ -37,7 +37,9 @@
   const fileMeta = (slug) => B.files.find((f) => f.slug === slug);
   const shortTitle = (f) => (f ? f.title.replace(/\s*\([A-Z0-9]+\)\s*$/, "") : "");
   const modules = () => B.files.filter((f) => f.kind === "module");
-  const nameOf = (slug) => { const f = fileMeta(slug); return f ? (f.module || f.rel.replace(/\.md$/, "")) : slug; };
+  // a module's display name is its id in plain words ("failure-handling" -> "Failure handling")
+  const pretty = (id) => String(id).replace(/^\d+-/, "").replace(/[-_]+/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const nameOf = (slug) => { const f = fileMeta(slug); return f ? pretty(f.module || f.rel.replace(/\.md$/, "").replace(/^modules\//, "")) : slug; };
   const readingMinutes = (f) => Math.max(1, Math.round(((f.words || 0) / 238)));
 
   /* ---------- chrome: toggles and search entry ---------- */
@@ -361,7 +363,7 @@
       nodes += `<g class="map-node" data-slug="${m.slug}" tabindex="0" role="link" aria-label="${esc(shortTitle(m))}">
         <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="10"/>
         <rect class="ring" x="${p.x + 10}" y="${p.y + p.h - 6}" width="${p.w - 20}" height="3" rx="1.5" style="fill:${ring}"/>
-        <text x="${p.x + 12}" y="${p.y + 22}">${esc(m.module)}</text>
+        <text x="${p.x + 12}" y="${p.y + 22}">${esc(pretty(m.module))}</text>
         <text class="sub" x="${p.x + 12}" y="${p.y + 38}">${esc(m.prefix)} · ${m.claims.confirmed + m.claims.inferred + m.claims.gap} claims</text>
         <title>${esc(shortTitle(m))}: ${esc(m.status || "")}</title></g>`;
     });
@@ -781,7 +783,7 @@
       <nav class="toc" aria-label="Sections"><div class="label">${f.kind === "module" ? "Chapter " + chapNo : "Reference"}</div>${toc}</nav>
       <article style="min-width:0">
         <header class="ch-head">
-          <div class="kicker">${f.kind === "module" ? `<span class="label">Chapter ${chapNo} · ${esc(f.module)}</span>` : `<span class="label">Reference</span>`}<span class="label mono" style="letter-spacing:0">${esc(f.prefix || "")}</span>${pill(f.status)}</div>
+          <div class="kicker">${f.kind === "module" ? `<span class="label">Chapter ${chapNo} · ${esc(pretty(f.module))}</span>` : `<span class="label">Reference</span>`}<span class="label mono" style="letter-spacing:0">${esc(f.prefix || "")}</span>${pill(f.status)}</div>
           <h1>${esc(shortTitle(f))}</h1>
           <div class="ch-meta">
             ${meter(f)}
