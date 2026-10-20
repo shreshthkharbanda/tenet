@@ -43,7 +43,9 @@ def everyone_text(story_md: str) -> str:
                 out += [b["md"], ""]
             elif b["t"] == "fig":
                 out.append(f"Figure: {b['title']}")
-                if b["kind"] == "timeline":
+                if b["kind"] == "table":
+                    out += [f"- {r['in']}: {r['out']} [{', '.join(r['ids'])}]" for r in b["rows"]]
+                elif b["kind"] == "timeline":
                     lanes = {x["id"]: x["label"] for x in b["lanes"]}
                     out += [f"- {e['time']}: {lanes.get(e['lane'], e['lane'])}: {e['label']}, now {e['state']}" for e in b["events"]]
                 else:

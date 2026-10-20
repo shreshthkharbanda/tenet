@@ -363,7 +363,9 @@ Write {{SPECS}}/_meta/story/{{MODULE_ID}}.md in the format of story.md. Work in 
    leading with its point. Prefer the plain term; use a code name only where an engineer needs the
    exact name, and only once it is in Words you'll see.
 5. Draw the central mechanism (states, flow or sequence, plain labels, with steps), and give it one
-   example timeline: concrete deployments and real values from the claims, played out over time.
+   example timeline: concrete deployments and real values from the claims, played out over time. When
+   a rule turns on one input with many values (which status codes do what, what each setting value
+   does), give it a table figure, one row per value, so a reader scans for their case.
 6. Write At a glance (When/Then, most common case first) and Watch out (plain words, what surprises
    a caller, including the most consequential suspected defects).
 Keep every condition a claim states. A story audit judged earlier stories sentence by sentence: the

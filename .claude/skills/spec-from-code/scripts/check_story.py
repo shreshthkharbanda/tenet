@@ -175,6 +175,26 @@ def overview_flows(specs: Path) -> dict[str, int]:
     return out
 
 
+NUMBER_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+                "eleven": 11, "twelve": 12}
+ANNOUNCED = re.compile(r"\b(two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,2})\s+(?:[a-z-]+\s+){0,2}[a-z-]+s\b[^:.;]*:\s*(.+)$", re.I)
+
+
+def announced_count(sentence: str) -> tuple[int, int] | None:
+    """(announced, listed) when a sentence announces a count and lists a different number of items after a
+    colon (L81: "nine checks" with eight listed sent a reader counting)."""
+    m = ANNOUNCED.search(strip_chips(sentence).rstrip(". "))
+    if not m:
+        return None
+    n = NUMBER_WORDS.get(m.group(1).lower()) or int(m.group(1))
+    rest = re.sub(r"\([^)]*\)", "", m.group(2))
+    items = [x for x in re.split(r";\s*" if ";" in rest else r",\s*(?:and\s+|or\s+)?|\s+(?:and|or)\s+", rest) if x.strip()]
+    # only a plain list of short names is counted; clauses and "both"/"each" items make the count a judgement
+    if any(len(x.split()) > 5 or re.search(r"\b(both|all|each|every|either|neither)\b", x, re.I) for x in items):
+        return None
+    return (n, len(items)) if 2 <= n <= 12 and len(items) >= 2 and len(items) != n else None
+
+
 def block_layer(b: dict) -> str:
     """The one definition of the layer a section block belongs to: a section's lead, its figures and its
     paths are Everyone; the rest of its prose is Engineer. The reader site (site_data tags each block)
@@ -246,12 +266,12 @@ def parse_story(text: str) -> tuple[dict, list[str]]:
             continue
         if s.startswith("@figure"):
             flush()
-            m = re.match(r'@figure\s+(flow|states|sequence|timeline)\s+id=([\w-]+)\s+title="([^"]*)"\s*$', s)
+            m = re.match(r'@figure\s+(flow|states|sequence|timeline|table)\s+id=([\w-]+)\s+title="([^"]*)"\s*$', s)
             fig = {"t": "fig", "kind": m.group(1) if m else "?", "id": m.group(2) if m else "?",
                    "title": m.group(3) if m else "", "nodes": [], "edges": [], "actors": [], "lanes": [], "events": [],
-                   "steps": [], "line": i + 1}
+                   "rows": [], "steps": [], "line": i + 1}
             if not m:
-                errs.append(f"line {i + 1}: figure header must be @figure flow|states|sequence|timeline id=<id> title=\"...\"")
+                errs.append(f"line {i + 1}: figure header must be @figure flow|states|sequence|timeline|table id=<id> title=\"...\"")
             i += 1
             while i < len(lines) and ROW.match(lines[i].strip()):
                 c = cells(lines[i])
@@ -261,6 +281,8 @@ def parse_story(text: str) -> tuple[dict, list[str]]:
                 if mm and len(c) >= 2:
                     rec = {"id": mm.group(2), "label": c[1], "ids": cell_ids(c[2]) if len(c) > 2 else []}
                     {"actor": fig["actors"], "lane": fig["lanes"]}.get(mm.group(1), fig["nodes"]).append(rec)
+                elif fig["kind"] == "table" and len(c) >= 3 and not mm:
+                    fig["rows"].append({"in": c[0], "out": c[1], "ids": cell_ids(c[2])})
                 elif fig["kind"] == "timeline" and len(c) >= 5 and seconds(c[0]) is not None:
                     fig["events"].append({"time": c[0], "t": seconds(c[0]), "lane": c[1], "label": c[2], "state": c[3],
                                           "ids": cell_ids(c[4])})
@@ -415,6 +437,9 @@ class Checker:
                 miss = self.unsupported(s, sid or ids or ids_fallback or [])
                 if miss:
                     errors.append(f"states {', '.join(miss[:3])} found in neither the cited claims nor their code: {where(s)}")
+                cnt = announced_count(s)
+                if cnt:
+                    warnings.append(f"announces {cnt[0]} but lists {cnt[1]}; list them all or drop the number: {where(s)}")
                 part = self.partial_quote(s, sid or ids or ids_fallback or [])
                 if part:
                     errors.append(f"quotes part of a message as if it were whole; the claim's message goes on "
@@ -649,6 +674,23 @@ class Checker:
     def check_figure(self, f: dict, errors: list, warnings: list, cited: set, everyone):
         name = f"figure {f['id']}"
         everyone(f["title"], f"{name} title")
+        if f["kind"] == "table":
+            # a lookup table: one input per row and what happens, in plain words, for a rule that turns on many
+            # values (L81: "I'd want a simple table: status code, benches yes or no")
+            if not 3 <= len(f["rows"]) <= 14:
+                errors.append(f"{name}: {len(f['rows'])} rows (3 to 14)")
+            for r in f["rows"]:
+                if not r["ids"]:
+                    errors.append(f"{name}: row '{r['in']}' cites no claim")
+                for part in (r["in"], r["out"]):
+                    everyone(part, f"{name} row")
+                    if len(part.split()) > 12:
+                        errors.append(f"{name}: cell over 12 words: {part}")
+                miss = self.unsupported(r["in"] + " " + r["out"], r["ids"])
+                if miss:
+                    errors.append(f"{name}: row '{r['in']}' states {', '.join(miss[:3])} found in neither its claims nor their code")
+                cited.update(r["ids"])
+            return
         if f["kind"] == "timeline":
             lanes = {x["id"] for x in f["lanes"]}
             if not f["lanes"]:

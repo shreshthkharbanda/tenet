@@ -662,6 +662,9 @@
     show(tmax);  // complete at rest: the whole example is visible before anyone presses play
   }
   function figureShell(fg) {
+    // a lookup table needs no layout: input on the left, what happens on the right, scannable at a glance
+    if (fg.kind === "table") return `<figure class="sfig lookup" data-fig="${fg.id}"><figcaption>${fg.title}</figcaption>
+      <div class="tbl"><table><tbody>${fg.rows.map((r) => `<tr><th scope="row">${r.in}</th><td>${r.out} ${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></figure>`;
     return `<figure class="sfig" data-fig="${fg.id}"><div class="sfig-art"><p class="loading" style="padding:16px">Drawing…</p></div>
       ${fg.steps.length ? `<div class="sfig-steps"><div class="controls"><span class="label">Step through</span><span style="display:flex;gap:6px"><button class="btn" data-act="prev" aria-label="Previous step">←</button><button class="btn" data-act="play">Play</button><button class="btn" data-act="next" aria-label="Next step">→</button></span></div>
         <ol>${fg.steps.map((x, k) => `<li data-k="${k}"><b>${x.title}</b><span>${x.h}</span></li>`).join("")}</ol></div>` : ""}
@@ -672,6 +675,7 @@
   async function drawFigure(fig, fg) {
     const art = $(".sfig-art", fig);
     let svg, geo;
+    if (fg.kind === "table") return;
     if (fg.kind === "timeline") return drawTimeline(fig, fg);
     if (fg.kind === "sequence") ({ svg, geo } = seqFigure(fg));
     else ({ svg, geo } = await graphFigure(fg));

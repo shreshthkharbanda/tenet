@@ -475,3 +475,10 @@ dfn.term:hover::after, dfn.term:focus-visible::after { content: attr(data-means)
   border: 0; border-radius: 50%; background: var(--muted); opacity: 0.4; vertical-align: 0.42rem; font-size: 0; }
 :root[data-lens="everyone"] .cites .xr:first-child:hover, :root[data-lens="everyone"] .cites .xr:first-child:focus-visible { opacity: 1; background: var(--accent); }
 :root[data-lens="everyone"] .story .glance td.ids .cites .xr:first-child { margin: 0; }
+
+/* lookup table figure: one input per row and what happens */
+.sfig.lookup { display: block; padding: 14px 16px; }
+.sfig.lookup figcaption { margin: 0 0 10px; }
+.sfig.lookup table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.sfig.lookup th { text-align: left; font: 700 0.92rem/1.4 var(--display); padding: 8px 14px 8px 0; width: 38%; vertical-align: top; border-bottom: 1px solid var(--rule-2); }
+.sfig.lookup td { padding: 8px 0; vertical-align: top; border-bottom: 1px solid var(--rule-2); }

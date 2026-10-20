@@ -739,3 +739,16 @@ lenses keep the full IDs. Each defined term, at its first use in each section, c
 meaning on hover or keyboard focus (Mayer's signalling and pre-training principles, applied just in
 time). A list of more than 16 terms starts collapsed, in two columns. The home page goes cover,
 map, system story with its figures drawn and terms defined, then paths and chapters.
+
+**L81. Readers count what you announce and look up what they need.** Found: LiteLLM Phase 9, persona
+reader round 4 on the rewritten failure-handling story. The story announced "nine checks" and listed
+eight. The reader also asked for "a simple table: status code, benches yes or no", because that
+rule was spread over three sentences: a list of exceptions, a definition of the retryable statuses
+and a rule for a lone deployment. Class: (1) a number and its list that disagree, which a machine
+can count, and (2) a rule that turns on one input with many values, told in sentences when the
+reader wants to look up a single case. Fix: G8 warns when a sentence announces a count and lists a
+different number of short items after a colon. Clause lists and "both"/"each" items are not
+counted, so the warning stays trustworthy; on the eleven LiteLLM stories it found nothing false. A
+new figure kind, `table` (input, what happens, claims: 3 to 14 rows of plain words), renders as a
+scannable lookup in the Everyone layer and reaches the persona snapshot. The narrator brief asks
+for one wherever a rule turns on many values.

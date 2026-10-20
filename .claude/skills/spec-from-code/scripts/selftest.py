@@ -685,6 +685,26 @@ def main() -> int:
           rc == 1 and "sentence cites no claim (end every sentence with the chips it rests on): Nothing else happens here." in out
           and "uses 'callback' with no row in Words you'll see" in out and "defines 'spare term' but the story never uses it" in out, out)
     sys.path.insert(0, str(HERE))
+    from check_story import announced_count as _ac
+    tbl = good_story.replace("## The later methods follow the same rule\nEvery method in a chunk follows that rule [BIGA-010].\n\n",
+        "## The later methods follow the same rule\nEvery method in a chunk follows that rule [BIGA-010].\n\n"
+        "@figure table id=which title=\"What each number gets back\"\n| Number above the bound | the difference | BIGA-002 |\n"
+        "| Number at the bound | the bound | BIGA-002 |\n| Number below the bound | the bound | BIGA-002 |\n\n")
+    (sdir / "big-a.md").write_text(tbl)
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    rc2, out2 = run("story_probe.py", "snapshot", "--specs", str(specs), "--module", "big-a", "--lens", "everyone", "--no-questions", "--out", str(tmp / "tbl-snap"))
+    snap = (tmp / "tbl-snap" / "story.md").read_text() if (tmp / "tbl-snap" / "story.md").exists() else ""
+    (sdir / "big-a.md").write_text(tbl.replace("| Number below the bound | the bound | BIGA-002 |", "| Number below the bound | the bound |  |"))
+    rc3, out3 = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L81 a lookup table figure passes G8, reaches the Everyone snapshot, and every row must cite",
+          rc == 0 and "- Number at the bound: the bound [BIGA-002]" in snap and rc3 == 1 and "row 'Number below the bound' cites no claim" in out3,
+          out + out2 + out3)
+    (sdir / "big-a.md").write_text(good_story)
+    check("L81 an announced count that its list does not match is flagged; clauses and 'both' items are not counted",
+          _ac("It checks four places: the request, the deployment and the router [BIGA-001].") == (4, 3)
+          and _ac("Three places: the request, the deployment and the router.") is None
+          and _ac("Two calls send the wrong thing: reranking sends a built-in function, and the other sends nothing.") is None
+          and _ac("Five strategies get one: least-busy, both usage-based ones and latency-based.") is None, "announced count")
     from check_story import Checker as _Checker
     ck = _Checker(specs, repo)
     ck.claims["BIGA-001"] = dict(ck.claims["BIGA-001"], text='Raises "Deployment is invalid at tiers: Input should be a dictionary. The write is rejected."')

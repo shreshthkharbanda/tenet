@@ -119,6 +119,7 @@ structure only. Every label is plain words, at most 5 words; steps are plain sen
 | `states` | `\| state <id> \| <label> \| <claims> \|`, `\| <a> > <b> \| <trigger> \| <claims> \|` | the lifecycle of one thing |
 | `sequence` | `\| actor <id> \| <label> \|`, `\| <a> > <b> \| <message> \| <claims> \|` in order | hops between parties over time |
 | `timeline` | `\| lane <id> \| <label> \|`, `\| <time> \| <lane> \| <what happens> \| <state after> \| <claims> \|` | **an example played out over time**: the title starts with "Example:", times are the example's own clock (`0s`, `1.5s`, `2 min`), every event and state is cited |
+| `table` | `\| <input> \| <what happens> \| <claims> \|`, 3 to 14 rows, cells at most 12 plain words | **a rule that turns on one input with many values** (which status codes bench a deployment, what each setting value does): a reader scans for their case instead of assembling it from sentences |
 
 - *At most 12 nodes per figure; edges and messages cite claims; steps target a node id or `a>b`.
 - Give each module one example timeline for its central mechanism: concrete deployments, real

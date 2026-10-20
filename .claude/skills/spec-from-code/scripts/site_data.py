@@ -183,6 +183,7 @@ def render_story(st: dict) -> dict:
                 "events": [{"time": e["time"], "t": e["t"], "lane": e["lane"], "label": e["label"], "state": e["state"],
                             "ids": e["ids"]} for e in f.get("events", [])],
                 "edges": [{"a": e["a"], "b": e["b"], "label": e["label"], "ids": e["ids"]} for e in f["edges"]],
+                "rows": [{"in": inline(r["in"]), "out": inline(r["out"]), "ids": r["ids"]} for r in f.get("rows", [])],
                 "steps": [{"target": x["target"], "title": html.escape(x["title"]), "h": inline(x["md"]), "ids": x["ids"]} for x in f["steps"]]}
 
     from check_story import block_layer
