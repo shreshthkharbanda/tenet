@@ -557,7 +557,10 @@
     const lanes = fg.lanes, evs = fg.events;
     const times = [...new Set(evs.map((e) => e.t))].sort((a, b) => a - b);
     const tmax = times.length;  // the playhead runs over event slots: distinct times evenly spaced, in order
-    const LW = 128, W = Math.max(680, LW + 110 * times.length), LH = 52, TOP = 26, H = TOP + lanes.length * LH + 34;
+    // lane names wrap to two lines and size the label column, so a long name never runs into its bars
+    const wrap = (s) => { const out = [""]; s.split(" ").forEach((w) => { const c = out.length - 1; if (out[c] && (out[c] + " " + w).length > 18 && out.length < 2) out.push(w); else out[c] = (out[c] + " " + w).trim(); }); return out; };
+    const names = lanes.map((ln) => wrap(ln.label));
+    const LW = Math.round(Math.min(210, Math.max(110, 22 + 7.8 * Math.max(...names.flat().map((s) => s.length))))), W = Math.max(680, LW + 110 * times.length), LH = 52, TOP = 26, H = TOP + lanes.length * LH + 34;
     const slot = (t) => times.indexOf(t);
     const x = (u) => LW + 10 + (u / tmax) * (W - LW - 26);
     evs.forEach((e) => (e.u = slot(e.t)));
@@ -570,7 +573,7 @@
     });
     lanes.forEach((ln, k) => {
       const y = TOP + k * LH;
-      out += `<text class="tl-lane" x="8" y="${y + LH / 2 + 4}">${lbl(ln.label)}</text>`;
+      out += `<text class="tl-lane" x="8" y="${y + LH / 2 + 4 - (names[k].length - 1) * 8}">${names[k].map((s, i) => `<tspan x="8" dy="${i ? 16 : 0}">${lbl(s)}</tspan>`).join("")}<title>${lbl(ln.label)}</title></text>`;
       const le = evs.filter((e) => e.lane === ln.id);
       le.forEach((e, j) => {
         const x0 = x(e.u), x1 = j + 1 < le.length ? x(le[j + 1].u) : W - 12;
