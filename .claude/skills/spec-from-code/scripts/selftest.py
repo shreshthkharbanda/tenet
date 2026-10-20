@@ -107,14 +107,14 @@ def main() -> int:
     import re as _re
     docs = "".join((HERE.parent / "references" / f).read_text() for f in ("briefs.md", "audit.md"))
     markers = sorted(set(_re.findall(r"<!-- brief:([^ ]+) -->", docs)))
-    sets = ["--set", "SAMPLE_FILE=/x", "--set", "CONTROL_DIR=" + str(tmp / "ctl"), "--set", "READER_SCENARIO=x"]
+    sets = ["--set", "SAMPLE_FILE=/x", "--set", "CONTROL_DIR=" + str(tmp / "ctl"), "--set", "READER_SCENARIO=x", "--set", "PERSONA=x"]
     bad = []
     for mk in markers:
         if mk in ("pairjudge",):
             continue  # needs an overlaps file; rendered in the L33 case
         extra = ["--kind", "interfaces"] if mk == "crosscut" else (["--module", "big-a"] if mk not in (
             "surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker") else [])
-        if mk in ("answerer", "story-reader"):
+        if mk in ("answerer", "story-reader", "persona-reader"):
             extra += ["--snapshot", str(tmp / "snap-x")]
         rc_, out_ = run("render_briefs.py", "--role", mk, *extra, *sets, "--specs", str(specs), "--repo", str(repo),
                         "--scratch", str(tmp / "scratch"))
@@ -734,6 +734,12 @@ def main() -> int:
     blob = "".join(f.read_text() for f in snapx.rglob("*") if f.is_file())
     check("L72 a story snapshot carries the story and questions but no reference answers",
           rc == 0 and "What does Big store" in blob and "SECRET-REFERENCE" not in blob and (snapx / "story.md").exists(), out)
+    snape = tmp / "persona-snap"
+    rc, out = run("story_probe.py", "snapshot", "--specs", str(specs), "--module", "big-a", "--lens", "everyone", "--no-questions", "--out", str(snape))
+    etext = (snape / "story.md").read_text() if (snape / "story.md").exists() else ""
+    check("L75 the Everyone-layer snapshot holds the plain layer only: no code, no Engineer prose, no questions",
+          rc == 0 and "remembers one number" in etext and "`" not in etext and "In one minute" not in etext
+          and "puts the number" not in etext and not (snape / "questions.jsonl").exists(), etext[:400] + out)
     (evx / "judgments" / "story").mkdir(parents=True, exist_ok=True)
     (evx / "judgments" / "story" / "big-a.jsonl").write_text(json.dumps({"id": "BIGA-P01", "verdict": "contradict", "note": "x"}) + "\n")
     (meta / "audit" / "story").mkdir(parents=True, exist_ok=True)

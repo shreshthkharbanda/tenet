@@ -45,7 +45,7 @@ SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs",
               ".swift", ".c", ".cc", ".cpp", ".h", ".hpp", ".ex", ".exs", ".sh", ".sql"}
 SPEC_KINDS = {"module", "overview", "interfaces", "data", "config", "operations"}
 WRITERS = {"surveyor", "extractor", "extractor-fix", "crosscut", "interfaces", "data", "config", "operations",
-           "reconciler", "pairjudge", "reviser", "verifier", "narrator", "system-narrator", "story-judge"}
+           "reconciler", "pairjudge", "reviser", "verifier", "narrator", "system-narrator", "story-judge", "teachback-judge"}
 XC_KINDS = {"interfaces", "data", "config", "operations"}
 PATH_TOKEN = re.compile(r"(?<![\w$])(/[^\s'\"`;|&<>(){}]+)")
 ASSIGN = re.compile(r"(?:^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
@@ -345,7 +345,7 @@ def main() -> int:
             flag("prober touched the eval dir beyond its own probe file",
                  [(h, p) for h, p in accesses if under(p, ev) and p != own_probe and not under(p, ev / "worker-reports")
                   and p != ev and p != ev / "probes"])
-        elif role in ("answerer", "control", "story-reader"):
+        elif role in ("answerer", "control", "story-reader", "persona-reader"):
             home = (brief_home.parent if role != "control" else brief_home) if brief_home else None
             declared = resolve(r["snapshot"], repo) if r.get("snapshot") else None
             if role != "control" and not r.get("snapshot"):

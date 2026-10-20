@@ -295,3 +295,59 @@ Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role s
   --output {{EVAL}}/judgments/story/{{MODULE_ID}}.jsonl --read-from <a file listing every path you read>
 This replaces any other instruction above about the report's file name or format.
 ```
+
+### Persona readers (the readability test; readability.md, "Tests of understanding")
+
+A persona reader reads only the layer its persona would read, then explains the module back. The
+explanation is the test: a reader who understood can say what the part is for, how it works and
+what can go wrong, in their own words, without contradicting the claims. Run one per module with the
+Everyone layer (a sales engineer, or a CTO for the system story); the story-only reader above is the
+Engineer-layer test.
+```
+python3 $SKILL_DIR/scripts/story_probe.py snapshot --specs $SPECS --module <m> --lens everyone --no-questions --out $SCRATCH/persona-<m>
+python3 $SKILL_DIR/scripts/render_briefs.py --role persona-reader --module <m> --snapshot $SCRATCH/persona-<m> \
+  --set "PERSONA=a sales engineer who explains the product to customers and does not read code" ...
+python3 $SKILL_DIR/scripts/render_briefs.py --role teachback-judge --module <m> ...   # after the reader
+```
+
+<!-- brief:persona-reader -->
+```
+You are {{PERSONA}}. A colleague handed you one chapter of a system's documentation:
+{{SPEC_SNAPSHOT}}/story.md. Read it once, fully, the way you would before a meeting. Read nothing
+else: no other file, no code, no web.
+Then write {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.persona.md with three parts:
+1. "In my words": explain this part of the system to someone like you, in at most 300 words: what
+   it is for, how it works, and what can go wrong and who would notice. Write it from memory of the
+   chapter, in your own words, and number each statement (1., 2., ...). Each statement makes one
+   point. Where you rely on a chapter sentence, add the claim IDs that sentence carried.
+2. "Where I got lost": every term you did not understand, every sentence you had to read twice,
+   every place you would have asked a question, quoting the words. Write "nothing" only if true.
+3. "What I would tell a customer": two or three sentences you would actually say.
+Do not try to sound expert: a misunderstanding written down is exactly what this test is for.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role persona-reader --module {{MODULE_ID}} --round {{ROUND}} \
+  --snapshot {{SPEC_SNAPSHOT}} --output {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.persona.md --read-from <a file listing every path you read>
+This replaces any other instruction above about the report's file name or format.
+```
+
+<!-- brief:teachback-judge -->
+```
+You are checking what a reader understood from a chapter, against the specification. A persona
+reader read only the plain layer of {{SPECS}}/_meta/story/{{MODULE_ID}}.md and wrote
+{{SPECS}}/_meta/audit/story/{{MODULE_ID}}.persona.md. Claims: {{SPECS}}/modules/{{MODULE_ID}}.md and,
+for other prefixes, the spec file that holds them under {{SPECS}}; you may read the code a claim
+cites. Never read the eval directory.
+For each numbered statement in "In my words" and each sentence of "What I would tell a customer",
+write a row to {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.teachback.jsonl:
+{"statement": "<the statement>", "verdict": "correct|vague|wrong|unsupported",
+ "story_cause": "<the story sentence that led the reader there, quoted, or empty>", "note": "..."}
+- correct: the claims say this (plain wording is fine; precision is not required, truth is);
+- vague: not false, but too unspecific to act on;
+- wrong: the claims contradict it (a reader who believed it would make a wrong decision);
+- unsupported: the claims do not say it either way.
+Then, for every item under "Where I got lost", add a row {"lost": "<quoted words>", "fix": "<the
+plain-words change to the story that would have prevented it>"}.
+Reply with counts per verdict and every wrong row with its story_cause.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role teachback-judge --module {{MODULE_ID}} --round {{ROUND}} \
+  --output {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.teachback.jsonl --read-from <a file listing every path you read>
+This replaces any other instruction above about the report's file name or format.
+```

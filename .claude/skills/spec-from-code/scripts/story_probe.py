@@ -22,19 +22,48 @@ VERDICTS = ("agree", "partial", "contradict", "not_in_story")
 SENTENCE = ("supported", "overstated", "distorted", "unsupported")
 
 
-def snapshot(specs: Path, module: str, out: Path) -> int:
+def everyone_text(story_md: str) -> str:
+    """The Everyone layer of a story as plain text: what a reader who picked "Everyone" sees."""
+    from check_story import parse_story
+    st, _ = parse_story(story_md)
+    out = [f"# {st['headline']}", "", "## In plain words", *st["plain"], ""]
+    for sec in st["sections"]:
+        out += [f"## {sec['title']}", ""]
+        for b in sec["blocks"]:
+            if b["t"] == "fig":
+                out.append(f"Figure: {b['title']}")
+                if b["kind"] == "timeline":
+                    lanes = {x["id"]: x["label"] for x in b["lanes"]}
+                    out += [f"- {e['time']}: {lanes.get(e['lane'], e['lane'])}: {e['label']}, now {e['state']}" for e in b["events"]]
+                else:
+                    names = {x["id"]: x["label"] for x in b["nodes"] + b["actors"]}
+                    out += [f"- {names.get(e['a'], e['a'])} -> {names.get(e['b'], e['b'])}" + (f" ({e['label']})" if e["label"] else "")
+                            for e in b["edges"]]
+                    out += [f"  Step: {x['title']}: {x['md']}" for x in b["steps"]]
+                out.append("")
+            elif b["t"] == "path":
+                out += [f"{x['n']}. {x['md']}" for x in b["steps"]] + [""]
+    out += ["## Watch out", *[f"- {w}" for w in st["watch"]]]
+    return "\n".join(out) + "\n"
+
+
+def snapshot(specs: Path, module: str, out: Path, lens: str = "engineer", questions: bool = True) -> int:
     story = specs / "_meta" / "story" / f"{module}.md"
     probes = eval_dir(specs) / "probes" / f"{module}.jsonl"
-    if not story.exists() or not probes.exists():
-        eprint(f"ERROR: need {story} and {probes}")
+    if not story.exists() or (questions and not probes.exists()):
+        eprint(f"ERROR: need {story}" + (f" and {probes}" if questions else ""))
         return 1
     if out.exists():
         shutil.rmtree(out)
     (out / "_briefs").mkdir(parents=True)
-    shutil.copy(story, out / "story.md")
-    rows = [{"id": p["id"], "question": p["question"]} for p in read_jsonl(probes)]
-    write_jsonl(out / "questions.jsonl", rows)
-    eprint(f"story snapshot: {module}: story + {len(rows)} questions (no reference answers) -> {out}")
+    text = story.read_text(encoding="utf-8")
+    (out / "story.md").write_text(everyone_text(text) if lens == "everyone" else text, encoding="utf-8")
+    rows = []
+    if questions:
+        rows = [{"id": p["id"], "question": p["question"]} for p in read_jsonl(probes)]
+        write_jsonl(out / "questions.jsonl", rows)
+    eprint(f"story snapshot: {module}: {lens} layer" + (f" + {len(rows)} questions (no reference answers)" if questions else "")
+           + f" -> {out}")
     return 0
 
 
@@ -58,6 +87,14 @@ def score(specs: Path, modules: list[str]) -> int:
             if odd:
                 bad += 1
                 eprint(f"ERROR: {m}: {len(odd)} judgment(s) with an unknown verdict")
+        tb = read_jsonl(adir / f"{m}.teachback.jsonl") if (adir / f"{m}.teachback.jsonl").exists() else []
+        if tb:
+            cnt = {v: sum(x.get("verdict") == v for x in tb) for v in ("correct", "vague", "wrong", "unsupported")}
+            r["teachback"] = {"n": len(tb), **cnt}
+            if cnt["wrong"]:
+                bad += 1
+                eprint(f"ERROR: {m}: a reader of the Everyone layer explained {cnt['wrong']} thing(s) wrongly, e.g. "
+                       f"{next(x for x in tb if x.get('verdict') == 'wrong').get('statement', '')[:90]!r}")
         ss = read_jsonl(adir / f"{m}.jsonl") if (adir / f"{m}.jsonl").exists() else []
         if ss:
             cnt = {v: sum(x.get("verdict") == v for x in ss) for v in SENTENCE}
@@ -87,6 +124,9 @@ def main() -> int:
     ap.add_argument("--specs", required=True)
     ap.add_argument("--module", action="append", default=[])
     ap.add_argument("--out", default=None)
+    ap.add_argument("--lens", choices=["everyone", "engineer"], default="engineer",
+                    help="everyone: the snapshot holds only the Everyone layer (what a non-engineer reads)")
+    ap.add_argument("--no-questions", action="store_true", help="a persona snapshot: the story only, no probes")
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
     if a.cmd == "snapshot":
@@ -95,7 +135,7 @@ def main() -> int:
         out = Path(a.out).resolve()
         if out == specs or specs in out.parents or eval_dir(specs) in out.parents:
             raise SystemExit("the snapshot must live outside the specs and eval dirs")
-        return snapshot(specs, a.module[0], out)
+        return snapshot(specs, a.module[0], out, a.lens, not a.no_questions)
     return score(specs, a.module)
 
 
