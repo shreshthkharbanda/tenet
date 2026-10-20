@@ -156,7 +156,7 @@
     return `<a class="chap" href="#${f.slug}"><span class="n">${n}</span>
       <div><h3>${esc(shortTitle(f))}</h3><p>${f.lede || ""}</p></div>
       <div class="stats">${f.kind === "module" ? `<div style="display:flex;gap:8px;align-items:center">${meter(f)} ${pill(f.status)}</div>` : ""}
-        <div class="kv"><span><b>${f.claims.confirmed + f.claims.inferred + f.claims.gap}</b> claims</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}<span><b>${readingMinutes(f)}</b> min</span></div></div></a>`;
+        <div class="kv">${f.story ? `<span class="brief-badge" title="This chapter opens with a short illustrated story">In brief · <b>${Math.max(1, Math.round(f.story.words / 238))}</b> min</span>` : ""}<span><b>${f.claims.confirmed + f.claims.inferred + f.claims.gap}</b> claims</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}<span><b>${readingMinutes(f)}</b> min</span></div></div></a>`;
   }
   function defectCard(d) {
     const f = fileMeta(d.file);
@@ -633,7 +633,9 @@
     svg.setAttribute("class", "sfig-svg");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", fg.title.replace(/<[^>]+>/g, ""));
-    svg.style.maxWidth = Math.ceil(g.width * 1.1) + "px";
+    // small figures may grow to fill the column; large ones keep a legible minimum and scroll on phones
+    svg.style.maxWidth = Math.ceil(g.width * 1.6) + "px";
+    svg.style.minWidth = Math.min(Math.ceil(g.width * 0.9), 520) + "px";
     svg.innerHTML = out;
     return { svg, geo: g };
   }
@@ -663,7 +665,8 @@
     svg.setAttribute("class", "sfig-svg");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", fg.title.replace(/<[^>]+>/g, ""));
-    svg.style.maxWidth = Math.ceil(W * 1.15) + "px";
+    svg.style.maxWidth = Math.ceil(W * 1.6) + "px";
+    svg.style.minWidth = Math.min(Math.ceil(W * 0.9), 520) + "px";
     svg.innerHTML = out;
     return { svg, geo: null };
   }
@@ -698,7 +701,7 @@
             ${meter(f)}
             ${f.evidence ? `<span class="kv" title="Share of confirmed behavioral claims backed by an executed check script"><b>${fmtPct(f.evidence)}</b> executed</span>` : ""}
             ${glyphCounts(f.claims)}
-            <span class="kv"><span><b>${readingMinutes(f)}</b> min read</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
+            <span class="kv">${f.story ? `<span><b>${Math.max(1, Math.round(f.story.words / 238))}</b> min story</span><span><b>${readingMinutes(f)}</b> min ledger</span>` : `<span><b>${readingMinutes(f)}</b> min read</span>`}${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
           </div>
           ${uses.length ? `<div class="neighbors"><span>Cites</span>${uses.map((l) => `<a href="#${l.to}" title="${l.n} citations">${esc(nameOf(l.to))}</a>`).join("")}</div>` : ""}
           ${usedBy.length ? `<div class="neighbors"><span>Cited by</span>${usedBy.map((l) => `<a href="#${l.from}" title="${l.n} citations">${esc(nameOf(l.from))}</a>`).join("")}</div>` : ""}
