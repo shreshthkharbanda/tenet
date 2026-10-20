@@ -95,7 +95,11 @@ def main() -> int:
     env_md = meta / "env.md"
     base["RUN_ENV"] = (env_md.read_text(encoding="utf-8").strip() if env_md.exists() else
                        "no verified way to run this project's code was recorded (_meta/env.md is missing); "
-                       "work from reading, and mark execution-dependent facts {inferred}.")
+                       "work from reading, and mark execution-dependent facts {inferred}.") + (
+        "\nHarness hygiene: work in a new subdirectory of your own (scratch dirs persist across rounds); name "
+        "scripts check_<claim-or-probe-id>.py, never a short name that can shadow a package (a stray h2.py "
+        "shadowed the real h2 HTTP/2 package, L60); run them with `python -P` (Python 3.11+; on older versions run "
+        "them from a different directory) so their directory is not on sys.path.")
     for kv in args.set:
         if "=" not in kv:
             raise SystemExit(f"--set expects KEY=VALUE, got {kv!r}")
