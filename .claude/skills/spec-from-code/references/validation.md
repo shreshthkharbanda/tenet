@@ -82,6 +82,20 @@ Interpretation: a rebuild that passes all tests proves the spec plus the tests a
 Rebuild Dossier result (a rule-breaking agent passed every test) means it does not prove the spec alone
 is. A rebuild that fails tells you exactly which claims are missing, which is the useful signal.
 
+## 3b. Adversarial audit (Phase 7)
+
+The audit has its own pass bar, stricter than the probe gate because it is aimed at the failures the
+gate cannot see. Pass means every check below passes (thresholds live in `score_audit.py`):
+
+| Check | Worker | Passes when |
+|---|---|---|
+| Falsification | falsifier per module, fixed random claim sample | high-severity false or imprecise claims are at most 5% of the sample |
+| Omission | omission hunter per module, lists top behaviors before reading the spec | at least 80% of the top behaviors are stated precisely and none is contradicted |
+| Judge reliability | judge auditor on a blind sample oversampling "agree" | at least 90% of verdicts reproduce and at most 5% of "agree" verdicts are rejected |
+| Prior knowledge | control answerer with questions only, judged as round 0 | lift over the control is at least 30 points |
+| Teachability | reader (spec only) explains a request path; checker traces it in code | no step is incorrect |
+| Gate robustness | red team on a copy of the specs | every demonstrated exploit has a mechanical fix or a recorded decision |
+
 ## 4. Orchestrator spot checks
 
 Scripts verify structure; you verify substance, cheaply:

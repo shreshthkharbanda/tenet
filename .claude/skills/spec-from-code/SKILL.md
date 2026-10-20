@@ -68,6 +68,18 @@ It prints `<role> <module> <path>` per brief. Agent prompt: "Your complete instr
 Read that file first and follow it exactly." Never paste or hand-edit brief text: the renderer fills
 the file lists, test lists, scope notes, and rounds, and refuses to write a brief with a gap.
 
+Record every launch and completion in the dispatch log, so a container restart (which stops every
+running subagent and wipes your memory of the batch) costs a resume, not a re-run:
+```
+python3 $SKILL_DIR/scripts/dispatch.py add --specs $SPECS --role <role> --module <id> --round N --brief <path> --agent <agentId>
+python3 $SKILL_DIR/scripts/dispatch.py done --specs $SPECS --agent <agentId>       # on its completion notification
+python3 $SKILL_DIR/scripts/dispatch.py next --specs $SPECS --cap 18                # queued briefs to launch now
+python3 $SKILL_DIR/scripts/dispatch.py running --specs $SPECS                      # after a restart: resume each
+```
+After a restart, send each running agent a SendMessage to its id saying it was interrupted and should
+check its output file and continue; re-create (fresh launch of the same brief) only agents whose resume
+fails.
+
 Dispatch the Surveyor (`--role surveyor`). When it returns, run:
 ```
 python3 $SKILL_DIR/scripts/check_shards.py --inventory $SPECS/_meta/inventory.json --modules $SPECS/_meta/modules.json --out $SPECS/_meta/shards-report.json
@@ -157,7 +169,26 @@ Rebuilder's `guesses` and `spec_bugs` are spec defects: feed them to a Reviser a
 file and re-score probes for that module so regression is still watched. Nothing from the scratch copy
 is ever copied back.
 
-## Phase 7: finalize and report
+## Phase 7: adversarial audit (first run on a repo, or before anyone reviews specs instead of code)
+
+The gates measure agreement among workers who share one method. The audit attacks the result from
+outside it, with briefs in `references/audit.md` (rendered like any other) and one scorer.
+1. Sample: `scripts/sample_claims.py $SPECS --per-module 12 --out $SPECS/_meta/audit/claims.jsonl`
+   and `scripts/score_audit.py $SPECS --round <last> --make-judge-sample --n 40`.
+2. Control: `scripts/snapshot_for_answerers.py $SPECS --out $SCRATCH/control --questions-only`, then
+   dispatch `--role control --set CONTROL_DIR=$SCRATCH/control` and one Judge per module with
+   `--round 0`. Prior knowledge is real for well-known projects; the validation report then shows each
+   module's no-spec fidelity and the spec's lift over it.
+3. Dispatch per module `--role falsifier --set SAMPLE_FILE=<claims.jsonl>` and `--role omission`; once
+   `--role judge-auditor --set SAMPLE_FILE=<judge-sample.jsonl>`, `--role redteam`, and `--role reader
+   --set READER_SCENARIO="<the system's most important request path>"`, then `--role lifecycle-checker`
+   with the same scenario after the reader finishes.
+4. `scripts/score_probes.py $SPECS --round <last>` (to pick up the control column), then
+   `scripts/score_audit.py $SPECS --round <last>`. `_meta/audit-report.md` gives PASS or the failing
+   checks. Each failure is a class of defect: fix the class (brief, gate, or script), log it in
+   `references/learnings.md` with a self-test case, re-run the affected phases, and audit again.
+
+## Phase 8: finalize and report
 
 ```
 python3 $SKILL_DIR/scripts/apply_status.py $SPECS      # stamps status/fidelity in frontmatter, refreshes INDEX table
@@ -208,7 +239,8 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   removed it. Read before changing this skill; run `scripts/selftest.py` after changing any script.
 - `scripts/`: stdlib Python 3.9+, deterministic, each prints a one-line summary to stderr.
   Planning: `inventory.py`, `split_file.py`, `check_shards.py`, `changed_modules.py`.
-  Dispatch: `render_briefs.py`, `snapshot_for_answerers.py`.
+  Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
   Gates: `lint_specs.py`, `coverage.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
+  Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
   Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`.
   Gate regression tests: `selftest.py`.

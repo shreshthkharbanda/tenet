@@ -189,6 +189,36 @@ def main() -> int:
     lost = val2["rounds"]["1"]["big-a"]["holdout_agree"] - val2["modules"]["big-a"]["holdout_agree"]
     check("L11 regression by count", (val2["modules"]["big-a"]["status"] == "REGRESSION") == (lost >= 2), json.dumps(val2["modules"]))
 
+    # L22: no-spec control round 0 feeds a control/lift column; never treated as a previous round
+    ctl = tmp / "control"
+    rc, out = run("snapshot_for_answerers.py", str(specs), "--out", str(ctl), "--questions-only")
+    files = sorted(p.name for p in ctl.rglob("*") if p.is_file())
+    check("L22 control snapshot holds questions only", files == ["big-a.questions.jsonl"], str(files))
+    (meta / "judgments" / "round-0").mkdir(parents=True)
+    (meta / "judgments" / "round-0" / "big-a.jsonl").write_text("\n".join(
+        json.dumps({"id": r["id"], "verdict": "agree" if i < 5 else "gap"}) for i, r in enumerate(rows)) + "\n")
+    rc, out = run("score_probes.py", str(specs), "--round", "0")
+    check("L22 round 0 cannot be scored as a round", rc != 0, out)
+    rc, out = run("score_probes.py", str(specs), "--round", "1", "--snapshot", str(snap))
+    v1 = json.loads((meta / "validation.json").read_text())["modules"]["big-a"]
+    check("L22 control fidelity and lift reported", v1.get("control_fidelity") == 0.25 and v1.get("lift_over_control") is not None
+          and v1["status"] != "REGRESSION", json.dumps(v1))
+
+    # L22: audit scorer thresholds
+    aud = meta / "audit"
+    aud.mkdir()
+    (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": v, "severity": "high"})
+                                                      for i, v in enumerate(["holds"] * 9 + ["false"])) + "\n")
+    (aud / "omission-big-a.jsonl").write_text("\n".join(json.dumps({"rank": i, "behavior": "b", "spec_status": s})
+                                                       for i, s in enumerate(["stated"] * 9 + ["missing"], 1)) + "\n")
+    rc, out = run("score_audit.py", str(specs), "--round", "1")
+    a1 = json.loads((meta / "audit.json").read_text())
+    check("L22 audit fails 10% high-severity falsification", rc == 1 and "big-a" in a1["fails"], out)
+    (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": "holds", "severity": "low"}) for i in range(10)) + "\n")
+    rc, out = run("score_audit.py", str(specs), "--round", "1", "--make-judge-sample", "--n", "6")
+    js = [json.loads(l) for l in (aud / "judge-sample.jsonl").read_text().splitlines()]
+    check("L22 judge sample is blind", js and all("verdict" not in r for r in js), str(js[:1]))
+
     # G5 + L03/L17: isolation checks with a specs dir not named "specs"; relative output paths resolve
     wr = meta / "worker-reports"
     wr.mkdir()

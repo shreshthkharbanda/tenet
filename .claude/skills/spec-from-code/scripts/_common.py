@@ -180,10 +180,15 @@ def _scalar(v: str):
 def parse_claims(text: str) -> list[dict]:
     """Return claims found in a spec body with line numbers and section."""
     claims = []
-    section = ""
+    section, subsection = "", ""
     for n, line in enumerate(text.splitlines(), 1):
         if line.startswith("#"):
-            section = line.lstrip("#").strip()
+            level = len(line) - len(line.lstrip("#"))
+            title = line.lstrip("#").strip()
+            if level <= 2:
+                section, subsection = title, ""
+            else:
+                subsection = title
             continue
         m = CLAIM_RE.match(line)
         if not m:
@@ -198,6 +203,7 @@ def parse_claims(text: str) -> list[dict]:
             "text": text,
             "line": n,
             "section": section,
+            "subsection": subsection,
         })
     return claims
 

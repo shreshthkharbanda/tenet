@@ -34,7 +34,7 @@ XC = {"interfaces": ("01-interfaces.md", "IF"), "data": ("02-data.md", "DATA"),
 
 
 def load_blocks() -> tuple[dict, dict]:
-    text = (SKILL_DIR / "references" / "briefs.md").read_text(encoding="utf-8")
+    text = "\n".join((SKILL_DIR / "references" / f).read_text(encoding="utf-8") for f in ("briefs.md", "audit.md"))
     blocks, focus = {}, {}
     for kind, name, body in re.findall(r"<!-- (brief|focus):(\w+) -->\s*\n```[^\n]*\n(.*?)\n```", text, re.S):
         (blocks if kind == "brief" else focus)[name] = body
@@ -69,6 +69,8 @@ def main() -> int:
     ap.add_argument("--n-probes", type=int, default=25)
     ap.add_argument("--test-cmd", default="(see 04-operations.md; if absent, find the project's test command)")
     ap.add_argument("--scope-note", default="")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="extra placeholder values (audit roles: SAMPLE_FILE, CONTROL_DIR, READER_SCENARIO)")
     args = ap.parse_args()
     specs, repo, scratch = Path(args.specs).resolve(), Path(args.repo).resolve(), Path(args.scratch).resolve()
     blocks, focus = load_blocks()
@@ -81,6 +83,11 @@ def main() -> int:
     commit = mods.get("commit") or git_head(repo) or "unknown"
     base = {"REPO": repo, "SPECS": specs, "SKILL_DIR": SKILL_DIR, "COMMIT": commit, "SCRATCH": scratch,
             "ROUND": args.round, "N_PROBES": args.n_probes, "TEST_CMD": args.test_cmd}
+    for kv in args.set:
+        if "=" not in kv:
+            raise SystemExit(f"--set expects KEY=VALUE, got {kv!r}")
+        k, v = kv.split("=", 1)
+        base[k.strip()] = v
     includes = inv["summary"].get("includes") or []
     default_scope = ("the whole repository" if not includes else
                      "only files matching " + ", ".join(includes) + "; everything else is context you may read but do not specify")
@@ -88,8 +95,9 @@ def main() -> int:
     rendered = []
     must = ("SCOPE_NOTE",) if args.scope_note else ()
 
-    if role in ("surveyor", "reconciler"):
-        rendered.append((role, "all", out_dir / f"{role}.md", fill(blocks[role], base | {"SCOPE_NOTE": args.scope_note or default_scope}, must)))
+    if role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
+        name = f"audit-{role}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
+        rendered.append((role, "all", out_dir / name, fill(blocks[role], base | {"SCOPE_NOTE": args.scope_note or default_scope}, must)))
     elif role == "crosscut":
         if not args.kind:
             raise SystemExit("--kind required for crosscut")
@@ -136,6 +144,8 @@ def main() -> int:
                 path = snap / "_briefs" / f"answerer-{mid}-round-{args.round}.md"
             elif role in ("judge", "reviser"):
                 path = out_dir / f"{role}-{mid}-round-{args.round}.md"
+            elif role in ("falsifier", "omission"):
+                path = out_dir / f"audit-{role}-{mid}.md"
             else:
                 path = out_dir / f"{role}-{mid}.md"
             if role == "rebuilder":

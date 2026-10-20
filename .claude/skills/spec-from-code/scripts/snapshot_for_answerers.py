@@ -17,6 +17,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("specs")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--questions-only", action="store_true",
+                    help="no-spec control: the snapshot holds question files only, no spec text at all")
     args = ap.parse_args()
     specs = Path(args.specs).resolve()
     out = Path(args.out).resolve()
@@ -33,6 +35,10 @@ def main() -> int:
         "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "briefs", "survey.md",
         "inventory.json", "shards-report.json", "coverage.json", "lint-report.json", "validation.json",
         "verify-report.json", "status.json", "traceability.md", "validation-report.md"))
+    if args.questions_only:
+        for f in list(out.rglob("*")):
+            if f.is_file() and not (f.suffix == ".jsonl" and "probes" in f.parts):
+                f.unlink()
     pdir = out / "_meta" / "probes"
     n = 0
     if pdir.exists():
@@ -41,6 +47,14 @@ def main() -> int:
             write_jsonl(pf.with_suffix(".questions.jsonl"), [{"id": r["id"], "question": r["question"]} for r in rows])
             pf.unlink()
             n += len(rows)
+    if args.questions_only and pdir.exists():
+        for f in pdir.glob("*.questions.jsonl"):
+            f.rename(out / f.name)
+        for d in sorted((x for x in out.rglob("*") if x.is_dir()), reverse=True):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
     eprint(f"snapshot: {out} ({n} questions, no reference answers, no source)")
     return 0
 

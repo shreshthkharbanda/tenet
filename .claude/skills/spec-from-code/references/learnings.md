@@ -130,3 +130,22 @@ exposed; each would have silently mis-measured every later run. Fix: `scripts/se
 fixture repo (with a specs dir deliberately not named `specs`) and asserts each gate's catches and
 non-catches, one case per learning that changed a script. Run it after any script change; a change
 that adds a learning adds a case.
+
+## Iteration 1 (LiteLLM router subsystem: 10 modules, 23k LOC)
+
+**L21. A restart erased the batch.** Found: the container restarted 20 workers into LiteLLM
+extraction and probing. Every worker held its output in memory until the end, so nothing was on disk,
+and the orchestrator's only record of the agent ids was its own context. Agents can be resumed from
+transcripts, but only by id. Fix: every brief has a Durability clause (write the output file early,
+save after each section, append probes/answers/verdicts as they are final, check the file first when
+resumed); `dispatch.py` keeps a durable launch log with agent ids, a `running` listing to resume after
+a restart, and a `next` listing that respects the concurrency cap.
+
+**L22. Validation only from inside the method.** Found: planning the iteration-1 grading. Every gate
+compares workers who share one method and one model: a lenient judge, a probe set answerable from
+prior knowledge (LiteLLM is famous), or a spec that is precise about trivia and silent about what
+matters would all pass. Fix: Phase 7 adversarial audit, built into the skill: falsifiers on a fixed
+random claim sample (`sample_claims.py`), omission hunters who list the top behaviors before reading
+the spec, a no-spec control answered as round 0 so every validation row shows lift over prior
+knowledge, a blind judge audit oversampling "agree", a reader-then-checker teachability test, and a
+red team on the gates. `score_audit.py` applies explicit pass thresholds.

@@ -62,6 +62,11 @@ def split_for(pid: str) -> str:
     return "revision" if h < 6 else "holdout"
 
 
+def report_lift(rf: float, hf: float, stats: dict, control: float) -> float:
+    n = stats["revision"]["n"] + stats["holdout"]["n"]
+    return ((rf * stats["revision"]["n"] + hf * stats["holdout"]["n"]) / n if n else 0.0) - control
+
+
 def wilson_lower(k: int, n: int, z: float = 1.96) -> float:
     if n == 0:
         return 0.0
@@ -136,6 +141,8 @@ def main() -> int:
 
     if args.round is None:
         raise SystemExit("need --assign-splits or --round N")
+    if args.round == 0:
+        raise SystemExit("round 0 is the no-spec control; it is scored as a column of every round >= 1")
     rnd = args.round
     ans_dir, jud_dir = meta / "answers" / f"round-{rnd}", meta / "judgments" / f"round-{rnd}"
     prev = meta / "validation.json"
@@ -150,10 +157,12 @@ def main() -> int:
     side_notes: list[dict] = []
     lines = [f"# Validation report (round {rnd})", "",
              "Fidelity = share of probes whose spec-only answer agrees with the code-derived reference answer.",
-             "Held-out probes are never shown to spec writers; revision probes drive fixes. "
+             "Held-out probes are never shown to spec writers; revision probes drive fixes. No-spec control is the "
+             "share answered correctly with no spec at all (prior knowledge); lift is overall fidelity minus that. "
+             "Low lift means the probes test what a model already knows, not the spec. "
              "Status: validated >= 0.90 held-out fidelity with zero held-out contradictions; provisional >= 0.75; weak otherwise.", "",
-             "| Module | Probes | Revision fidelity | Held-out fidelity | Held-out contradictions | Gaps | Invalid probes | Status | Delta vs prev |",
-             "|---|---:|---:|---:|---:|---:|---:|---|---:|"]
+             "| Module | Probes | Revision fidelity | Held-out fidelity | Held-out contradictions | Gaps | Invalid probes | Status | Delta vs prev | No-spec control | Lift |",
+             "|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|"]
     for pf in sorted(probes_dir.glob("*.jsonl")):
         mid = pf.stem
         probes = {r["id"]: r for r in read_jsonl(pf)}
@@ -215,7 +224,7 @@ def main() -> int:
         hc = stats["holdout"]["contradict"]
         gaps = stats["revision"]["gap"] + stats["holdout"]["gap"]
         st = status_for(hf, hc)
-        prev = prev_rounds.get(str(rnd - 1), {}).get(mid, {})
+        prev = prev_rounds.get(str(rnd - 1), {}).get(mid, {}) if rnd >= 2 else {}  # round 0 is the no-spec control
         prev_hf = prev.get("holdout_fidelity")
         delta = (hf - prev_hf) if isinstance(prev_hf, (int, float)) else None
         # Regression is counted in probes, not points: with ~10 held-out probes one probe is 10 points,
@@ -226,14 +235,24 @@ def main() -> int:
         if regression:
             st = "REGRESSION"
         lb = wilson_lower(stats["holdout"]["agree"], stats["holdout"]["n"])
+        control = None
+        cj = meta / "judgments" / "round-0" / f"{mid}.jsonl"
+        if rnd >= 1 and cj.exists():
+            cv = {r["id"]: r.get("verdict") for r in read_jsonl(cj)}
+            valid = [pid for pid in probes if cv.get(pid) in ("agree", "contradict", "gap")]
+            control = (sum(1 for pid in valid if cv[pid] == "agree") / len(valid)) if valid else None
         report["modules"][mid] = {"probes": len(probes), "revision_fidelity": round(rf, 3), "holdout_fidelity": round(hf, 3),
                                   "holdout_contradictions": hc, "gaps": gaps, "invalid_probes": invalid,
                                   "status": st, "delta_holdout": None if delta is None else round(delta, 3),
                                   "holdout_n": stats["holdout"]["n"], "holdout_agree": stats["holdout"]["agree"],
                                   "holdout_wilson_lower": round(lb, 3),
+                                  "control_fidelity": None if control is None else round(control, 3),
+                                  "lift_over_control": None if control is None else round((rf * stats["revision"]["n"] + hf * stats["holdout"]["n"]) / max(1, stats["revision"]["n"] + stats["holdout"]["n"]) - control, 3),
                                   "revision_failures": len(failures)}
         lines.append(f"| {mid} | {len(probes)} | {rf:.0%} | {hf:.0%} ({stats['holdout']['agree']}/{stats['holdout']['n']}, 95% lower {lb:.0%}) | {hc} | {gaps} | {invalid} | {st} | "
-                     f"{'' if delta is None else f'{delta:+.0%}'} |")
+                     f"{'' if delta is None else f'{delta:+.0%}'} | "
+                     f"{'' if control is None else f'{control:.0%}'} | "
+                     f"{'' if control is None else f'{report_lift(rf, hf, stats, control):+.0%}'} |")
         if args.failures_for_revision and failures:
             write_jsonl(meta / "revise" / f"round-{rnd}" / f"{mid}.jsonl", failures)
         if invalid and invalid > 0.25 * len(probes):

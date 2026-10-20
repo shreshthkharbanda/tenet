@@ -84,6 +84,9 @@ surface; cross-cutting concerns you noticed (auth, retries, logging, errors); ri
 Finish by writing {{SPECS}}/_meta/worker-reports/surveyor-all.json per the format in
 {{SKILL_DIR}}/references/templates.md section 7, then reply with: module count, total in-scope LOC,
 modules over 6000 LOC (if any), and the three biggest risks.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 2. Extractor (one per module, fully parallel)
@@ -141,6 +144,9 @@ the lint to yours). Then write
 {{SPECS}}/_meta/worker-reports/extractor-{{MODULE_ID}}.json (format: templates.md section 7) with an
 accurate claim count and the full list of files you read. Reply with: claim counts by confidence, files
 you could not cite and why, and the three behaviors you are least sure about.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 3. Cross-cutting extractors (four, parallel with module extractors)
@@ -175,6 +181,9 @@ Finish by running:
 and fixing every error. Write {{SPECS}}/_meta/worker-reports/{{XC_KIND}}-all.json (format:
 templates.md section 7) with an accurate claim count and every file you read. Reply with claim counts
 by confidence and the three facts you are least sure about.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 <!-- focus:interfaces -->
@@ -247,6 +256,9 @@ mentions anywhere.
 Finish by running `python3 {{SKILL_DIR}}/scripts/lint_specs.py {{SPECS}} --repo {{REPO}}` until it
 passes, write {{SPECS}}/_meta/worker-reports/reconciler-all.json, and reply with: contradictions
 fixed, contradictions left as questions, cross-links added, and the main paths you documented.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 5. Prober (one per module, parallel; code-only, never sees the spec)
@@ -293,6 +305,9 @@ executed reference answer beats a read one; mark it verified_by: execution.
 Do not read other modules' probes. Do not modify any file outside _meta/probes/. Write
 {{SPECS}}/_meta/worker-reports/prober-{{MODULE_ID}}.json listing every file you read. Reply with the
 probe count by category and difficulty.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 6. Answerer (one per module per round; spec-only, never sees the code)
@@ -327,6 +342,9 @@ need to say. For a partially answerable probe, answer what the spec supports and
 Write {{SPECS}}/_meta/worker-reports/answerer-{{MODULE_ID}}-round-{{ROUND}}.json with
 "snapshot": "{{SPEC_SNAPSHOT}}" and every file you read in files_read (all must be under
 {{SPEC_SNAPSHOT}}; this brief itself is there too). Reply with: answered, partial, unanswerable counts.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 7. Judge (one per module per round)
@@ -362,6 +380,9 @@ revisers mechanically; do not bury them in the note.
 
 Do not read or edit any spec file; your job is comparison, not repair. Write
 {{SPECS}}/_meta/worker-reports/judge-{{MODULE_ID}}-round-{{ROUND}}.json. Reply with the verdict counts.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 8. Reviser (Extractor in revise mode; one per failing module per round)
@@ -396,6 +417,9 @@ Never renumber or reuse IDs. Never delete a {gap} unless you resolved it from co
 (add `--only 01-interfaces.md` etc. for any other file you edited) until clean. Write
 {{SPECS}}/_meta/worker-reports/reviser-{{MODULE_ID}}-round-{{ROUND}}.json. Reply with: failures by
 root-cause class, claims rewritten, claims added, references you judged wrong.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
 
 ## 9. Rebuilder (optional round-trip; one per selected module)
@@ -435,4 +459,7 @@ The orchestrator runs the tests itself and scores the result; do not report pass
 
 Write {{SPECS}}/_meta/worker-reports/rebuilder-{{MODULE_ID}}.json (format: templates.md section 7)
 listing every file you read. Reply with compiled yes/no and the five most important guesses.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+your output file early and save it after each section (append each probe, answer, or verdict as soon
+as it is final). If you are told you were resumed, check your output file first and continue from it.
 ```
