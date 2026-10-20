@@ -578,7 +578,7 @@ Durability: the container running you can restart mid-task, and anything not on 
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role rebuilder --module {{MODULE_ID}} \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role rebuilder --module {{MODULE_ID}} --snapshot {{SCRATCH}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.

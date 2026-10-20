@@ -130,6 +130,19 @@ def main() -> int:
                     or (rel.parts[1:2] == ("probes",) and rel.stem == module)))
                 if not ok:
                     errors.append(f"{rf.name}: prober read {rel} (blindness broken: probers may not read spec text)")
+        if role == "rebuilder":
+            work = r.get("snapshot")  # write_report --snapshot <the rebuild copy>
+            if not work:
+                errors.append(f"{rf.name}: rebuilder report lacks 'snapshot' (its rebuild copy)")
+            else:
+                wroot = resolve(work, repo)
+                outside = [str(x) for x in reads if not under(x, wroot)]
+                if outside:
+                    errors.append(f"{rf.name}: rebuilder read outside its copy (original code reachable): {outside[:5]}")
+                tests_read = [str(x) for x in reads if under(x, wroot) and
+                              ("/tests/" in str(x) or "/test/" in str(x) or x.name.startswith("test_") or x.name.endswith(("_test.py", ".test.ts", "Test.java")))]
+                if tests_read:
+                    errors.append(f"{rf.name}: rebuilder read test source (expected values leak past the spec): {tests_read[:5]}")
         if role in ("extractor", "reviser"):
             for x in reads:
                 if under(x, specs / "modules") and x.stem != module:

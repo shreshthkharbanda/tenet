@@ -320,3 +320,11 @@ decision files (code-derived evidence not in the spec) were copied in, because t
 known-bad names and these were new. Caught before any answerer ran. Fix: the snapshot is an allowlist
 (INDEX.md, 0*.md, modules/*.md, _meta/modules.json, question files); a self-test plants a correction and
 a decision file and asserts neither reaches the snapshot. Rule: isolation boundaries are allowlists.
+
+**L44. The Rebuilder could read the tests it is scored by.** Found: preparing the LiteLLM rebuild;
+the rebuild copy keeps the tests (they are the scorer), and the brief only asked the Rebuilder not to
+read them. A rebuilder that reads test source can satisfy assertions the spec never stated, and the
+recovery rate would credit the spec. Fix: rebuilders report their copy with `--snapshot`, and
+`verify_reports.py` fails a rebuilder that read outside its copy (the original is reachable on disk) or
+read any test file inside it. Test failure messages seen while running stay fair game and are recorded
+as spec gaps.
