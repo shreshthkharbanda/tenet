@@ -257,7 +257,9 @@ Write {{SPECS}}/_meta/reconcile/decisions-{{SLICE_NAME}}.jsonl, one row per pair
            "refs": ["optional replacement refs"]}],
  "evidence": "path:START-END and what the code does", "question": "only for unresolvable"}
 An edit replaces the claim's text (and confidence or refs if given); the ID never changes. Do not edit
-spec files yourself. Reply with counts by verdict.
+spec files yourself. Write {{SPECS}}/_meta/worker-reports/pairjudge-{{SLICE_NAME}}.json (format:
+{{REFS}}/templates.md section 7, with every file you read and any suspected_bugs you noticed). Reply
+with counts by verdict.
 ```
 
 ## 4. Reconciler (one, after all extractors pass lint and coverage)

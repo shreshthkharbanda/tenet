@@ -378,9 +378,14 @@ Every worker ends by writing `_meta/worker-reports/<role>-<module>[-round-N].jso
   "module": "<id or 'all'>",
   "outputs": [{"path": "specs/modules/<id>.md", "claims": 87}],
   "files_read": ["src/auth/session.py", "tests/test_session.py"],
-  "notes": "anything the orchestrator should know: suspected dead code, a file too large to read fully, a dependency whose behavior could not be traced"
+  "notes": "anything the orchestrator should know: suspected dead code, a file too large to read fully, a dependency whose behavior could not be traced",
+  "suspected_bugs": [{"where": "path:START-END", "what": "what the code does and why it looks unintended", "evidence": "how you know (read / executed / test)"}]
 }
 ```
+
+Every role may report `suspected_bugs`, including roles whose job is not to find bugs (probers,
+judges, pair judges, falsifiers). Anything you notice that looks unintended goes here, not only into
+your reply: `collect_defects.py` reads it, a reply does not survive.
 
 Use absolute paths in `outputs` and `files_read`. `verify_reports.py` checks these against the filesystem. Report what you did, not what you intended;
 a report that claims 87 claims when 40 parse fails the gate and the module is re-run.

@@ -239,3 +239,10 @@ disjoint slices in parallel and only record decisions (distinct, contradiction, 
 unresolvable) with exact claim edits; `apply_claim_edits.py` is the single writer, rewriting claim
 lines by ID, so parallel judges cannot race; duplicates collapse to one owning claim plus pointers;
 the Reconciler then writes only the top layer.
+
+**L34. Bug reports outside the bug channel.** Found: LiteLLM pair judge 00 reported a likely bug
+(`ttl=RoutingArgs.ttl`, the enum member, passed where `.value` is expected) only in its reply; its
+brief had no worker report and no defect field. L24 gave extractors a channel, but every role reads
+code and any of them can trip over a bug. Fix: `suspected_bugs` is part of the worker report format
+for every role, the pair-judge brief now writes a worker report, and the template says a reply does
+not survive and a report does.
