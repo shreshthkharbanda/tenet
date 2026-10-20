@@ -266,6 +266,37 @@ Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role s
 This replaces any other instruction above about the report's file name or format.
 ```
 
+After a story fixer (briefs.md 2f) has repaired the named rows, a recheck judges just those rows
+again instead of the whole story. The previous rows are archived first (`_meta/audit/story/round-N/`);
+the recheck writes the full current rows file, so `story_probe.py score` scores the story as it now is.
+
+<!-- brief:story-recheck -->
+```
+You are rechecking repaired sentences in one readable story of a behavioral specification. A story
+judge labelled every sentence against the claims it cites; a fixer then repaired every row not
+marked "supported". Your job is to judge the repaired sentences, so the rows file describes the story
+as it now is.
+
+Story: {{SPECS}}/_meta/story/{{MODULE_ID}}.md. Previous rows: {{PREVIOUS_ROWS}}.
+Claims: {{CLAIMS_HOME}} and, for other prefixes, the spec file that holds them under {{SPECS}}. You may
+read the code a claim cites. Never read anything under the eval dir.
+
+For each previous row whose verdict is not "supported", find the text that now stands in its place
+(the fixer may have reworded it, split it, merged it or cut it). Judge that text with the same
+labels and the same care as a full judge: supported, overstated, distorted or unsupported. Search the
+spec for its key terms, because a claim it does not cite may qualify it. Also judge any other
+sentence that clearly changed next to it, such as the same fact in a figure step or At a glance.
+Keep every other previous row as it is, with its sentence updated only if its wording changed.
+
+Write the full current rows file, in the same format as the previous one, to
+{{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl: every previous row, with each rechecked row replaced
+by the current text and your verdict, and a "rechecked": true field on the rows you judged. Do not
+edit the story or the spec. Reply with the counts per verdict over the whole file, and one line per
+rechecked row that is still not supported.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-recheck --module {{MODULE_ID}} --round {{ROUND}} \
+  --output {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl --read-from <a file listing every path you read>
+```
+
 <!-- brief:story-reader -->
 ```
 You are an engineer who has just read one chapter of a system's specification: the chapter story in

@@ -146,7 +146,7 @@ def main() -> int:
         tests = [f["path"] for f in inv["files"] if f.get("is_test")]
         for mid in ids:
             m = next((x for x in mods["modules"] if x["id"] == mid), None)
-            if not m and mid == "_system" and role in ("story-judge", "persona-reader", "teachback-judge", "story-reader", "story-fixer"):
+            if not m and mid == "_system" and role in ("story-judge", "persona-reader", "teachback-judge", "story-reader", "story-fixer", "story-recheck"):
                 m = {"id": "_system", "prefix": "SYS", "name": "the system story (the book's opening)", "globs": []}
             if not m:
                 raise SystemExit(f"unknown module {mid}" + (" (the system story is audited by story-judge, persona-reader and "
@@ -203,7 +203,12 @@ def main() -> int:
                 snap = Path(args.snapshot).resolve()
                 vals["SPEC_SNAPSHOT"] = snap
                 path = snap / "_briefs" / f"{role}-{mid}-round-{args.round}.md"
-            elif role in ("falsifier", "omission", "story-judge", "story-scorer", "teachback-judge", "story-fixer"):
+            elif role in ("falsifier", "omission", "story-judge", "story-scorer", "teachback-judge", "story-fixer", "story-recheck"):
+                if role == "story-recheck":
+                    prev = sorted((meta / "audit" / "story").glob(f"round-*/{mid}.jsonl"))
+                    if not prev:
+                        raise SystemExit(f"story-recheck {mid}: archive the previous rows under _meta/audit/story/round-N/ first")
+                    vals["PREVIOUS_ROWS"] = str(prev[-1])
                 path = out_dir / f"audit-{role}-{mid}-round-{args.round}.md"
             elif role == "verifier":
                 # one brief per chunk of confirmed normative claims that have no evidence yet

@@ -116,6 +116,9 @@ def main() -> int:
             "surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker") else [])
         if mk in ("answerer", "story-reader", "persona-reader"):
             extra += ["--snapshot", str(tmp / "snap-x")]
+        if mk == "story-recheck":  # rechecks the archived rows of a previous round
+            (meta / "audit" / "story" / "round-1").mkdir(parents=True, exist_ok=True)
+            (meta / "audit" / "story" / "round-1" / "big-a.jsonl").write_text("{}\n")
         rc_, out_ = run("render_briefs.py", "--role", mk, *extra, *sets, "--specs", str(specs), "--repo", str(repo),
                         "--scratch", str(tmp / "scratch"))
         if rc_ != 0:
