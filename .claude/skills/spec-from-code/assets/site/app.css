@@ -454,8 +454,9 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .tl-events li b { font: 700 0.8rem/1.5 var(--mono); color: var(--muted); }
 .tl-events li.on { background: var(--accent-soft); border-left-color: var(--accent); }
 .tl-events li.future { opacity: 0.45; }
-.sfig:has(.tl-events) { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
-@media (max-width: 900px) { .sfig:has(.tl-events) { grid-template-columns: minmax(0, 1fr); } }
+/* a timeline reads left to right across the full figure; its event list sits below in two columns */
+.sfig:has(.tl-events) { grid-template-columns: minmax(0, 1fr); }
+.sfig .tl-events { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
 .st-sec p.lead { font-size: 1.04em; }
 :root[data-lens="everyone"] .st-sec p.lead { margin-bottom: 14px; }
 .claim .cdetail { margin: 6px 0 0; padding-left: 1.1em; font-size: 0.95em; color: var(--ink-2); }
