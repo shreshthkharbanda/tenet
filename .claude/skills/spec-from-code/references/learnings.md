@@ -778,3 +778,17 @@ what a thing is and cites the claim that defines it, with conditional behavior l
 G8 warns when a sentence states a number that every mention in its cited claims calls a default,
 unless the sentence says "by default", "unless" or "usually". On the eleven stories it flagged the
 two such sentences the round-3 judges had found, and nothing else.
+
+**L84. Each rewrite round found new faults in new text; repair the named sentences instead.**
+Found: LiteLLM Phase 9 story audit rounds 2 and 3. Narrators rewrote whole stories to answer judge
+rows, persona lost items and teach-back verdicts together. Comprehension improved: the failure-handling
+reader's contradicted answers went 4, then 2, and its teach-back went from 16 correct and 3 vague to
+20 correct and 1 vague, with none wrong. Faithfulness did not converge. Each rewrite added plain
+explanations and Words-you'll-see rows, and the next judge found new overstated or distorted rows
+in exactly that new text. Failure-handling went from 1 distorted row in round 2 to 4 in round 3,
+three of them in new glossary rows. Resuming a narrator also cost 300k to 420k tokens of context
+per story. Class: a revision step whose scope is the whole artifact when the defect list is
+specific. Fix: a `story-fixer` role. It is a fresh worker that reads the story, the judge's rows and
+the claims those rows name, and changes only those sentences plus what they make inconsistent; it
+adds no material. A narrator rewrite is kept for what needs new material: a persona reader who got
+lost, or explained something wrongly.

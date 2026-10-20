@@ -405,6 +405,48 @@ Report: write your worker report with the CLI, not by hand (the gate verifies it
 This replaces any other instruction above about the report's file name or format.
 ```
 
+## 2f. Story fixer (targeted repair after a story judge; G8)
+
+After a story judge's round, the rows not marked "supported" name exactly what to repair. A fresh
+fixer reads the story, those rows and the claims they name, and changes only those sentences: far
+cheaper than a narrator rewrite, and it cannot introduce new material for the next judge to find
+(L84). Use a narrator rewrite instead when a persona reader got lost or explained something wrongly.
+
+<!-- brief:story-fixer -->
+```
+You are repairing named sentences in one readable story of a behavioral specification. A story judge
+labelled every sentence of the story against the claims it cites; each row not marked "supported"
+is a mistake. Fix those, and nothing else.
+
+Story: {{SPECS}}/_meta/story/{{MODULE_ID}}.md. Judge rows: {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl.
+Claims: {{CLAIMS_HOME}} and, for other prefixes, the spec file that holds them under {{SPECS}}. You may
+read the code a claim cites. Never read anything under the eval dir, or earlier audit rounds.
+Read first: {{SKILL_DIR}}/references/story.md (format and layers) and the writing rules in
+{{SKILL_DIR}}/references/readability.md.
+
+For each row whose verdict is not "supported", read its note and the claims it names, then:
+- overstated: put back the condition the claim states, or say "by default" or "in the usual case"
+  and move the exception to At a glance or Watch out;
+- distorted: rewrite the sentence to say what the claims say;
+- unsupported: cite the claim that says it (search the spec for it), or cut the clause no claim
+  supports.
+A row of Words you'll see is a definition: say what the thing is and cite the claim that defines it;
+leave behavior that holds only under conditions to the sections.
+Change only what a row needs, plus anything the change makes inconsistent elsewhere in the story
+(the same fact in a figure step, At a glance or Watch out). Do not restructure, add sections or add
+facts. Keep the story's terms: one term per thing.
+
+Run the gate until it reports 0 errors, and fix its warnings where you can:
+  python3 {{SKILL_DIR}}/scripts/check_story.py {{SPECS}} --module {{MODULE_ID}} --repo {{REPO}}
+Edit only the story file. If a row's note shows the claim itself is wrong or looser than its code,
+keep the story faithful to the claim and report "module claim <ID>: <the problem>".
+Reply with the gate's summary line, one line per row (fixed, or kept and why), and any module claim
+notes.
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role story-fixer --module {{MODULE_ID}} \
+  --round {{ROUND}} --output {{SPECS}}/_meta/story/{{MODULE_ID}}.md --read-from <a file listing every path you read> \
+  [--note "..."]
+```
+
 ## 2e. System narrator (the book's opening and the plain walkthroughs; G8)
 
 <!-- brief:system-narrator -->

@@ -45,7 +45,7 @@ SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs",
               ".swift", ".c", ".cc", ".cpp", ".h", ".hpp", ".ex", ".exs", ".sh", ".sql"}
 SPEC_KINDS = {"module", "overview", "interfaces", "data", "config", "operations"}
 WRITERS = {"surveyor", "extractor", "extractor-fix", "crosscut", "interfaces", "data", "config", "operations",
-           "reconciler", "pairjudge", "reviser", "verifier", "narrator", "system-narrator", "story-judge", "teachback-judge"}
+           "reconciler", "pairjudge", "reviser", "verifier", "narrator", "system-narrator", "story-judge", "teachback-judge", "story-fixer"}
 XC_KINDS = {"interfaces", "data", "config", "operations"}
 PATH_TOKEN = re.compile(r"(?<![\w$])(/[^\s'\"`;|&<>(){}]+)")
 ASSIGN = re.compile(r"(?:^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")

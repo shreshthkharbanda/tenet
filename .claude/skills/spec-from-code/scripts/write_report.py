@@ -23,7 +23,7 @@ from _common import EVAL_ROLES, eval_dir, parse_claims, parse_frontmatter
 
 ROLES = {"surveyor", "extractor", "interfaces", "data", "config", "operations", "crosscut", "reconciler", "pairjudge",
          "prober", "answerer", "judge", "reviser", "rebuilder", "falsifier", "omission", "control", "judge-auditor",
-         "redteam", "reader", "lifecycle-checker", "verifier", "narrator", "system-narrator", "story-judge", "story-reader", "story-scorer", "persona-reader", "teachback-judge"}
+         "redteam", "reader", "lifecycle-checker", "verifier", "narrator", "system-narrator", "story-judge", "story-reader", "story-scorer", "persona-reader", "teachback-judge", "story-fixer"}
 
 
 def main() -> int:
