@@ -41,7 +41,11 @@ def main() -> int:
     for mid in mods:
         f = out_dir / f"{mid}.jsonl"
         rows = read_jsonl(f) if f.exists() else []
-        seen = {(r.get("source"), r.get("id")) for r in rows}
+        def key(r: dict, default_round=None) -> tuple:
+            # audit findings are keyed by the audit round that produced them: a claim found wrong again in a
+            # later audit is a new finding, and omission ranks restart every round
+            return (r.get("source"), str(r.get("id")), r.get("audit_round", default_round))
+        seen = {key(r) for r in rows}
         # one-time findings (rebuild guesses, notes) were handed to an earlier round's reviser: never again
         # (L61: 27 already-fixed rebuild rows came back in round 2). Probe, lint and audit rows recur only
         # while they still fail, because their sources are re-measured each round.
@@ -49,22 +53,29 @@ def main() -> int:
         for k in range(1, a.round):
             pf = meta / "revise" / f"round-{k}" / f"{mid}.jsonl"
             if pf.exists():
-                earlier |= {(r.get("source"), str(r.get("id"))) for r in read_jsonl(pf) if r.get("source") in ("rebuild", "note")}
+                earlier |= {key(r, k if r.get("source") in ("falsifier", "omission") else None) for r in read_jsonl(pf)
+                            if r.get("source") in ("rebuild", "note", "falsifier", "omission")}
         add = []
-        for ff in sorted((meta / "audit" / f"round-{a.round}").glob(f"falsify-{mid}*.jsonl")) + sorted((meta / "audit" / f"round-{a.round}").glob(f"universal-falsify-{mid}*.jsonl")):
-            for r in read_jsonl(ff):
-                if r.get("verdict") in ("false", "imprecise", "ref_wrong") and ("falsifier", r["id"]) not in seen:
-                    add.append({"source": "falsifier", "id": r["id"], "verdict": r["verdict"], "severity": r.get("severity"),
-                                "judge_note": r.get("evidence", ""), "counterexample": r.get("counterexample", "")})
-        of = meta / "audit" / f"round-{a.round}" / f"omission-{mid}.jsonl"
-        if of.exists():
-            for r in read_jsonl(of):
-                if r.get("spec_status") in ("vague", "missing", "contradicted"):
-                    key = ("omission", f"rank-{r.get('rank')}")
-                    if key not in seen:
-                        add.append({"source": "omission", "id": f"rank-{r.get('rank')}", "verdict": r["spec_status"],
-                                    "question": r.get("behavior"), "refs": r.get("refs", []),
-                                    "judge_note": r.get("note", ""), "spec_claims": r.get("spec_claims", [])})
+        # every audit round up to this one: an audit run after the last revision (an experiment, a fresh
+        # sample) feeds the next revision; rows already handed out are skipped below (L66)
+        audit_dirs = [(k, meta / "audit" / f"round-{k}") for k in range(1, a.round + 2)]
+        for k, d in audit_dirs:
+            for ff in sorted(d.glob(f"falsify-{mid}*.jsonl")) + sorted(d.glob(f"universal-falsify-{mid}*.jsonl")):
+                for r in read_jsonl(ff):
+                    row = {"source": "falsifier", "id": r["id"], "audit_round": k, "verdict": r["verdict"],
+                           "severity": r.get("severity"), "judge_note": r.get("evidence", ""),
+                           "counterexample": r.get("counterexample", "")}
+                    if r.get("verdict") in ("false", "imprecise", "ref_wrong") and key(row) not in seen:
+                        seen.add(key(row))
+                        add.append(row)
+            of = d / f"omission-{mid}.jsonl"
+            for r in (read_jsonl(of) if of.exists() else []):
+                row = {"source": "omission", "id": f"rank-{r.get('rank')}", "audit_round": k, "verdict": r.get("spec_status"),
+                       "question": r.get("behavior"), "refs": r.get("refs", []), "judge_note": r.get("note", ""),
+                       "spec_claims": r.get("spec_claims", [])}
+                if r.get("spec_status") in ("vague", "missing", "contradicted") and key(row) not in seen:
+                    seen.add(key(row))
+                    add.append(row)
         for ln in lint:
             if f"modules/{mid}.md:" in ln and ln.startswith("WARN"):
                 m = re.search(r"modules/[\w-]+\.md:(\d+): (.*)", ln)
@@ -111,7 +122,7 @@ def main() -> int:
         # appended twice and a reviser worked 68 rows of which 27 were repeats)
         merged, keys = [], set()
         for r in rows + add:
-            k = (r.get("source"), str(r.get("id")))
+            k = key(r)
             if k not in keys and k not in earlier:
                 keys.add(k)
                 merged.append(r)

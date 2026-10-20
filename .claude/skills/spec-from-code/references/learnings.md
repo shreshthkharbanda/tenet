@@ -519,3 +519,17 @@ hygiene line tells every executing worker to build one instance of the system pe
 never to assert timing-dependent order; failing and stale evidence checks go to the owner's revise
 worklist (source "evidence") to fix the claim or the check; G7 runs checks in parallel, each in its own
 working directory, with one serial re-run that separates a flaky check from a wrong claim.
+
+**L66. Executable evidence removes false claims; omissions survive it.** Found: LiteLLM evidence
+experiment. Twelve verifiers backed 274 confirmed normative claims of two modules with check scripts
+and corrected 73 (26%), finding several real LiteLLM bugs no reading pass had caught (a caller-forged
+reservation decrements another deployment's rate-limit counter; router I/O reservations are never
+reconciled; a second Router in one process silently shares the first's pre-call checks). A blind
+falsification sample afterwards (12 fresh confirmed normative claims per module, same seed rules):
+verified modules 0/24 false, 25% false-or-imprecise, 12% medium+, 0 high; unverified controls 3/24 false
+(12%), 38%, 17%, 1 high. What survived verification is omission: claims true as stated that leave out
+a condition a caller would hit (the store down, an unparseable value, a stream closed before its first
+read, a second instance). Fix: the evidence sweep is Phase 3b of the pipeline; the verifier brief now
+attacks those unstated conditions after checking the stated ones; revisers update a claim's check when
+they change the claim; revise worklists collect findings from every audit round, keyed by the round
+that found them (a claim found wrong again later is a new finding).

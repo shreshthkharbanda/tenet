@@ -290,7 +290,12 @@ For each claim:
    The script drives the entry point with fakes only at the outer boundary (provider HTTP, Redis,
    clock), asserts every observable the claim states (values, exact messages, exception types, order,
    what is NOT done), covers the boundary its words imply ("only", "unless", "never", "always": test
-   the case on each side), prints what it observed, and exits 0 only if the claim holds. It must run
+   the case on each side), prints what it observed, and exits 0 only if the claim holds. Then attack
+   what the claim leaves unsaid, because that is where verified claims still fail: the dependency
+   failing (store or provider raising, timing out, circuit open), input of the wrong type or shape
+   (None, string for number, unparseable), early cancellation or close (a stream dropped before its
+   first read), the sync/async and sibling entry points, and a second instance in the same process.
+   If one of these changes the outcome a caller sees, the claim is incomplete: correct it. It must run
    with `python -P` the way the run environment above says (interpreter, working directory,
    environment variables), in under 60 seconds, and never write into the repo.
 3. Run it. Then exactly one of:
@@ -599,7 +604,9 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
 - rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding;
 - note: another worker (a cross-cutting writer, a falsifier, the reconciler) reported this claim as
   wrong or incomplete while working on its own file; verify it in the code before acting on it.
-- evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails or is stale. Run
+- evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails or is stale.
+  Whenever you change a claim that has a check script, update the script's `# text:` line and
+  assertions to the new text and run it; a changed claim with an unchanged check fails the gate. Run
   it; correct the claim if the code disagrees, or fix the check if it tests the wrong thing, and keep
   its `# text:` line equal to the claim's final text.
 The probe rows are revision-split only; a separate held-out set you will never see is scored

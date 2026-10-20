@@ -178,6 +178,24 @@ writes `00-overview.md`, `_meta/gaps.md`, `_meta/questions.md`, and a first `IND
 Read `00-overview.md` yourself as the intended reader (new engineer, 15 minutes). If the first
 paragraph does not say what the system is for, or a main path skips a module on it, send it back.
 
+## Phase 3b: evidence sweep (verifiers; gate G7)
+
+Every `{confirmed}` claim in a module's normative sections gets executed evidence before probing. Run
+`python3 $SKILL_DIR/scripts/render_briefs.py --role verifier --module <id> ...` per module: it splits
+the module's unbacked confirmed normative claims into chunks of 25 and renders one brief per chunk.
+Dispatch them like extractors. Each verifier writes `_meta/evidence/<module>/check_<ID>.py` per
+claim (drives the public entry point, asserts what the claim states, then attacks what it leaves
+unsaid: dependency failure, wrong-typed input, early cancel, sibling entry points, a second instance)
+and corrects wrong claims through `decisions-verify-<module>-<chunk>.jsonl`. When a module's
+verifiers finish, run `apply_claim_edits.py` (only complete decision files: an applied file must not
+change), then `gate.py` (G7 re-runs every check in parallel and lists failing, stale and orphan
+checks). Why it is not optional: on LiteLLM, reading-based claims that had passed probes and a revision
+round were 26% wrong when executed (73 of 274 corrected), and a blind falsification sample after the
+sweep found 0 false claims in verified modules against 12% in unverified ones (L61, L66). Cost: about
+one verifier per 25 confirmed claims (tier M: ~6 per module). Tier L: sweep critical modules first.
+G7 also makes the spec maintainable: after a code change, `gate.py` lists exactly the claims whose
+checks now fail.
+
 ## Phase 4: probe (M probers, then M answerers, then M judges; gate G4)
 
 Full protocol in `references/validation.md` section 2. In short:
