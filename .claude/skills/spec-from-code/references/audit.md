@@ -41,6 +41,9 @@ Write {{SPECS}}/_meta/audit/falsify-{{MODULE_ID}}.jsonl, one row per claim, appe
 {"id": "...", "verdict": "holds|false|imprecise|ref_wrong", "severity": "high|medium|low",
  "evidence": "path:Lx-Ly and what the code actually does", "counterexample": "input or state, if any",
  "executed": true|false}
+If you find a wrong claim outside your sample while working, append it as a row too, with
+"out_of_sample": true: it is fixed like the others but not counted in the error rate. Never put it
+only in your notes; notes are not read by the revision step.
 Do not edit the spec or the code. Reply with verdict counts and the worst three findings.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role falsifier --module {{MODULE_ID}} \

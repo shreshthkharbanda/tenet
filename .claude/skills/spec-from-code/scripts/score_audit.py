@@ -80,7 +80,9 @@ def main() -> int:
         m = {}
         ff = audit / f"falsify-{mid}.jsonl"
         if ff.exists():
-            rows = read_jsonl(ff)
+            # out-of-sample findings are fixed (build_revise reads them) but never counted: a rate is only
+            # an estimate when the claims were drawn at random
+            rows = [r for r in read_jsonl(ff) if not r.get("out_of_sample")]
             n = len(rows)
             c = {k: sum(1 for r in rows if r.get("verdict") == k) for k in ("holds", "false", "imprecise", "ref_wrong")}
             bad = [r for r in rows if r.get("verdict") in ("false", "imprecise")]
