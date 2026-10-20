@@ -228,3 +228,14 @@ all. Fix: one notation in every doc (`path:START-END`), an `L` prefix accepted e
 parsed, and `score_probes.py --assign-splits` resolves every probe ref (file exists, lines in range)
 before the held-out split is frozen. The control answerer's brief is rendered inside its own
 directory, like answerer briefs inside their snapshot, so reading it does not break isolation.
+
+**L33. Reconciliation by reading could not scale.** Found: LiteLLM iteration 1 reconcile; 13 spec
+files and about 2,950 claims. Finding contradictions by reading is hopeless, and one Reconciler
+checking pairs against code would need ~750k tokens. Measured: 4,039 cross-file claim pairs cite
+overlapping lines, and 75 are near-duplicates (61 with differing values). Cross-cutting writers run in
+parallel with module extractors, so they restate module facts that then drift on revision. Fix:
+`find_overlaps.py` builds the worklist (near-duplicates with differing values first); pair judges work
+disjoint slices in parallel and only record decisions (distinct, contradiction, duplicate,
+unresolvable) with exact claim edits; `apply_claim_edits.py` is the single writer, rewriting claim
+lines by ID, so parallel judges cannot race; duplicates collapse to one owning claim plus pointers;
+the Reconciler then writes only the top layer.

@@ -108,7 +108,15 @@ def main() -> int:
     rendered = []
     must = ("SCOPE_NOTE",) if args.scope_note else ()
 
-    if role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
+    if role == "pairjudge":
+        n = sum(1 for l in (meta / "overlaps.jsonl").read_text().splitlines() if l.strip())
+        size = int(next((kv.split("=", 1)[1] for kv in args.set if kv.startswith("SLICE_SIZE=")), "60"))
+        for k, lo in enumerate(range(0, n, size)):
+            hi = min(n, lo + size)
+            vals = base | {"SLICE": f"{lo}-{hi}", "SLICE_NAME": f"{k:02d}"}
+            rendered.append((role, f"slice-{k:02d}", out_dir / f"pairjudge-{k:02d}.md", fill(blocks[role], vals, must)))
+        (meta / "reconcile").mkdir(parents=True, exist_ok=True)
+    elif role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
         name = f"audit-{role}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
         dest = out_dir / name
         if role == "control":  # the control may read only its own directory, so its brief lives there

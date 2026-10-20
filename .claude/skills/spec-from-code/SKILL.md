@@ -126,9 +126,17 @@ Spot check (`references/validation.md` section 4): per module, open two random `
 their refs. A miss sends the module back with the miss named. This is cheap and it changes how
 extractors behave.
 
-## Phase 3: reconcile (1 worker, then G2)
+## Phase 3: reconcile (pair judges in parallel, a script applies edits, then 1 Reconciler; G2)
 
-Dispatch the Reconciler: it fixes cross-module contradictions from code, adds claim-ID cross-links,
+First run `python3 $SKILL_DIR/scripts/find_overlaps.py $SPECS`: it lists claim pairs from different
+files that cite overlapping lines, near-duplicates with differing values first. That worklist is how
+the Reconciler finds contradictions; reading thousands of claims for them does not work. Then:
+1. Render pair judges (`--role pairjudge`, one per 60 rows; `--set SLICE_SIZE=N` to change) and
+   dispatch them in parallel. They only write decisions; they never edit specs.
+2. `python3 $SKILL_DIR/scripts/apply_claim_edits.py $SPECS` applies every edit by claim ID (the only
+   writer, so parallel judges cannot race) and appends unresolvable pairs to `_meta/questions.md`.
+   Re-run lint.
+3. Dispatch the Reconciler: it turns questions into gaps, adds claim-ID cross-links,
 writes `00-overview.md`, `_meta/gaps.md`, `_meta/questions.md`, and a first `INDEX.md`. Re-run `gate.py`.
 Read `00-overview.md` yourself as the intended reader (new engineer, 15 minutes). If the first
 paragraph does not say what the system is for, or a main path skips a module on it, send it back.
@@ -253,6 +261,7 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   Planning: `inventory.py`, `split_file.py`, `check_shards.py`, `changed_modules.py`.
   Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
   Gates: `lint_specs.py`, `coverage.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
+  Reconcile: `find_overlaps.py`, `apply_claim_edits.py`, `collect_defects.py`.
   Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
   Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`, `collect_defects.py`.
   Gate regression tests: `selftest.py`.

@@ -137,6 +137,21 @@ def main() -> int:
     check("L19 identifier at text start is not a ref", pc[0]["refs"] == ["pkg/a.py:1-2", "pkg/b.py::X"]
           and pc[0]["text"].startswith("`add`") and pc[1]["refs"] == [] and pc[1]["text"].startswith("`Router"), json.dumps(pc))
 
+    # L33: pair-judge edits applied by claim ID; id, refs kept; unresolvable -> questions
+    (meta / "overlaps.jsonl").write_text(json.dumps({"a": {"file": "modules/big-a.md", "id": "BIGA-001"},
+                                                     "b": {"file": "modules/big-b.md", "id": "BIGB-002"}}) + "\n")
+    (meta / "reconcile").mkdir(exist_ok=True)
+    (meta / "reconcile" / "decisions-00.jsonl").write_text("\n".join(json.dumps(d) for d in [
+        {"row": 0, "verdict": "duplicate", "edits": [{"file": "modules/big-a.md", "id": "BIGA-001",
+         "text": "`Big` stores 1 in x at construction; method behavior is in [BIGB-002]."}]},
+        {"row": 0, "verdict": "unresolvable", "edits": [], "question": "which is intended?", "evidence": "pkg/big.py:1-3"}]) + "\n")
+    rc, out = run("apply_claim_edits.py", str(specs))
+    txt = (specs / "modules" / "big-a.md").read_text()
+    check("L33 edit applied by id, refs kept", rc == 0 and "- [BIGA-001] {confirmed} `pkg/big.py::Big` `Big` stores 1 in x at construction; method behavior is in [BIGB-002]." in txt, out)
+    check("L33 unresolvable pair becomes a question", "which is intended?" in (meta / "questions.md").read_text())
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("L33 specs still lint after edits", rc == 0, out)
+
     # L08: freshness is per cited file
     (repo / "README.md").write_text("unrelated\n")
     git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "readme")

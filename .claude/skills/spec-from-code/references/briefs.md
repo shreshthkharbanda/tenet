@@ -229,6 +229,37 @@ CI config, Dockerfiles, Makefiles, and the build hints in _meta/inventory.json. 
 command that runs the tests for the scope and whether it passed when you tried it.
 ```
 
+## 3b. Pair judge (parallel, before the Reconciler)
+
+<!-- brief:pairjudge -->
+```
+You are judging pairs of claims, written independently by different spec writers, that describe the
+same lines of code. Your decisions are applied to the specs by a script, so be exact.
+
+Repo: {{REPO}} (commit {{COMMIT}}). Pairs: rows {{SLICE}} (0-based, end exclusive) of
+{{SPECS}}/_meta/overlaps.jsonl. Each row has "a" and "b" with file, id, refs, text, plus "kind"
+(duplicate or same-code). How to run this project's code if reading is not enough: {{RUN_ENV}}
+
+For each row, open the code at both refs and decide:
+- distinct: the claims describe different behaviors of the same code, and both are right. No edit.
+- contradiction: they disagree on something a caller could observe. Fix the wrong one (or both).
+- duplicate: they state the same fact. Keep the full statement in the claim whose file owns the code
+  (the module spec over 01-04 cross-cutting files; for two modules, the one whose scope holds the
+  lines) and rewrite the other as a pointer that keeps its ID and confidence, e.g.
+  "`update_settings` applies only the runtime-updatable keys; the exact list is in [RSELECT-152]."
+  If the two differ in a detail, make the kept one correct first.
+- unresolvable: the code itself is inconsistent or ambiguous; describe it for the human.
+
+Write {{SPECS}}/_meta/reconcile/decisions-{{SLICE_NAME}}.jsonl, one row per pair, appended as you go:
+{"row": N, "verdict": "distinct|contradiction|duplicate|unresolvable",
+ "edits": [{"file": "modules/x.md", "id": "RSELECT-152", "text": "full new claim text, without the id,
+           confidence, or refs", "confidence": "confirmed|inferred|gap (optional, to change it)",
+           "refs": ["optional replacement refs"]}],
+ "evidence": "path:START-END and what the code does", "question": "only for unresolvable"}
+An edit replaces the claim's text (and confidence or refs if given); the ID never changes. Do not edit
+spec files yourself. Reply with counts by verdict.
+```
+
 ## 4. Reconciler (one, after all extractors pass lint and coverage)
 
 <!-- brief:reconciler -->
@@ -239,10 +270,9 @@ _meta/judgments. Repo: {{REPO}} (commit {{COMMIT}}). Survey: {{SPECS}}/_meta/sur
 Scope of the specification: {{SCOPE_NOTE}}
 
 Tasks, in order:
-1. Contradictions. Where two specs state the same fact with different values (a retry count, a
-   default, an error code, an ordering), open the code at both refs and fix the wrong one in place
-   (edit the claim text; keep its ID). If the code itself is inconsistent or you cannot decide, leave
-   both and record the pair in {{SPECS}}/_meta/questions.md with both claim IDs and refs.
+1. Contradictions and duplicates were decided by pair judges and applied by script; unresolvable
+   pairs are in {{SPECS}}/_meta/questions.md. Read that file; for each question, add a {gap} claim to
+   the owning module if none covers it.
 2. Cross-links. Where a module spec says "see module X" or describes a dependency's behavior, add the
    concrete claim ID cross-reference `[X-NNN]` so a reader can jump. Do not duplicate claims across
    modules; one fact lives in the module that decides it, and other modules point at it.
