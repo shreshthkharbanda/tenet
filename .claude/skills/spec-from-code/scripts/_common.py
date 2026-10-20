@@ -363,3 +363,16 @@ def scope_label(item: dict) -> str:
     if item.get("whole"):
         return item["path"]
     return f"{item['path']}:{item['start']}-{item['end']}"
+
+
+# Universal claims (always / never / unless / only / "takes effect" / "is ignored" ...) assert something
+# about every path. In the LiteLLM audit they failed falsification at 29% against 8% for other claims:
+# writers check the paths they read and generalize. They get priority in falsification sampling.
+UNIVERSAL_RE = re.compile(
+    r"(?i)\b(always|never|every|any|only|unless|regardless|none|all\s+(?:paths|callers|calls|cases)|"
+    r"no\s+\w+\s+(?:is|are|ever)|is\s+(?:not\s+)?(?:retried|validated|checked|ignored)|not\s+(?:retried|validated|checked|"
+    r"called|read|written)|does not|cannot|takes effect)\b")
+
+
+def is_universal(text: str) -> bool:
+    return bool(UNIVERSAL_RE.search(text or ""))

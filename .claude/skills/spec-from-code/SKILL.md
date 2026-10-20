@@ -182,6 +182,13 @@ Full protocol in `references/validation.md` section 2. In short:
 
 ## Phase 5: revise (per failing module, up to 3 rounds)
 
+Before the first revision round, run the universal-claim falsification pass on every module:
+`scripts/sample_claims.py $SPECS --universal-only --per-module 8 --out $SPECS/_meta/audit/universal.jsonl`,
+then one `--role falsifier --set SAMPLE_FILE=<that file>` per module. Universal claims (always, never,
+unless, only) are where writers overreach; false and imprecise verdicts join that module's failures
+file (category `falsifier`) so the Reviser fixes them with the probe failures.
+
+
 For each module not `validated`: copy its spec to `_meta/rounds/round-1/<module>.md`, dispatch a
 Reviser with the failures file, re-run lint, then re-run Answerer (fresh snapshot) and Judge for that
 module as round 2, and score with `--round 2`. Repeat to round 3 at most. Stop early per module when

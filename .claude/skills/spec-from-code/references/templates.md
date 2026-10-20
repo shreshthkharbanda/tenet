@@ -58,6 +58,11 @@ the first column.
 
 - `{confirmed}`: you read the code path and the text follows from it with no interpretation beyond
   reading. A test that pins the behavior also counts as confirmation; cite it in Test evidence.
+- Universal claims (always, never, only, unless, "is not retried", "takes effect", "is ignored") assert
+  something about every path, and writers check the paths they read. In the LiteLLM audit they were
+  falsified at 3.5 times the rate of other claims. A universal claim is `{confirmed}` only if you traced
+  every path it covers (callers and callees included for "never"); say the scope in the text ("within
+  this module", "on the async path") or mark it `{inferred}`.
 - `{inferred}`: the behavior is strongly suggested (naming, a comment, a doc, a partial read, a call into
   a dependency you did not open) but you did not trace the whole path. Say in the text what the inference
   rests on: "…(inferred from the docstring; the retry loop itself lives in a third-party client)".
@@ -82,6 +87,12 @@ review, but every claim should sit as high on this ladder as the fact allows:
 4. Given / When / Then for behaviors with setup, trigger, and observable result.
 5. Pseudo-predicates for conditions: "when `retries_remaining == 0 and status in {502, 503, 504}`".
 6. Plain prose, only for purpose, rationale, and context.
+
+Message templates with placeholders say how each placeholder renders, or give one fully rendered
+example: "`Valid options: ['a', 'b']` (a Python list repr)", "`Try again in 60 seconds` (the configured
+integer, not the remaining time)". A caller matching on text needs the exact string, and
+`[<names>]` does not say whether that is a repr, a comma join, or quoted. Lint warns on a backticked
+literal containing `<...>` unless the claim says how it renders or gives an example.
 
 Numbers get units. Time gets a timezone or "monotonic". Sizes say bytes or characters. Ranges say
 inclusive or exclusive. Ordering says stable or unstable. Defaults say where they are set.

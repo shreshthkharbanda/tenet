@@ -164,6 +164,10 @@ def main() -> int:
                 warnings.append(f"{relp}:{c['line']}: {cid} is very short; one claim = one trigger + one observable outcome")
             if TOOL_MENTION.search(c["text"]):
                 errors.append(f"{relp}:{c['line']}: {cid} mentions an AI tool/model; specs must be agent-neutral")
+            if (re.search(r"`[^`]*<[A-Za-z_][^`>]*>[^`]*`", c["text"])
+                    and not re.search(r"(?i)\b(e\.g\.|for example|renders?|rendered|repr|joined|formatted|as in)\b", c["text"])):
+                warnings.append(f"{relp}:{c['line']}: {cid} has a message template with <placeholders> but does not say how they "
+                                f"render; add one rendered example (precision ladder)")
         if kind == "module" and counts["confirmed"] + counts["inferred"] == 0:
             errors.append(f"{relp}: module spec has no confirmed/inferred claims")
         if kind == "module" and not claims:

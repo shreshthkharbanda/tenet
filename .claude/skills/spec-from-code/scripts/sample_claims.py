@@ -14,7 +14,7 @@ import json
 import random
 from pathlib import Path
 
-from _common import eprint, parse_claims, parse_frontmatter
+from _common import eprint, is_universal, parse_claims, parse_frontmatter
 
 NORMATIVE = {"Behaviors", "Validation rules", "Error handling", "State and data", "External interactions",
              "Configuration", "Concurrency and ordering", "Public surface", "Entry points", "Error catalog",
@@ -28,6 +28,10 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--module", action="append", default=[])
     ap.add_argument("--out", default=None)
+    ap.add_argument("--universal-only", action="store_true",
+                    help="sample only universal claims (always/never/unless/only...): the Phase 5 falsification pass")
+    ap.add_argument("--universal-share", type=float, default=0.67,
+                    help="share of confirmed picks drawn from universal claims when both kinds exist")
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
     files = sorted(specs.glob("modules/*.md")) + sorted(specs.glob("0*.md"))
@@ -39,12 +43,17 @@ def main() -> int:
             continue
         claims = [c for c in parse_claims(body) if c["section"] != "Open questions and gaps"]
         rng = random.Random(f"{a.seed}:{mid}")
+        if a.universal_only:
+            claims = [c for c in claims if is_universal(c["text"])]
         conf = [c for c in claims if c["confidence"] == "confirmed"]
         inf = [c for c in claims if c["confidence"] == "inferred"]
-        n_inf = min(len(inf), max(1, a.per_module // 4)) if inf else 0
+        n_inf = 0 if a.universal_only else (min(len(inf), max(1, a.per_module // 4)) if inf else 0)
         n_conf = min(len(conf), a.per_module - n_inf)
         conf.sort(key=lambda c: (c["section"] not in NORMATIVE, rng.random()))
-        pick = conf[:n_conf] + rng.sample(inf, n_inf)
+        uni = [c for c in conf if is_universal(c["text"])]
+        rest = [c for c in conf if not is_universal(c["text"])]
+        k_uni = min(len(uni), round(n_conf * (1.0 if a.universal_only else a.universal_share)))
+        pick = uni[:k_uni] + rest[: n_conf - k_uni] + rng.sample(inf, n_inf)
         for c in pick:
             out.append({"module": mid, "file": str(fp.relative_to(specs)), **c})
     text = "".join(json.dumps(r) + "\n" for r in out)

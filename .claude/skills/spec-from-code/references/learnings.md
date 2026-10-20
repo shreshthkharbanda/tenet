@@ -339,3 +339,28 @@ answerers; many "agree" answers carried notes like "the spec does not say how pl
 "RSETUP-172 conflicts with RDISP-237". Those are spec defects whatever the verdict. Fix:
 `score_probes.py` routes revision-split answers whose note reports silence, ambiguity, or contradiction
 to the reviser as `answer_note` failures; held-out notes stay out, as with judge side notes (L16).
+
+**L47. Message templates with unrendered placeholders.** Found: nearly every LiteLLM round-1
+answerer marked answers partial because templates like `Valid options: [<names>]` or `Try again in
+<X> seconds` never say whether a list is a repr or a join, whether 60 prints as `60` or `60.0`, or which
+value fills the slot. A caller that matches on error text needs the exact string. Fix: the precision
+ladder requires each placeholder's rendering or one fully rendered example; lint warns on backticked
+literals containing `<...>` without either (200 warnings on the iteration-1 specs, routed to revisers).
+
+**L48. Universal claims overreach.** Found: LiteLLM falsifiers. Of 36 sampled claims, universal
+ones (always, never, unless, only, "takes effect", "is not retried") were falsified or imprecise 7 of
+24 times (29%), others 1 of 12 (8%): "never retries a failed cache read" (a caller re-reads),
+"update_settings takes effect on the next selection" (keys outside an allowlist are dropped), "returns
+the deployment directly unless blocked" (an override selector's pre-call check still runs). Writers
+check the paths they read and generalize; "absence of a safeguard is a behavior" invites exactly these.
+Fix: universal claims are confirmed only when every covered path was traced, else scoped or inferred
+(templates.md); `sample_claims.py` draws two thirds of confirmed picks from universal claims and has
+`--universal-only`; Phase 5 starts with a universal-claim falsification pass per module whose findings
+join the reviser's failures.
+
+**L49. A test-verified reference that tested the wrong thing.** Found: LiteLLM deployment-limits
+round-1 judge executed LIMITS-P25 through `Router.acompletion` and showed the reference wrong, and the
+truth a security bug: a forged reservation is refunded because the refund runs before the forged keys
+are stripped. The prober had "verified by test" with a unit test of the stripping helper. Fix: the
+prober brief requires execution through the public entry point the question names; a test verifies a
+reference only if it drives that entry point. The probe was corrected on the record (L40).
