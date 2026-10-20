@@ -288,7 +288,8 @@ For each claim:
      # claim: <CLAIM-ID>
      # text: <the claim's text as it will stand in the spec, on one line, refs omitted>
    The script drives the entry point with fakes only at the outer boundary (provider HTTP, Redis,
-   clock), asserts every observable the claim states (values, exact messages, exception types, order,
+   clock), so it runs code the claim's refs cite (the gate fails a check that executes none of those
+   lines, or whose body names nothing the claim states), asserts every observable the claim states (values, exact messages, exception types, order,
    what is NOT done), covers the boundary its words imply ("only", "unless", "never", "always": test
    the case on each side), prints what it observed, and exits 0 only if the claim holds. Then attack
    what the claim leaves unsaid, because that is where verified claims still fail: the dependency
@@ -602,11 +603,14 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
   ambiguous, or self-contradictory there;
 - falsifier: a sampled claim shown false or imprecise, with the evidence and counterexample;
 - omission: a high-consequence behavior the spec states vaguely, omits, or contradicts;
-- lint: a placeholder template without rendering, or a table row carrying untracked values;
+- lint: a placeholder template without rendering, or a table row carrying untracked values or a
+  value found in neither the claims it cites nor their code;
 - rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding;
 - note: another worker (a cross-cutting writer, a falsifier, the reconciler) reported this claim as
   wrong or incomplete while working on its own file; verify it in the code before acting on it.
-- evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails or is stale.
+- evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails, is stale, passes
+  only on a re-run (flaky: harden it), or is hollow (it runs none of the code the claim cites, or names
+  nothing the claim states: make it drive that code, or correct the claim's refs).
   Whenever you change a claim that has a check script, update the script's `# text:` line and
   assertions to the new text and run it; a changed claim with an unchanged check fails the gate.
 When you confirm a behavior by running it, keep the script as that claim's evidence instead of

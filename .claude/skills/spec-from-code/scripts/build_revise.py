@@ -6,6 +6,7 @@
   - omission rows (audit/omission-<module>.jsonl) with spec_status vague/missing/contradicted
   - lint warnings on the module's spec (placeholder rendering, untracked table values)
   - rebuild guesses and spec bugs (rebuild/<module>.json)
+  - evidence checks that fail, went stale, pass only on re-run, or are hollow (_meta/evidence-report.json)
 None of these carries held-out probe content, so they are safe to give the writer.
 Usage: build_revise.py <specs_dir> --repo <root> --round N
 """
@@ -35,8 +36,12 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     mods = [m["id"] for m in read_json(meta / "modules.json")["modules"]]
     prefix = {m["id"]: m.get("prefix") for m in read_json(meta / "modules.json")["modules"]}
-    lint = subprocess.run([sys.executable, str(HERE / "lint_specs.py"), str(specs), "--repo", a.repo],
-                          capture_output=True, text=True).stderr.splitlines()
+    # read the JSON report, not stderr: stderr prints the first 200 warnings only, and a big spec's later
+    # warnings never reached their owner (L71)
+    lint_out = out_dir / "_lint.json"
+    subprocess.run([sys.executable, str(HERE / "lint_specs.py"), str(specs), "--repo", a.repo, "--out", str(lint_out)],
+                   capture_output=True, text=True)
+    lint = ["WARN: " + w for w in (read_json(lint_out).get("warnings", []) if lint_out.exists() else [])]
     totals = {}
     for mid in mods:
         f = out_dir / f"{mid}.jsonl"
@@ -109,14 +114,18 @@ def main() -> int:
         er = meta / "evidence-report.json"
         if er.exists():
             emod = read_json(er).get("modules", {}).get(mid, {})
-            for kind in ("failed", "stale", "flaky"):  # flaky: passed only on the serial re-run; harden it
+            # flaky: passed only on the serial re-run; harden it. hollow: passes without exercising the claim (L71)
+            for kind in ("failed", "stale", "flaky", "hollow"):
                 for cid in emod.get(kind, []):
                     if ("evidence", cid) not in seen:
                         seen.add(("evidence", cid))
-                        add.append({"source": "evidence", "id": cid, "verdict": kind,
-                                    "judge_note": f"_meta/evidence/{mid}/check_{cid}.py is {kind}: run it, then fix the "
-                                                  f"claim, or fix the check if it tests the wrong thing (shared process "
-                                                  f"state, timing), keeping its '# text:' line equal to the claim"})
+                        note = (f"_meta/evidence/{mid}/check_{cid}.py passes without exercising the claim: make it drive "
+                                f"the cited code and assert what the claim states, or correct the claim's refs if the "
+                                f"check exercises code they do not cite" if kind == "hollow" else
+                                f"_meta/evidence/{mid}/check_{cid}.py is {kind}: run it, then fix the claim, or fix the "
+                                f"check if it tests the wrong thing (shared process state, timing), keeping its '# text:' "
+                                f"line equal to the claim")
+                        add.append({"source": "evidence", "id": cid, "verdict": kind, "judge_note": note})
         rb = meta / "rebuild" / f"{mid}.json"
         if rb.exists():
             r = read_json(rb)

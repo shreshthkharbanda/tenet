@@ -19,9 +19,10 @@ Layout (written by verifiers):
   _meta/evidence/<module>/unverifiable.jsonl    {"id": ..., "reason": "..."}  (timing, real network, ...)
 
 Usage:
-  check_evidence.py <specs> --python PY --cwd REPO [--module ID ...] [--env K=V ...] [--timeout 120]
+  check_evidence.py <specs> --python PY --cwd RUN_DIR [--module ID ...] [--env K=V ...] [--timeout 120]
   check_evidence.py <specs> --list-unbacked --module ID     # confirmed normative claims with no evidence
-Writes _meta/evidence-report.json. Exit 1 if any check fails or is stale.
+  check_evidence.py <specs> ... --id CLAIM-ID ...            # re-run a few checks; writes no report
+Writes _meta/evidence-report.json (an --id run writes nothing). Exit 1 if any check fails, is stale, or is hollow.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -67,18 +69,23 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("specs")
     ap.add_argument("--python", default="python3")
-    ap.add_argument("--cwd", default=None, help="directory the checks run in (the repo root)")
+    ap.add_argument("--cwd", default=None, help="directory the checks' working dirs are made in (default: a new temp dir)")
     ap.add_argument("--module", action="append", default=[])
     ap.add_argument("--env", action="append", default=[])
     ap.add_argument("--timeout", type=int, default=120)
     ap.add_argument("--jobs", type=int, default=6, help="checks run in parallel, each in its own working directory")
     ap.add_argument("--list-unbacked", action="store_true")
     ap.add_argument("--repo", default=None, help="repo root, to resolve claim refs (default: _meta/run.json 'repo')")
+    ap.add_argument("--id", action="append", default=[], help="run only these claim IDs")
     ap.add_argument("--no-coverage", action="store_true",
                     help="skip the executed-a-cited-line test (only if coverage.py is unavailable in the run env)")
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
     edir = specs / "_meta" / "evidence"
+    # absolute: coverage's rc file and data paths are handed to processes running in another directory;
+    # never the caller's cwd, which may be the repo or the skill (L71: a relative default broke child
+    # coverage and left check dirs in the skill)
+    run_root = Path(a.cwd).resolve() if a.cwd else Path(tempfile.mkdtemp(prefix="sfc-evidence-"))
     claims = module_claims(specs)
     mods = a.module or sorted(claims)
     if a.list_unbacked:
@@ -115,7 +122,8 @@ def main() -> int:
                 res["stale"].append(cid)
                 errors.append(f"{mid}: {cid} changed since it was verified (or its check has no '# text:' header); re-verify")
                 continue
-            runnable.append((cid, fp))
+            if not a.id or cid in a.id:
+                runnable.append((cid, fp))
 
         def spans_of(cid):
             out = []
@@ -138,23 +146,37 @@ def main() -> int:
         def run_one(item):
             cid, fp = item
             # each check gets its own working directory, so parallel checks never share scratch files
-            wd = Path(a.cwd or ".") / f"evidence-{mid}-{cid}"
+            wd = run_root / f"evidence-{mid}-{cid}"
             wd.mkdir(parents=True, exist_ok=True)
             spans = spans_of(cid)
-            cmd = [a.python, "-P", str(fp)]
+            cmd, cenv = [a.python, "-P", str(fp)], env
             if use_cov and spans:
                 for old in wd.glob(".coverage*"):
                     old.unlink()
-                cmd = [a.python, "-P", "-m", "coverage", "run", "--data-file", str(wd / ".coverage"),
-                       "--include", ",".join(sorted({str(sp[0]) for sp in spans})), str(fp)]
+                # measure child Python processes too: a check may drive the system in a subprocess (one
+                # system instance per process, L65). A sitecustomize in the check's own dir starts coverage
+                # in every child that inherits COVERAGE_PROCESS_START.
+                rc_file = wd / ".coveragerc"
+                rc_file.write_text("[run]\nparallel = True\ndata_file = " + str(wd / ".coverage") + "\ninclude =\n    "
+                                   + "\n    ".join(sorted({str(sp[0]) for sp in spans})) + "\n")
+                (wd / "sitecustomize.py").write_text("try:\n    import coverage\n    coverage.process_startup()\nexcept Exception:\n    pass\n")
+                cenv = {**env, "COVERAGE_PROCESS_START": str(rc_file),
+                        "PYTHONPATH": str(wd) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")}
+                cmd = [a.python, "-P", "-m", "coverage", "run", "--rcfile", str(rc_file), str(fp)]
             try:
-                p = subprocess.run(cmd, cwd=wd, env=env, capture_output=True, text=True, timeout=a.timeout)
+                p = subprocess.run(cmd, cwd=wd, env=cenv, capture_output=True, text=True, timeout=a.timeout)
             except subprocess.TimeoutExpired:
                 return cid, False, ["timeout"]
-            ok, tail = p.returncode == 0, (p.stderr or p.stdout).strip().splitlines()[-1:]
+            # the reason a check failed is the last line that is not a tool's warning (coverage's "no data
+            # collected" hid a SyntaxError in the check)
+            lines = [l for l in (p.stderr or p.stdout).strip().splitlines()
+                     if l.strip() and not re.search(r"Warning\b|self\._warn\(", l)]
+            ok, tail = p.returncode == 0, lines[-1:]
             if ok and use_cov and spans:
                 # the check must execute at least one line inside a span its claim cites
-                j = subprocess.run([a.python, "-m", "coverage", "json", "--data-file", str(wd / ".coverage"),
+                subprocess.run([a.python, "-m", "coverage", "combine", "--rcfile", str(wd / ".coveragerc")],
+                               cwd=wd, env=env, capture_output=True, text=True)
+                j = subprocess.run([a.python, "-m", "coverage", "json", "--rcfile", str(wd / ".coveragerc"),
                                     "-o", str(wd / "cov.json")], cwd=wd, env=env, capture_output=True, text=True)
                 executed = {}
                 if j.returncode == 0 and (wd / "cov.json").exists():
@@ -197,9 +219,13 @@ def main() -> int:
         backed = len({c for c in res["passed"] if c in conf}) + res["tests"]
         res["evidence_rate"] = round(backed / len(conf), 3) if conf else None
         report["modules"][mid] = res
-    # a --module run updates its modules in the shared report; it never erases the others' results (L70)
+    # a --module run updates its modules in the shared report; it never erases the others' results (L70).
+    # An --id run checks a few claims and writes nothing: its counts cover only those claims and would
+    # replace the modules' real results (L71).
     rp = specs / "_meta" / "evidence-report.json"
-    if a.module and rp.exists():
+    if a.id:
+        pass
+    elif a.module and rp.exists():
         prev = read_json(rp)
         merged = {**prev.get("modules", {}), **report["modules"]}
         kept = [e for e in prev.get("errors", []) if e.split(":", 1)[0] not in report["modules"]]

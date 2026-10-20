@@ -559,3 +559,37 @@ backup (or `--baseline`) and fails on any that disappeared.
 ran `check_evidence.py --module deployment-limits` and overwrote the shared evidence report, dropping
 affinity-checks' results (it noticed and restored a copy). Fix: a `--module` run merges its modules into
 `_meta/evidence-report.json` and replaces only their errors.
+
+**L71. Gates checked a property's form, not the property; partial runs shrank what the next step saw.**
+Found: LiteLLM round-2 red team (B1-B7) and the runs that measured the fixes.
+- B1: G7 passed checks that test nothing (`assert True`, a verify function never called, a
+  reimplementation that agrees with itself): it asked only for exit 0 and a matching `# text:` line.
+  Fix: a check must name something its claim states (a backticked literal or a cited symbol), and
+  under coverage.py it, or a Python process it starts, must execute a line its claim cites. On the 293
+  real LiteLLM checks: 8 flagged with in-process coverage; 4 after following child processes (those 4
+  drove the router in a subprocess, per L65's one instance per process); the remaining 4 (1.4%) run
+  none of their claim's cited lines or name nothing it states, so the check or the refs are wrong.
+  Hollow IDs go to the owner's worklist next to failed, stale and flaky ones.
+- B3: a worker could append its own blanket G5 waiver under `_meta/`. Waivers live in `$EVAL`, need a
+  reason, evidence and a match of 12+ characters; a worker touching the waiver file is flagged.
+- B5: a planted contradiction scored 7 and ranked 507th of 7,890 overlap pairs, below the 400 cut.
+  Near-duplicates with differing values and score 3+ always reach the pair judges; the tail sample
+  grows with the tail (1 in 50).
+- B6: a table row citing a claim stated a setting that exists nowhere, with 0 diagnostics. Lint warns on
+  a row whose backticked cell names something in neither the claims it cites nor the code they cite.
+  Requiring each literal to appear in the claim was too strict (478 rows on LiteLLM, mostly exact
+  messages the claim paraphrases); this rule flags 54, and build_revise routes them to the owner.
+- B7: a hand-typed `status: validated` and an INDEX.md claim with a dangling pointer linted clean. A
+  status other than draft without apply_status's `fidelity:` block is an error; INDEX.md is linted
+  (no claims, pointers and refs resolve).
+- B2 and B4 have no mechanical fix and are stated as limitations: G5 sees only paths a transcript spells
+  out (16 of 18 deliberately evasive workers passed), and a reworded copy of the answer key that keeps
+  its literals passes G4's copy and leak checks.
+- Tool bugs found while fixing these: `check_evidence --id` (re-running 8 checks) replaced the shared
+  report with those 8 results, the L70 class again, so an `--id` run now writes nothing. Without
+  `--cwd`, check dirs were relative to the caller's directory: coverage's rc path broke in the child
+  and check dirs were left inside the skill; they are now absolute, in a temp dir by default. A failing
+  check's reported reason was coverage's "no data was collected" warning, hiding a SyntaxError; tool
+  warnings are skipped when picking the reason. build_revise parsed lint's stderr, which prints only
+  the first 200 warnings; it reads the JSON report.
+

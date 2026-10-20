@@ -6,6 +6,7 @@ scripts/: `python3 selftest.py`. Every learning that changed a script adds a cas
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -500,9 +501,29 @@ def main() -> int:
     rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable, "--repo", str(repo))
     ev_r = json.loads((meta / "evidence-report.json").read_text())["modules"]["big-a"]
     check("L61 a passing check backs its claim", rc == 0 and ev_r["passed"] == ["BIGA-001"], out)
+    before = (meta / "evidence-report.json").read_text()
+    rc, out = run("check_evidence.py", str(specs), "--id", "BIGA-001", "--python", sys.executable, "--repo", str(repo))
+    check("L71 an --id run re-checks the claim and leaves the shared report alone",
+          rc == 0 and (meta / "evidence-report.json").read_text() == before, out)
+    # L71: a check that runs the system in a child process is not hollow (coverage follows the child)
+    covpy = os.environ.get("SELFTEST_COVERAGE_PYTHON") or sys.executable
+    if subprocess.run([covpy, "-c", "import coverage"], capture_output=True).returncode == 0:
+        (edir / "check_BIGA-001.py").write_text(
+            f"# claim: BIGA-001\n# text: {txt}\nimport subprocess, sys\n"
+            f"code = {f'import sys; sys.path.insert(0, {str(repo)!r}); from pkg.big import Big; assert Big().x == 1'!r}\n"
+            "sys.exit(subprocess.run([sys.executable, '-c', code]).returncode)\n")
+        rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", covpy, "--repo", str(repo))
+        check("L71 a check that drives the code in a child process is not hollow", rc == 0 and "hollow" not in out, out)
+    else:
+        print("  SKIP L71 child-process coverage: no interpreter with coverage.py (set SELFTEST_COVERAGE_PYTHON)")
     (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nassert True\n")
     rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable, "--repo", str(repo))
     check("L71 a hollow check (assert True) fails G7", rc == 1 and "is hollow" in out, out)
+    rc, out = run("build_revise.py", str(specs), "--repo", str(repo), "--round", "9")
+    rows = [json.loads(x) for x in (meta / "revise" / "round-9" / "big-a.jsonl").read_text().splitlines() if x.strip()]
+    check("L71 a hollow check goes to the owner's revise worklist",
+          any(r.get("source") == "evidence" and r.get("verdict") == "hollow" and r.get("id") == "BIGA-001" for r in rows), out)
+    shutil.rmtree(meta / "revise" / "round-9")
     (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys\nsys.path.insert(0, {str(repo)!r})\n"
                                            "from pkg.big import Big\nassert Big().x == 2\n")
     rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
@@ -608,6 +629,29 @@ def main() -> int:
     check("L59 G6 counts only related pointers; bare refs into a split file are owned",
           own_r["ids"] == ["CFG-001", "CFG-002", "CFG-004"] and own_r["pointers_unrelated"] == 1, json.dumps(own_r))
     (specs / "03-config.md").unlink()
+    # red team B6: a table row citing a claim states a value found in neither the claim nor its code
+    rows = ("\n| Claim | Value |\n|---|---|\n| [BIGA-001] | `made_up_setting` |\n"
+            "| [BIGA-001] | `self.x` holds it |\n")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks + rows))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo), "--only", "modules/big-a.md")
+    check("B6 a table row value in neither its claim nor its code is flagged; one the code holds is not",
+          "states made_up_setting, found in neither" in out and "states self" not in out, out)
+    # red team B7: INDEX.md pointers resolve and it holds no claims; only apply_status sets a status
+    idx = specs / "INDEX.md"
+    old_idx = idx.read_text() if idx.exists() else None
+    idx.write_text("# Index\n\nSee [NOPE-999] and `no/such/file.py:1-9`; `modules/big-a.md` is real.\n\n"
+                   "- [IDX-001] {confirmed} `pkg/big.py:1-3` The router never retries.\n")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks).replace("status: draft", "status: validated"))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("B7 INDEX.md is linted: dangling pointer, unresolvable ref, claims in the index",
+          rc == 1 and "INDEX.md: cross-reference [NOPE-999]" in out and "`no/such/file.py:1-9` names no spec file" in out
+          and "claim IDX-001 in the index" in out and "modules/big-a.md` names" not in out, out)
+    check("B7 a typed status without apply_status's fidelity block is an error",
+          "modules/big-a.md: status 'validated' without the fidelity block" in out, out)
+    if old_idx is None:
+        idx.unlink()
+    else:
+        idx.write_text(old_idx)
     (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
     (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b))
 

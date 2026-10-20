@@ -20,6 +20,7 @@ import subprocess
 from _common import (XREF_RE, eprint, git_head, parse_claims, parse_frontmatter, read_json, ref_path, ref_span, resolve_ref,
                      write_json)
 
+TABLE_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}|\d+(?:\.\d+)?")
 REQUIRED_SECTIONS = {
     "module": ["Purpose", "Scope and boundaries", "Public surface", "Behaviors", "Validation rules",
                "Error handling", "State and data", "External interactions", "Configuration",
@@ -98,6 +99,7 @@ def main() -> int:
     if not files:
         errors.append(f"no spec files found under {specs}")
     claims_by_file = {}
+    cited_rows: list[tuple[str, int, str]] = []
     for fp in files:
         relp = fp.relative_to(specs).as_posix()
         text = fp.read_text(encoding="utf-8", errors="replace")
@@ -144,6 +146,11 @@ def main() -> int:
                     (errors if args.strict_fresh else warnings).append(msg)
         if fm.get("status") not in ("draft", "provisional", "validated", "weak"):
             errors.append(f"{relp}: status must be draft|provisional|validated|weak (got {fm.get('status')!r})")
+        elif fm.get("status") != "draft" and (kind != "module" or not re.search(r"(?m)^fidelity:", text.split("\n---", 1)[0])):
+            # only apply_status sets a status, from the gates, and it writes the fidelity block with it; a
+            # typed `status: validated` reads as measured when nothing measured it (red team B7)
+            errors.append(f"{relp}: status {fm.get('status')!r} without the fidelity block apply_status writes; writers "
+                          f"leave status: draft (cross-cutting files always stay draft)")
 
         # sections
         headings = {ln.lstrip("#").strip() for ln in body.splitlines() if ln.startswith("#")}
@@ -217,6 +224,8 @@ def main() -> int:
             if ln.startswith("## "):
                 sec = ln[3:].strip()
             st = ln.strip()
+            if st.startswith("|") and sec not in ("Test evidence", "Status", "System map") and XREF_RE.search(st):
+                cited_rows.append((relp, n, st))
             if (st.startswith("|") and not re.match(r"^\|[\s:|-]+\|?$", st) and sec not in ("Test evidence", "Status", "System map")
                     and not re.search(r"\[?[A-Z][A-Z0-9]{1,11}-\d{3,4}\]?", st)
                     and re.search(r"`[^`]+`|\b\d{2,}\b", st) and not st.lower().startswith(("| entry point", "| id", "| setting", "| module", "| claim", "| condition"))):
@@ -253,6 +262,50 @@ def main() -> int:
         for xid in sorted(set(XREF_RE.findall(body))):
             if xid not in known:
                 errors.append(f"{relp}: cross-reference [{xid}] does not resolve to any claim")
+
+    # a table row that cites claims states only what they state or their code holds: a name or number in a
+    # backticked cell that neither the cited claims nor the files they cite contain is a value that drifted
+    # or was made up (red team B6: a row required a setting that exists nowhere, 0 diagnostics). Literals the
+    # claims merely word differently are not flagged (that measured 478 rows on LiteLLM; this, 57).
+    by_id = {c["id"]: c for cl in claims_by_file.values() for c in cl}
+    for fp in sorted(p for p in specs.rglob("*.md") if "_meta" not in p.relative_to(specs).parts and p not in files):
+        by_id.update({c["id"]: c for c in parse_claims(fp.read_text(encoding="utf-8", errors="replace"))})
+    src_cache: dict[str, str] = {}
+
+    def src(r: str) -> str:
+        rp = ref_path(r)
+        if rp not in src_cache:
+            f = repo / rp
+            src_cache[rp] = f.read_text(encoding="utf-8", errors="replace") if f.is_file() else ""
+        return src_cache[rp]
+
+    for relp, n, st in cited_rows:
+        ids = [x for x in XREF_RE.findall(st) if x in by_id]
+        if not ids:
+            continue
+        cells = re.sub(r"\[?[A-Z][A-Z0-9]{1,11}-\d{3,4}\]?", " ", st)
+        said = " ".join(by_id[x]["text"] for x in ids).lower()
+        code = "\n".join(src(r) for x in ids for r in by_id[x]["refs"])
+        miss = sorted({w for t in re.findall(r"`([^`]+)`", cells) for w in TABLE_TOKEN.findall(re.sub(r"<[^>]*>", " ", t))
+                       if w.lower() not in said and w not in code})
+        if miss:
+            warnings.append(f"{relp}:{n}: table row states {', '.join(miss[:3])}" + (f" (+{len(miss) - 3} more)" if len(miss) > 3 else "")
+                            + f", found in neither the claims it cites ({', '.join(ids[:4])}) nor their code; put the value "
+                              f"in a claim or fix the row")
+
+    # INDEX.md is a generated map, not a spec: it holds no claims, and its pointers must resolve (red team B7)
+    idx = specs / "INDEX.md"
+    if idx.exists() and not args.only:
+        itext = idx.read_text(encoding="utf-8", errors="replace")
+        for c in parse_claims(itext):
+            errors.append(f"INDEX.md:{c['line']}: claim {c['id']} in the index; claims belong in a spec file")
+        for xid in sorted(set(XREF_RE.findall(itext)) - known):
+            errors.append(f"INDEX.md: cross-reference [{xid}] does not resolve to any claim")
+        for r in sorted(set(re.findall(r"`([^`\s]+\.\w+(?::\d+(?:-\d+)?)?)`", itext))):
+            if ":" in r or "/" in r:
+                ok = (specs / r).is_file() or resolve_ref(repo, r)[0]
+                if not ok:
+                    errors.append(f"INDEX.md: `{r}` names no spec file and resolves to no code")
 
     # IDs are permanent: one present at the last round's backup must still exist (L69)
     rounds = sorted((specs / "_meta" / "rounds").glob("round-*"), key=lambda d: int(d.name.split("-")[1])
