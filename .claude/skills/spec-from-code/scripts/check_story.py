@@ -349,7 +349,7 @@ class Checker:
         toks = literal_tokens(md)
         if not toks:
             return []
-        said = " ".join(self.claims[x]["text"] for x in ids if x in self.claims)
+        said = " ".join(self.claims[x]["text"] + " " + " ".join(self.claims[x].get("detail", [])) for x in ids if x in self.claims)
         code = None
         miss = []
         for t in sorted(toks):

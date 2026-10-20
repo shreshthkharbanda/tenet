@@ -665,3 +665,12 @@ the page tool's `edits` option, publishing its story; that tool's own guidance r
 small file changes, and a sentence in a brief lost to it. Fix (structural, not wording): workers are
 dispatched as the `spec-worker` agent type, whose tool list has no publishing, messaging, scheduling
 or connector tools at all; the footer names the page tool and its `edits` option explicitly.
+
+**L76. Claim detail on indented lines was invisible to every gate.** Found: LiteLLM Phase 9, by the
+router-deployments narrator: a worked example under a claim bullet could not be cited, because the
+claim parser read one line per claim. 470 indented lines sat under claims across the specs (examples,
+per-setting cases, values); lint, the story checker's literal rule and search never saw them, and the
+reader site showed them as a loose list after the ledger. Fix: `parse_claims` keeps a claim's
+indented lines as its `detail`; the story checker counts detail as what the claim says; the site
+shows detail under its claim and searches it. The claim's first line is still its text (evidence
+`# text:` lines and stale checks compare it), so no evidence went stale.

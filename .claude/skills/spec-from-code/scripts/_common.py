@@ -227,8 +227,10 @@ def parse_claims(text: str) -> list[dict]:
     """Return claims found in a spec body with line numbers and section."""
     claims = []
     section, subsection = "", ""
+    last = None  # the claim whose indented continuation lines (sub-bullets) are being collected
     for n, line in enumerate(text.splitlines(), 1):
         if line.startswith("#"):
+            last = None
             level = len(line) - len(line.lstrip("#"))
             title = line.lstrip("#").strip()
             if level <= 2:
@@ -238,6 +240,12 @@ def parse_claims(text: str) -> list[dict]:
             continue
         m = CLAIM_RE.match(line)
         if not m:
+            # an indented line under a claim belongs to it: its detail (examples, cases, values). The
+            # claim text stays the first line; gates that compare text use "detail" as well (L76)
+            if last is not None and line.startswith(("  ", "\t")) and line.strip():
+                last["detail"].append(re.sub(r"^\s*[-*]\s+", "", line).strip())
+            elif not line.strip() or not line.startswith(("  ", "\t")):
+                last = None if line.strip() else last
             continue
         refs, text = split_refs(m.group("rest"))
         if not text:
@@ -250,7 +258,9 @@ def parse_claims(text: str) -> list[dict]:
             "line": n,
             "section": section,
             "subsection": subsection,
+            "detail": [],
         })
+        last = claims[-1]
     return claims
 
 

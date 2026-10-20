@@ -132,6 +132,13 @@ def parse_file(text: str) -> tuple[dict, list[dict], dict]:
                 cur["blocks"].append({"t": "claims", "ids": [cid]})
             i += 1
             continue
+        # an indented line right under a claim is that claim's detail, shown under it (L76)
+        blk = cur["blocks"][-1] if cur["blocks"] else None
+        if blk and blk["t"] == "claims" and ln.startswith(("  ", "\t")) and st and not para:
+            claims[blk["ids"][-1]].setdefault("detail", []).append(inline(re.sub(r"^[-*]\s+", "", st)))
+            claims[blk["ids"][-1]]["plain"] += " " + plain(re.sub(r"^[-*]\s+", "", st))
+            i += 1
+            continue
         lm = re.match(r"^\s*[-*]\s+(.*)$", ln)
         nm = NUM_ITEM.match(st)
         if lm or nm:

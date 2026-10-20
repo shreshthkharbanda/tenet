@@ -503,7 +503,7 @@
       : c.ev === "failed" || c.ev === "stale" ? `<span class="badge failed">check ${esc(c.ev)}</span>` : "";
     return `<li class="claim${c.defect ? " defect" : ""}" id="${c.id}">
       <div class="cid"><i class="g ${c.conf}" title="${c.conf}"></i><a href="#${c.id}">${c.id}</a></div>
-      <div class="body"><div class="tx">${c.h}</div>
+      <div class="body"><div class="tx">${c.h}</div>${c.detail && c.detail.length ? `<ul class="cdetail">${c.detail.map((d) => `<li>${d}</li>`).join("")}</ul>` : ""}
         <div class="refs">${ev}${c.refs.map((r, k) => `<button class="ref" data-ref="${esc(r)}" data-k="${k}" aria-expanded="false" title="${esc(r)}">${esc(refLabel(r))}</button>`).join("")}</div></div></li>`;
   }
   function srcHTML(r, sn) {
