@@ -34,6 +34,7 @@ def main() -> int:
     out_dir = meta / "revise" / f"round-{a.round}"
     out_dir.mkdir(parents=True, exist_ok=True)
     mods = [m["id"] for m in read_json(meta / "modules.json")["modules"]]
+    prefix = {m["id"]: m.get("prefix") for m in read_json(meta / "modules.json")["modules"]}
     lint = subprocess.run([sys.executable, str(HERE / "lint_specs.py"), str(specs), "--repo", a.repo],
                           capture_output=True, text=True).stderr.splitlines()
     totals = {}
@@ -41,6 +42,14 @@ def main() -> int:
         f = out_dir / f"{mid}.jsonl"
         rows = read_jsonl(f) if f.exists() else []
         seen = {(r.get("source"), r.get("id")) for r in rows}
+        # one-time findings (rebuild guesses, notes) were handed to an earlier round's reviser: never again
+        # (L61: 27 already-fixed rebuild rows came back in round 2). Probe, lint and audit rows recur only
+        # while they still fail, because their sources are re-measured each round.
+        earlier = set()
+        for k in range(1, a.round):
+            pf = meta / "revise" / f"round-{k}" / f"{mid}.jsonl"
+            if pf.exists():
+                earlier |= {(r.get("source"), str(r.get("id"))) for r in read_jsonl(pf) if r.get("source") in ("rebuild", "note")}
         add = []
         for ff in sorted((meta / "audit").glob(f"falsify-{mid}*.jsonl")) + sorted((meta / "audit").glob(f"universal-falsify-{mid}*.jsonl")):
             for r in read_jsonl(ff):
@@ -61,6 +70,20 @@ def main() -> int:
                 m = re.search(r"modules/[\w-]+\.md:(\d+): (.*)", ln)
                 if m and ("lint", m.group(1)) not in seen:
                     add.append({"source": "lint", "id": m.group(1), "verdict": "warning", "judge_note": m.group(2)})
+        # "module claim X-NNN: problem" notes from any worker (cross-cutting writers, falsifiers, the
+        # reconciler) are findings about a claim another worker owns; free-text notes otherwise never reach
+        # the owner (L61)
+        for rf in sorted((meta / "worker-reports").glob("*.json")):
+            try:
+                notes = str(read_json(rf).get("notes", ""))
+            except Exception:
+                continue
+            for cid, problem in re.findall(r"module claim ([A-Z][A-Z0-9]{1,11}-\d{3,4}):\s*(.+?)(?=module claim [A-Z][A-Z0-9]{1,11}-\d{3,4}:|$)",
+                                           notes, flags=re.S):
+                if cid.split("-")[0] == prefix.get(mid) and ("note", cid) not in seen:
+                    seen.add(("note", cid))
+                    add.append({"source": "note", "id": cid, "verdict": "reported", "judge_note": problem.strip()[:1500],
+                                "reporter": rf.stem})
         rb = meta / "rebuild" / f"{mid}.json"
         if rb.exists():
             r = read_json(rb)
@@ -76,7 +99,7 @@ def main() -> int:
         merged, keys = [], set()
         for r in rows + add:
             k = (r.get("source"), str(r.get("id")))
-            if k not in keys:
+            if k not in keys and k not in earlier:
                 keys.add(k)
                 merged.append(r)
         write_jsonl(f, merged)

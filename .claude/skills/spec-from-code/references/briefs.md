@@ -264,6 +264,67 @@ CI config, Dockerfiles, Makefiles, and the build hints in _meta/inventory.json. 
 command that runs the tests for the scope and whether it passed when you tried it.
 ```
 
+## 2c. Verifier (executable evidence for confirmed claims; G7)
+
+<!-- brief:verifier -->
+```
+You are backing claims of a behavioral specification with executed evidence. A claim marked
+{confirmed} was written by someone who read the code; about one in three such claims turned out wrong
+or incomplete when someone ran it (most often where it states what code outside the cited lines does:
+what the provider call receives, how a dependency logs, what a sibling sync/async path does, whether a
+value is copied or shared). Your job is to run each claim, and either back it with a check script or
+correct it.
+
+Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}} ("{{MODULE_NAME}}"), spec
+{{SPECS}}/modules/{{MODULE_ID}}.md. Your claims (only these): {{CLAIM_LIST}}
+How to run this project's code here: {{RUN_ENV}}
+
+For each claim:
+1. Read the claim, its refs, and the code around them. Find the PUBLIC entry point a caller would use
+   to observe the behavior (a Router method, a CLI command, an HTTP route), not the helper.
+2. Write {{SPECS}}/_meta/evidence/{{MODULE_ID}}/check_<CLAIM-ID>.py. First lines, exactly:
+     # claim: <CLAIM-ID>
+     # text: <the claim's text as it will stand in the spec, on one line, refs omitted>
+   The script drives the entry point with fakes only at the outer boundary (provider HTTP, Redis,
+   clock), asserts every observable the claim states (values, exact messages, exception types, order,
+   what is NOT done), covers the boundary its words imply ("only", "unless", "never", "always": test
+   the case on each side), prints what it observed, and exits 0 only if the claim holds. It must run
+   with `python -P` the way the run environment above says (interpreter, working directory,
+   environment variables), in under 60 seconds, and never write into the repo.
+3. Run it. Then exactly one of:
+   - It passes: done.
+   - It fails because the claim is wrong or incomplete: write the corrected claim text (same ID, same
+     refs unless they were wrong) as a row of
+     {{SPECS}}/_meta/reconcile/decisions-verify-{{MODULE_ID}}-{{CHUNK}}.jsonl:
+     {"row": -1, "verdict": "contradiction", "edits": [{"file": "modules/{{MODULE_ID}}.md", "id": "<CLAIM-ID>",
+      "text": "<corrected text>"}], "evidence": "check_<CLAIM-ID>.py: what it observed"}
+     then make the script's `# text:` line and assertions match the corrected text, and run it again.
+   - An existing test already pins exactly this behavior through the entry point: append
+     {"id": "<CLAIM-ID>", "test": "<path>::<test name>", "text": "<claim text>"} to
+     {{SPECS}}/_meta/evidence/{{MODULE_ID}}/tests.jsonl after running that test.
+   - It cannot be checked by execution here (needs real network, real time, true concurrency):
+     append {"id": "<CLAIM-ID>", "reason": "..."} to {{SPECS}}/_meta/evidence/{{MODULE_ID}}/unverifiable.jsonl
+     and, if it is {confirmed} only because it was read, say so in the reason.
+Never edit spec files directly (other verifiers work on this module too); decision rows are applied
+by a script. Do not modify the repo. If a check reveals behavior that looks unintended, keep the claim
+describing what the code does and report the bug.
+
+Finish by running
+  python3 {{SKILL_DIR}}/scripts/check_evidence.py {{SPECS}} --module {{MODULE_ID}} --python <interpreter> \
+    --cwd <working dir> --env NAME=VALUE ...   (all three as the run environment above gives them)
+and make every check you wrote pass (stale-text errors for claims you corrected clear once the rows
+are applied; list those IDs in your report notes). Reply with counts: passed, corrected, test-pinned,
+unverifiable, and the three corrections that matter most.
+Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
+each check script and each decision row as soon as it is final. If you are told you were resumed,
+list what exists under {{SPECS}}/_meta/evidence/{{MODULE_ID}}/ and continue from there.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role verifier --module {{MODULE_ID}}-{{CHUNK}} \
+    --output <each file you wrote> --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
+```
+
 ## 3b. Pair judge (parallel, before the Reconciler)
 
 <!-- brief:pairjudge -->
@@ -528,7 +589,9 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
 - falsifier: a sampled claim shown false or imprecise, with the evidence and counterexample;
 - omission: a high-consequence behavior the spec states vaguely, omits, or contradicts;
 - lint: a placeholder template without rendering, or a table row carrying untracked values;
-- rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding.
+- rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding;
+- note: another worker (a cross-cutting writer, a falsifier, the reconciler) reported this claim as
+  wrong or incomplete while working on its own file; verify it in the code before acting on it.
 The probe rows are revision-split only; a separate held-out set you will never see is scored
 afterwards, so fixing exactly these questions is not the goal. Fixing what they reveal is.
 

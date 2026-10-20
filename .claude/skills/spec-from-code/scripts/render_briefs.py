@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from _common import build_ownership, eprint, eval_dir, git_head, glob_to_regex, read_json, scope_label
@@ -174,6 +175,18 @@ def main() -> int:
                 path = out_dir / f"{role}-{mid}-round-{args.round}.md"
             elif role in ("falsifier", "omission"):
                 path = out_dir / f"audit-{role}-{mid}.md"
+            elif role == "verifier":
+                # one brief per chunk of confirmed normative claims that have no evidence yet
+                size = int(next((kv.split("=", 1)[1] for kv in args.set if kv.startswith("CHUNK_SIZE=")), "25"))
+                out = subprocess.run([sys.executable, str(HERE / "check_evidence.py"), str(specs), "--list-unbacked",
+                                      "--module", mid], capture_output=True, text=True).stdout.split()
+                todo = [x for x in out if x != mid]
+                for k, lo in enumerate(range(0, len(todo), size)):
+                    chunk = todo[lo:lo + size]
+                    v = vals | {"CHUNK": f"{k:02d}", "CLAIM_LIST": ", ".join(chunk)}
+                    rendered.append((role, f"{mid}-{k:02d}", out_dir / f"verifier-{mid}-{k:02d}.md",
+                                     fill(blocks[role], v, must)))
+                continue
             else:
                 path = out_dir / f"{role}-{mid}.md"
             if role == "rebuilder":
