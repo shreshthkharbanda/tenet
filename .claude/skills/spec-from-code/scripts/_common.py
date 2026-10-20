@@ -20,7 +20,10 @@ CLAIM_RE = re.compile(
 # A backticked span is a ref only if it is shaped like a location: it has a slash or a file
 # extension, optionally followed by :L1[-L2] or ::Symbol. Otherwise it is the start of the claim
 # text (e.g. "`add` returns ..."), which must not be swallowed as a ref.
-REF_SHAPE = re.compile(r"^(?:[\w.@+-]+/)*[\w.@+-]*(?:/|\.[A-Za-z0-9]{1,8})(?::L?\d+(?:-L?\d+)?|::[\w.$<>-]+)?$")
+REF_SHAPE = re.compile(
+    r"^(?:(?:[\w.@+-]+/)*[\w@+-][\w.@+-]*\.[A-Za-z0-9]{1,8}(?::L?\d+(?:-L?\d+)?|::[\w.$<>-]+)?"  # file, opt. lines/symbol
+    r"|(?:[\w.@+-]+/){2,})$"                                                                  # dir: 2+ segments
+)
 
 
 def split_refs(rest: str) -> tuple[list[str], str]:

@@ -276,3 +276,16 @@ rows 60-300 held 8, the overlap list had 4,039 pairs and only the top 300 were j
 `apply_claim_edits.py` reports the tail's contradiction rate, telling the orchestrator to judge more
 when it is 3% or higher. With L36 in place the list should shrink by an order of magnitude, which makes
 judging all of it affordable.
+
+**L38. Edits by line left stale sub-bullets, and tables carried untracked values.** Found: LiteLLM
+pair judge 03; a claim it rewrote (RDEPLOY-003) had three sub-bullets the applier would have left in
+place, and a config table still said "32768 nodes" after the claim it summarized was corrected. Fix:
+`apply_claim_edits.py` replaces a claim's whole block (its line plus deeper-indented continuation
+lines) and lists every table row that mentions an edited claim (`tables_to_review`, 119 rows in this
+run) for the Reconciler; lint warns on table rows that state values but cite no claim ID, since nothing
+can keep such a row in sync.
+
+**L39. A directory-shaped identifier read as a ref.** Found: lint after applying LiteLLM edits; a
+claim text starting with `os.environ/` parsed as a directory ref and failed resolution. Fix: a
+directory ref needs two or more path segments; single tokens ending in `/` stay text. Self-test case
+added beside L19's.

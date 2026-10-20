@@ -133,9 +133,11 @@ def main() -> int:
     from _common import parse_claims
     pc = parse_claims("- [AB-001] {confirmed} `pkg/a.py:1-2`, `pkg/b.py::X` `add` returns `3`.\n"
                       "- [AB-002] {inferred} `Router.completion` retries twice.\n"
-                      "- [AB-003] {gap} Does it time out?\n")
+                      "- [AB-003] {gap} Does it time out?\n"
+                      "- [AB-004] {confirmed} `pkg/c.py:3` `os.environ/` pointers are resolved at load.\n")
     check("L19 identifier at text start is not a ref", pc[0]["refs"] == ["pkg/a.py:1-2", "pkg/b.py::X"]
-          and pc[0]["text"].startswith("`add`") and pc[1]["refs"] == [] and pc[1]["text"].startswith("`Router"), json.dumps(pc))
+          and pc[0]["text"].startswith("`add`") and pc[1]["refs"] == [] and pc[1]["text"].startswith("`Router")
+          and pc[3]["refs"] == ["pkg/c.py:3"] and pc[3]["text"].startswith("`os.environ/`"), json.dumps(pc))
 
     # L33: pair-judge edits applied by claim ID; id, refs kept; unresolvable -> questions
     (meta / "overlaps.jsonl").write_text(json.dumps({"a": {"file": "modules/big-a.md", "id": "BIGA-001"},

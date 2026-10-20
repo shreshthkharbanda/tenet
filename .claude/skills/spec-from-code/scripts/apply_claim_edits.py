@@ -28,6 +28,7 @@ def main() -> int:
     overlaps = [json.loads(l) for l in (specs / "_meta" / "overlaps.jsonl").read_text().splitlines() if l.strip()]
     from _common import split_refs
     errors, applied, counts, questions = [], 0, {}, []
+    edited_ids: set[str] = set()
     edits_by_file: dict[str, list[dict]] = {}
     tail_counts: dict[str, int] = {}
     for df in sorted(rdir.glob("decisions-*.jsonl")):
@@ -78,7 +79,20 @@ def main() -> int:
             refs = e.get("refs") or old_refs
             conf = e.get("confidence") or m.group("conf")
             ref_txt = (", ".join(f"`{r}`" for r in refs) + " ") if refs else ""
-            lines[i] = f"{m.group('lead')}[{e['id']}] {{{conf}}} {ref_txt}{e['text'].strip()}\n"
+            # A claim's block is its line plus continuation lines indented deeper than its bullet (wrapped
+            # text, sub-bullets). Replace the whole block, or stale sub-bullets survive the edit.
+            lead = len(m.group("lead")) - len(m.group("lead").lstrip())
+            j = i + 1
+            while j < len(lines):
+                nxt = lines[j]
+                if not nxt.strip() or LINE.match(nxt.rstrip("\n")) or nxt.lstrip().startswith(("#", "|")):
+                    break
+                if len(nxt) - len(nxt.lstrip()) <= lead:
+                    break
+                j += 1
+            lines[i:j] = [f"{m.group('lead')}[{e['id']}] {{{conf}}} {ref_txt}{e['text'].strip()}\n"]
+            index = {k: (v if v <= i else v - (j - i - 1)) for k, v in index.items()}
+            edited_ids.add(e["id"])
             applied += 1
         if not a.dry_run:
             fp.write_text("".join(lines), encoding="utf-8")
@@ -100,11 +114,20 @@ def main() -> int:
         tgt = next((g for g in pm.groups() if g), None) if pm else None
         if tgt and tgt in texts and POINTER.search(texts[tgt]):
             chains.append(f"{cid} -> {tgt} -> ...")
+    # Tables repeat claim values in cells the applier cannot edit by ID; list rows that mention an edited
+    # claim so they are re-checked by hand (or by the Reconciler).
+    tables_to_review = []
+    for fp in list(specs.glob("modules/*.md")) + list(specs.glob("0*.md")):
+        for n, ln in enumerate(fp.read_text(encoding="utf-8").splitlines(), 1):
+            if ln.lstrip().startswith("|"):
+                hit = sorted(set(re.findall(r"[A-Z][A-Z0-9]{1,11}-\d{3,4}", ln)) & edited_ids)
+                if hit:
+                    tables_to_review.append(f"{fp.relative_to(specs).as_posix()}:{n} ({', '.join(hit)})")
     if conflicts:
         write_json(rdir / "conflicts.json", conflicts)
     write_json(rdir / "applied.json", {"verdicts": counts, "edits_applied": applied, "errors": errors,
                                        "questions": len(questions), "conflicts": len(conflicts),
-                                       "tail_sample_verdicts": tail_counts,
+                                       "tail_sample_verdicts": tail_counts, "tables_to_review": tables_to_review,
                                        "pointer_chains": chains})
     if tail_counts:
         n = sum(tail_counts.values())
@@ -116,6 +139,8 @@ def main() -> int:
         eprint(f"CONFLICT: {c['file']} {c['id']}: {len(c['variants'])} different edits; left unchanged, see reconcile/conflicts.json")
     for ch in chains[:20]:
         eprint("POINTER CHAIN:", ch)
+    if tables_to_review:
+        eprint(f"{len(tables_to_review)} table rows mention edited claims; re-check them (applied.json tables_to_review)")
     for e in errors:
         eprint("ERROR:", e)
     eprint(f"reconcile: verdicts {counts}; {applied} claim edits applied; {len(questions)} questions; {len(errors)} errors")

@@ -174,6 +174,16 @@ def main() -> int:
             if re.match(r"^\s*[-*]\s+\[[A-Z]", ln) and not any(c["line"] == n for c in claims):
                 errors.append(f"{relp}:{n}: bullet starts like a claim but does not parse; expected '- [PFX-001] {{confirmed|inferred|gap}} `ref` text'")
 
+        # untracked facts in tables: a row that carries values but cites no claim cannot be kept in sync
+        sec = ""
+        for n, ln in enumerate(body.splitlines(), 1):
+            if ln.startswith("## "):
+                sec = ln[3:].strip()
+            st = ln.strip()
+            if (st.startswith("|") and not re.match(r"^\|[\s:|-]+\|?$", st) and sec not in ("Test evidence", "Status", "System map")
+                    and not re.search(r"\[?[A-Z][A-Z0-9]{1,11}-\d{3,4}\]?", st)
+                    and re.search(r"`[^`]+`|\b\d{2,}\b", st) and not st.lower().startswith(("| entry point", "| id", "| setting", "| module", "| claim", "| condition"))):
+                warnings.append(f"{relp}:{n}: table row states values but cites no claim ID; tie it to a claim or it will drift")
         # code fences (language-neutral rule: short exact literals ok, long code dumps not)
         fence_len, in_fence = 0, False
         for n, ln in enumerate(body.splitlines(), 1):

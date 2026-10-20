@@ -284,9 +284,16 @@ _meta/judgments. Repo: {{REPO}} (commit {{COMMIT}}). Survey: {{SPECS}}/_meta/sur
 Scope of the specification: {{SCOPE_NOTE}}
 
 Tasks, in order:
-1. Contradictions and duplicates were decided by pair judges and applied by script; unresolvable
-   pairs are in {{SPECS}}/_meta/questions.md. Read that file; for each question, add a {gap} claim to
-   the owning module if none covers it.
+1. Contradictions and duplicates were decided by pair judges and applied by script. Finish what the
+   script could not, from {{SPECS}}/_meta/reconcile/:
+   - conflicts.json: claims that two judges edited differently. Open the code, choose (or merge into)
+     the correct text, preferring the variant that points straight at the owning module claim, and
+     edit the claim line in place (keep its ID).
+   - applied.json "pointer_chains": repoint each pointer at the final owning claim.
+   - applied.json "tables_to_review": table rows that mention an edited claim; make each row's values
+     agree with the claim it cites, or replace the value with the claim ID.
+   - {{SPECS}}/_meta/questions.md: for each question, add a {gap} claim to the owning module if none
+     covers it.
 2. Cross-links. Where a module spec says "see module X" or describes a dependency's behavior, add the
    concrete claim ID cross-reference `[X-NNN]` so a reader can jump. Do not duplicate claims across
    modules; one fact lives in the module that decides it, and other modules point at it.
