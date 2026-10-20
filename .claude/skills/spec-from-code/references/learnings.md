@@ -297,3 +297,19 @@ alone, the probe is "invalid" forever, shrinking the held-out set or penalizing 
 evidence in `_meta/probe-corrections.jsonl`, so held-out integrity stays auditable. Judges that mark
 probe_invalid with execution evidence feed it; the orchestrator applies corrections before the next
 round.
+
+**L41. A false PASS from a gate that skipped what it could not parse.** Found: LiteLLM iteration 1.
+Every prober (and the control judges) hand-wrote its report in an invented schema with no `role`
+field, so `verify_reports.py` never ran the prober-blindness check and reported "0 discrepancies":
+G5 passed while verifying nothing. It later crashed outright on a report whose outputs were strings.
+(Checked by hand afterwards: no prober read spec text; the method held, the gate did not.) Fix:
+`write_report.py` is the only way workers write reports (every brief ends with the exact command, which
+overrides older wording); `verify_reports.py` fails any report missing role, module, outputs, or
+files_read, and treats malformed entries as findings rather than crashing. General rule for gates: a
+check that cannot find its input must fail loudly, never skip silently.
+
+**L42. Relayed suspicions are not findings.** Found: the `RoutingArgs.ttl` "bug" a pair judge
+mentioned in passing and the orchestrator recorded was a false positive (the module defines its own
+`RoutingArgs` with `ttl = 60`); the Reconciler disproved it. Fix: `--bug` entries carry how the worker
+knows (read, executed, test), the Reconciler verifies every collected defect against code before it
+becomes a claim, and suspected defects in the final report are only those that exist as claims.

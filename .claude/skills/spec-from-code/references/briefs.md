@@ -90,6 +90,11 @@ modules over 6000 LOC (if any), and the three biggest risks.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role surveyor --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 2. Extractor (one per module, fully parallel)
@@ -154,6 +159,11 @@ you could not cite and why, and the three behaviors you are least sure about.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role extractor --module {{MODULE_ID}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 3. Cross-cutting extractors (four, parallel with module extractors)
@@ -203,6 +213,11 @@ by confidence and the three facts you are least sure about.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role {{XC_KIND}} --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 <!-- focus:interfaces -->
@@ -272,6 +287,11 @@ An edit replaces the claim's text (and confidence or refs if given); the ID neve
 spec files yourself. Write {{SPECS}}/_meta/worker-reports/pairjudge-{{SLICE_NAME}}.json (format:
 {{REFS}}/templates.md section 7, with every file you read and any suspected_bugs you noticed). Reply
 with counts by verdict.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role pairjudge --module {{SLICE_NAME}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 4. Reconciler (one, after all extractors pass lint and coverage)
@@ -323,6 +343,11 @@ fixed, contradictions left as questions, cross-links added, and the main paths y
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role reconciler --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 5. Prober (one per module, parallel; code-only, never sees the spec)
@@ -377,6 +402,11 @@ probe count by category and difficulty.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role prober --module {{MODULE_ID}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 6. Answerer (one per module per round; spec-only, never sees the code)
@@ -414,6 +444,11 @@ Write {{SPECS}}/_meta/worker-reports/answerer-{{MODULE_ID}}-round-{{ROUND}}.json
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role answerer --module {{MODULE_ID}} --round {{ROUND}} --snapshot {{SPEC_SNAPSHOT}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 7. Judge (one per module per round)
@@ -453,6 +488,11 @@ Do not read or edit any spec file; your job is comparison, not repair. Write
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role judge --module {{MODULE_ID}} --round {{ROUND}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 8. Reviser (Extractor in revise mode; one per failing module per round)
@@ -490,6 +530,11 @@ root-cause class, claims rewritten, claims added, references you judged wrong.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role reviser --module {{MODULE_ID}} --round {{ROUND}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## 9. Rebuilder (optional round-trip; one per selected module)
@@ -532,4 +577,9 @@ listing every file you read. Reply with compiled yes/no and the five most import
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role rebuilder --module {{MODULE_ID}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```

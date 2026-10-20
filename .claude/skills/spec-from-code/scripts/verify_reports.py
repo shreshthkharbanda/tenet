@@ -69,9 +69,25 @@ def main() -> int:
             errors.append(f"{rf.name}: unreadable: {e}")
             continue
         checked += 1
+        missing = [k for k in ("role", "module", "outputs", "files_read") if k not in r]
+        if missing:
+            errors.append(f"{rf.name}: report lacks {missing}; write reports with scripts/write_report.py")
         role = r.get("role", "?")
         module = r.get("module", "?")
-        for o in r.get("outputs", []):
+        # Schema tolerance: a malformed report is a finding about that worker, never a crash of the gate.
+        outs = r.get("outputs", [])
+        if not isinstance(outs, list):
+            errors.append(f"{rf.name}: 'outputs' must be a list")
+            outs = []
+        norm = []
+        for o in outs:
+            if isinstance(o, str):
+                norm.append({"path": o})
+            elif isinstance(o, dict) and "path" in o:
+                norm.append(o)
+            else:
+                errors.append(f"{rf.name}: malformed output entry {str(o)[:80]}")
+        for o in norm:
             fp = resolve(o.get("path", ""), repo, specs)
             if not fp.exists() or (fp.is_file() and fp.stat().st_size == 0):
                 errors.append(f"{rf.name}: reported output {o.get('path')} missing or empty")
@@ -82,7 +98,11 @@ def main() -> int:
                 rep = int(o["claims"])
                 if abs(actual - rep) > max(2, 0.10 * max(actual, rep)):
                     errors.append(f"{rf.name}: reported {rep} claims in {o.get('path')} but {actual} parse")
-        reads = [resolve(str(x), repo, specs) for x in r.get("files_read", [])]
+        fr = r.get("files_read", [])
+        if not isinstance(fr, list):
+            errors.append(f"{rf.name}: 'files_read' must be a list")
+            fr = []
+        reads = [resolve(str(x), repo, specs) for x in fr]
         if not reads and role not in ("judge",):
             errors.append(f"{rf.name}: no files_read listed; every worker must list what it read")
         if role == "answerer":

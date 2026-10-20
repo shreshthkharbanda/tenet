@@ -42,6 +42,11 @@ Write {{SPECS}}/_meta/audit/falsify-{{MODULE_ID}}.jsonl, one row per claim, appe
  "evidence": "path:Lx-Ly and what the code actually does", "counterexample": "input or state, if any",
  "executed": true|false}
 Do not edit the spec or the code. Reply with verdict counts and the worst three findings.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role falsifier --module {{MODULE_ID}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## Omission hunter
@@ -71,6 +76,11 @@ could not act on it: missing literal, condition, or order) | "missing" | "contra
 
 Do not edit the spec or the code. Reply with counts by spec_status and the three most consequential
 omissions.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role omission --module {{MODULE_ID}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## No-spec control answerer
@@ -93,6 +103,11 @@ For unanswerable: "unanswerable": true, "answer": "".
 
 Write {{SPECS}}/_meta/worker-reports/control-all.json with role "answerer", "snapshot":
 "{{CONTROL_DIR}}", and every file you read. Reply with answered vs unanswerable counts per module.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role control --module all --snapshot {{CONTROL_DIR}} \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## Judge auditor
@@ -114,6 +129,11 @@ reference_answer, refs, answer). For each row, decide:
 
 Write {{SPECS}}/_meta/audit/judge-audit.jsonl: {"id": "...", "verdict": "...", "note": "..."},
 appended as you go. Do not read {{SPECS}}/_meta/judgments/. Reply with verdict counts.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role judge-auditor --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## Red team
@@ -140,6 +160,11 @@ For each exploit: demonstrate it on the copy (run the gate and show it passes), 
 reader), and propose the smallest mechanical check that closes it. Write
 {{SPECS}}/_meta/audit/redteam.md. Do not edit the skill or the real specs. Reply with the exploits
 ranked by severity.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role redteam --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## Reader
@@ -157,6 +182,11 @@ Then, from the spec alone, write {{SPECS}}/_meta/audit/reader.md:
 3. Every place the spec confused you, contradicted itself, or used a term it did not define, with
    the file and claim ID.
 Keep it under 1200 words. Your lifecycle will be checked against the code by someone else.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role reader --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```
 
 ## Lifecycle checker
@@ -172,4 +202,9 @@ Trace the scenario in the code yourself. For each numbered step write a row to
 {"step": 1, "verdict": "correct|incorrect|vague|missing_step_before", "evidence": "path:Lx-Ly", "note": "..."}
 Then add rows with "verdict": "missing" for important steps the explanation skipped entirely. A wrong
 explanation means the spec taught it wrong, so be exact. Reply with verdict counts.
+Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role lifecycle-checker --module all \
+    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+This replaces any other instruction above about the report's file name or format.
 ```

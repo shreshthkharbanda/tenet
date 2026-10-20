@@ -280,7 +280,17 @@ def main() -> int:
     (wr / "extractor-big-b.json").write_text(json.dumps({"role": "extractor", "module": "big-b",
                                                        "outputs": [{"path": f"{specs.name}/modules/big-b.md", "claims": 2}],
                                                        "files_read": ["pkg/small.py"]}))
+    (tmp / "reads.txt").write_text(str(repo / "pkg" / "small.py") + "\n")
+    rc, out = run("write_report.py", "--specs", str(specs), "--role", "judge", "--module", "big-a", "--round", "1",
+                  "--output", str(meta / "probes" / "big-a.jsonl"), "--read-from", str(tmp / "reads.txt"),
+                  "--bug", "pkg/small.py:1-2|adds without checks|read")
+    wr_ok = json.loads(Path(out.strip().splitlines()[-1]).read_text())
+    check("L41 write_report emits the verified schema", rc == 0 and wr_ok["role"] == "judge" and wr_ok["files_read"]
+          and wr_ok["suspected_bugs"][0]["where"] == "pkg/small.py:1-2", out)
+    (wr / "hand-written.json").write_text(json.dumps({"worker": "x", "inputs": []}))
     rc, out = run("verify_reports.py", str(specs), "--repo", str(repo))
+    check("L41 hand-made schema is reported, not crashed on", "write_report.py" in out and "Traceback" not in out, out)
+    (wr / "hand-written.json").unlink()
     check("L03 prober reading spec caught (dir not named specs)", "blindness broken" in out, out)
     check("L03 answerer reading source caught", "outside its snapshot" in out, out)
     check("L17 relative output path resolves", "extractor-big-b.json: reported output" not in out, out)
