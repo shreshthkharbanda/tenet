@@ -200,6 +200,10 @@ def main() -> int:
                 if hit:
                     errors.append(f"{relp}:{c['line']}: {cid} says {hit.group(0)!r}, which no test can falsify; state the "
                                   f"observable outcome (value, message, state change) instead")
+            spans = len(re.findall(r"`[^`\n]+`", c["text"]))
+            if spans > 6 and not c["section"].lower().startswith(("public surface", "test evidence")):
+                warnings.append(f"{relp}:{c['line']}: {cid} carries {spans} code spans; say it in words first and keep the "
+                                f"exact names that matter (at most 4), or split it (readability.md)")
             if len(c["text"]) < 20:
                 warnings.append(f"{relp}:{c['line']}: {cid} is very short; one claim = one trigger + one observable outcome")
             if TOOL_MENTION.search(c["text"]):

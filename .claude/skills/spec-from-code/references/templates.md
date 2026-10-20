@@ -107,6 +107,12 @@ inclusive or exclusive. Ordering says stable or unstable. Defaults say where the
   commands, flags, env vars, table names) are part of the interface and are named exactly. Private
   identifiers appear only inside refs. No code transcription; code fences longer than 20 lines are
   flagged by the linter. Short literals in backticks are good.
+- **Natural language first** (readability.md). A claim says what happens in words a reader can follow
+  without the code, then names exactly what an engineer needs to find: "When the cooldown store's write
+  to Redis fails, the router keeps the cooldown in this server's memory only (`cooldown_time`, default
+  `5`)", not a chain of identifiers. At most 4 code spans per claim; a claim that needs more is two
+  claims. Describe a value's meaning before the value. Lint warns on claims over 6 code spans, and
+  the warning goes to the module's reviser.
 - **Agent-neutral and self-contained.** Never mention a model, a tool, or this process in the spec. Each
   module spec must make sense to a reader who opens only it plus `INDEX.md`. Define terms where used or
   in the glossary. Specs are consumed by retrieval as well as by people, so a chunk pulled out of the
