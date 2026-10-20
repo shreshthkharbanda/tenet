@@ -127,7 +127,10 @@ Method:
    registration tables, decorators that wrap or rename, and attributes generated from data files. List
    every resulting public name in the Public surface table with a ref to where it is bound, because
    these names never appear as definitions and a reader cannot find them otherwise.
-2. Grep for callers of each public symbol outside the module (what callers rely on is contract).
+2. Grep for callers of each public symbol outside the module (what callers rely on is contract). A
+   claim about who calls what ("the Router calls X", "only tests use Y") must cite the call sites
+   themselves as refs, found by search, not inferred from names; "no production caller" claims are
+   universal claims (see templates.md) and need the search scope stated.
 3. Open dependencies only as far as needed to state this module's behavior; what you did not trace is
    {inferred} or {gap}, never {confirmed}. Where reading leaves you unsure, execute: copy what you need
    to {{SCRATCH}}/extract-{{MODULE_ID}}/ and run a throwaway harness there (never in the repo). How to
@@ -393,8 +396,11 @@ that prove them; a reference answer you cannot cite is not a probe, drop it.
 Read the tests: behaviors pinned by tests make the best probes, and tests often reveal edge cases.
 Where it is cheap, confirm reference answers by executing the code: copy what you need into
 {{SCRATCH}}/probe-harness-{{MODULE_ID}}/ and run a throwaway harness there (never in the repo).
-How to run this project's code here: {{RUN_ENV}} An
-executed reference answer beats a read one; mark it verified_by: execution.
+How to run this project's code here: {{RUN_ENV}} An executed reference answer beats a read one; mark it verified_by: execution. Execute through the
+public entry point the question names (e.g. `Router.acompletion`), not the helper that implements one
+step: ordering bugs live between steps. A test counts as verification only if it drives that same entry
+point; a unit test of a helper does not (LiteLLM: a test of the key-stripping helper "verified" that
+forged reservations cannot be refunded, while the real call path refunds before stripping).
 
 Do not read other modules' probes. Do not modify any file outside _meta/probes/. Write
 {{SPECS}}/_meta/worker-reports/prober-{{MODULE_ID}}.json listing every file you read. Reply with the

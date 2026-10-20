@@ -364,3 +364,10 @@ truth a security bug: a forged reservation is refunded because the refund runs b
 are stripped. The prober had "verified by test" with a unit test of the stripping helper. Fix: the
 prober brief requires execution through the public entry point the question names; a test verifies a
 reference only if it drives that entry point. The probe was corrected on the record (L40).
+
+**L50. Caller relationships asserted from names.** Found: LiteLLM request-targets falsifier;
+TARGETS-088 said the Router calls `resolve_served_model`; a search shows only two proxy budget checks
+do, and the Router uses a different, similarly named method. The module also had the most failures of
+any audited module (7 of 12 claims false or imprecise). Fix: the extractor brief requires caller claims
+to cite the call sites found by search, and treats "no production caller" as a universal claim with a
+stated scope.
