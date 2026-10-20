@@ -59,7 +59,7 @@ you look for the behaviors that matter most and check whether the spec states th
 Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}} ("{{MODULE_NAME}}"). Code in scope:
 {{FILES}}
 Spec: {{SPECS}}/modules/{{MODULE_ID}}.md plus {{SPECS}}/01-interfaces.md, 02-data.md, 03-config.md
-where they exist.
+where they exist. How to run this project's code to settle what reading cannot: {{RUN_ENV}}
 
 Step 1, before opening any spec file: read the code in scope and write the 15 behaviors a caller or
 an operator most needs to know, ranked by consequence: failure modes and what the caller sees,
@@ -197,7 +197,7 @@ You are checking a newcomer's explanation of a code path against the code. Repo:
 {{COMMIT}}). Explanation: {{SPECS}}/_meta/audit/reader.md (section 1 is the lifecycle; the steps cite
 spec claim IDs, which you may ignore). Scenario: {{READER_SCENARIO}}
 
-Trace the scenario in the code yourself. For each numbered step write a row to
+Trace the scenario in the code yourself, executing it where reading is not decisive: {{RUN_ENV}} For each numbered step write a row to
 {{SPECS}}/_meta/audit/lifecycle-check.jsonl:
 {"step": 1, "verdict": "correct|incorrect|vague|missing_step_before", "evidence": "path:Lx-Ly", "note": "..."}
 Then add rows with "verdict": "missing" for important steps the explanation skipped entirely. A wrong

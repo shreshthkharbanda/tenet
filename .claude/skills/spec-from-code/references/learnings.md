@@ -390,3 +390,20 @@ false <= 5%, medium-or-worse <= 10%, and zero high; ungraded omission rows read 
 (454/454 baseline tests recovered from the spec alone); the verifier flagged the brief path outside the
 rebuild copy. Fix: rebuilder briefs render into `<scratch>/rebuild-<module>/_brief.md`, as answer and
 control briefs render inside their snapshots.
+
+**L54. The orchestrator forgot to log launches.** Found: LiteLLM iteration 1; three omission-hunter
+launches never made it into `dispatch.jsonl`, so after a restart they would have been lost. A record
+the orchestrator must remember to keep fails in the same moments it is needed. Fix: `dispatch.py
+unfinished` needs no log: every rendered brief whose worker report (or, for pair judges, decision file)
+does not exist is unfinished. The launch log stays as the way to resume by agent id; the unfinished
+check is the ground truth for what is left.
+
+**L55. Parallel revisers raced on shared files; two audit briefs ran blind to the environment.** Found:
+LiteLLM round-1 revision setup. The failure-handling worklist held a contradiction between its own
+module and `03-config.md` (CFG-123 vs IF-375 on `max_fallbacks`); ten revisers editing the shared
+cross-cutting files in parallel would have overwritten one another, the same race L35 fixed for pair
+judges. Separately, omission hunters and the lifecycle checker had no `{{RUN_ENV}}`, so they could not
+run the declared test command to confirm a behaviour. Fix: a reviser edits only its own module file;
+any fix to a shared file goes into `decisions-revise-<module>-round-<n>.jsonl` rows that the
+single-writer `apply_claim_edits.py` applies after all revisers finish. Every brief that may execute
+code now receives `{{RUN_ENV}}`.

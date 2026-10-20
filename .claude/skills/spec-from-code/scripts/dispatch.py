@@ -9,6 +9,9 @@ recorded the ids. This log is that record, kept on disk next to the specs.
   dispatch.py done    --specs S --agent ID [--status ok|failed|lost]
   dispatch.py running --specs S            # entries launched but not done: resume these after a restart
   dispatch.py next    --specs S [--cap 18] # queued briefs that fit under the cap (queue.txt minus launched)
+  dispatch.py unfinished --specs S [--snapshot DIR ...]  # rendered briefs with no worker report yet
+The "unfinished" check needs no launch log at all: a brief without its worker report is not done. Use it
+after a restart (re-dispatch fresh what cannot be resumed by id) and before scoring a phase.
 """
 from __future__ import annotations
 
@@ -26,7 +29,7 @@ def load(log: Path) -> list[dict]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["add", "done", "running", "next"])
+    ap.add_argument("cmd", choices=["add", "done", "running", "next", "unfinished"])
     ap.add_argument("--specs", required=True)
     ap.add_argument("--role")
     ap.add_argument("--module")
@@ -35,6 +38,7 @@ def main() -> int:
     ap.add_argument("--agent")
     ap.add_argument("--status", default="ok")
     ap.add_argument("--cap", type=int, default=18)
+    ap.add_argument("--snapshot", action="append", default=[], help="extra dirs holding rendered briefs (_briefs/, _brief.md)")
     a = ap.parse_args()
     meta = Path(a.specs).resolve() / "_meta"
     log = meta / "dispatch.jsonl"
@@ -53,6 +57,29 @@ def main() -> int:
         for r in rows:
             if r["status"] == "running":
                 print(f"{r['agent']}\t{r['role']}\t{r['module']}\tround {r['round']}\t{r['brief']}")
+        return 0
+    elif a.cmd == "unfinished":
+        reports = {p.stem for p in (meta / "worker-reports").glob("*.json")}
+        briefs = list((meta / "briefs").glob("*.md"))
+        for d in a.snapshot:
+            briefs += list(Path(d).glob("_briefs/*.md")) + list(Path(d).glob("_brief.md"))
+        def expected(b: Path) -> str:
+            n = b.stem
+            if n == "_brief":
+                parts = b.parent.name.split("-", 1)
+                return f"{parts[0]}-{parts[1]}" if len(parts) == 2 and parts[0] == "rebuild" else "control-all"
+            n = n.replace("audit-", "")
+            if n in ("surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control"):
+                return f"{n}-all"
+            if n in ("interfaces", "data", "config", "operations"):
+                return f"{n}-all"
+            return n
+        for b in sorted(briefs):
+            e = expected(b).replace("rebuild-", "rebuilder-")
+            if e.startswith("pairjudge-") and (meta / "reconcile" / f"decisions-{e.split('-', 1)[1]}.jsonl").exists():
+                continue  # its output file is the proof of completion
+            if e not in reports:
+                print(f"{e}\t{b}")
         return 0
     elif a.cmd == "next":
         launched = {r["brief"] for r in rows if r["status"] in ("running", "ok")}

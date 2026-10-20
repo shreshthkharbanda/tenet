@@ -40,12 +40,12 @@ def main() -> int:
     for mid in mods:
         f = out_dir / f"{mid}.jsonl"
         rows = read_jsonl(f) if f.exists() else []
-        seen = {(r.get("category"), r.get("id")) for r in rows}
+        seen = {(r.get("source"), r.get("id")) for r in rows}
         add = []
         for ff in sorted((meta / "audit").glob(f"falsify-{mid}*.jsonl")) + sorted((meta / "audit").glob(f"universal-falsify-{mid}*.jsonl")):
             for r in read_jsonl(ff):
                 if r.get("verdict") in ("false", "imprecise", "ref_wrong") and ("falsifier", r["id"]) not in seen:
-                    add.append({"category": "falsifier", "id": r["id"], "verdict": r["verdict"], "severity": r.get("severity"),
+                    add.append({"source": "falsifier", "id": r["id"], "verdict": r["verdict"], "severity": r.get("severity"),
                                 "judge_note": r.get("evidence", ""), "counterexample": r.get("counterexample", "")})
         of = meta / "audit" / f"omission-{mid}.jsonl"
         if of.exists():
@@ -53,27 +53,28 @@ def main() -> int:
                 if r.get("spec_status") in ("vague", "missing", "contradicted"):
                     key = ("omission", f"rank-{r.get('rank')}")
                     if key not in seen:
-                        add.append({"category": "omission", "id": f"rank-{r.get('rank')}", "verdict": r["spec_status"],
+                        add.append({"source": "omission", "id": f"rank-{r.get('rank')}", "verdict": r["spec_status"],
                                     "question": r.get("behavior"), "refs": r.get("refs", []),
                                     "judge_note": r.get("note", ""), "spec_claims": r.get("spec_claims", [])})
         for ln in lint:
             if f"modules/{mid}.md:" in ln and ln.startswith("WARN"):
                 m = re.search(r"modules/[\w-]+\.md:(\d+): (.*)", ln)
                 if m and ("lint", m.group(1)) not in seen:
-                    add.append({"category": "lint", "id": m.group(1), "verdict": "warning", "judge_note": m.group(2)})
+                    add.append({"source": "lint", "id": m.group(1), "verdict": "warning", "judge_note": m.group(2)})
         rb = meta / "rebuild" / f"{mid}.json"
         if rb.exists():
             r = read_json(rb)
             for i, g in enumerate(r.get("guesses", [])):
-                add.append({"category": "rebuild", "id": f"guess-{i}", "verdict": "guess", "judge_note": json.dumps(g)})
+                add.append({"source": "rebuild", "id": f"guess-{i}", "verdict": "guess", "judge_note": json.dumps(g)})
             for i, b in enumerate(r.get("spec_bugs", [])):
-                add.append({"category": "rebuild", "id": f"spec-bug-{i}", "verdict": "spec_bug", "judge_note": str(b)})
+                add.append({"source": "rebuild", "id": f"spec-bug-{i}", "verdict": "spec_bug", "judge_note": str(b)})
         for r in rows:
-            r.setdefault("category", "probe")
+            if "source" not in r:
+                r["source"] = r["verdict"] if r.get("verdict") in ("answer_note", "defect_note") else "probe"
         write_jsonl(f, rows + add)
         totals[mid] = {}
         for r in rows + add:
-            totals[mid][r["category"]] = totals[mid].get(r["category"], 0) + 1
+            totals[mid][r["source"]] = totals[mid].get(r["source"], 0) + 1
     for mid, t in totals.items():
         eprint(f"{mid}: " + ", ".join(f"{k} {v}" for k, v in sorted(t.items())))
     return 0

@@ -85,7 +85,9 @@ python3 $SKILL_DIR/scripts/dispatch.py running --specs $SPECS                   
 ```
 After a restart, send each running agent a SendMessage to its id saying it was interrupted and should
 check its output file and continue; re-create (fresh launch of the same brief) only agents whose resume
-fails.
+fails. `dispatch.py unfinished --specs $SPECS [--snapshot DIR]` is the ground truth for what is left
+(rendered briefs with no worker report), whether or not every launch was logged; check it before
+scoring any phase.
 
 Dispatch the Surveyor (`--role surveyor`). When it returns, run:
 ```

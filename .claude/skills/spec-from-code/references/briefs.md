@@ -507,9 +507,15 @@ This replaces any other instruction above about the report's file name or format
 ```
 You are revising the specification of one module after fidelity probing found contradictions and
 gaps. Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}}, prefix {{PREFIX}}.
-Spec to revise: {{SPECS}}/modules/{{MODULE_ID}}.md (also fix 01-interfaces.md / 02-data.md /
-03-config.md if a failure's root cause lives there).
-Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row has a "category":
+Spec to revise: {{SPECS}}/modules/{{MODULE_ID}}.md, which you own and edit directly. Other revisers run
+in parallel, so NEVER edit the shared files (00-overview.md, 01-interfaces.md, 02-data.md,
+03-config.md) or another module's spec: when a failure's root cause is a claim there, write the fix as
+a row of {{SPECS}}/_meta/reconcile/decisions-revise-{{MODULE_ID}}-round-{{ROUND}}.jsonl, in the format
+{"row": -1, "verdict": "contradiction", "edits": [{"file": "03-config.md", "id": "CFG-123", "text":
+"<full new claim text>"}], "evidence": "path:START-END ..."}; the orchestrator applies all such rows
+with the single-writer script after every reviser finishes. Prefer turning a wrong shared claim into a
+pointer to your module's correct claim.
+Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row has a "source":
 - probe: a revision-split probe the spec answered wrongly (contradict) or not at all (gap), with the
   question, reference answer, refs, the spec-only answer, and the judge's note;
 - answer_note / defect_note: the answer agreed, but the answerer or judge saw the spec was silent,
