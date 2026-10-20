@@ -713,6 +713,10 @@ def main() -> int:
     from check_story import Checker as _Checker
     ck = _Checker(specs, repo)
     ck.claims["BIGA-001"] = dict(ck.claims["BIGA-001"], text='Raises "Deployment is invalid at tiers: Input should be a dictionary. The write is rejected."')
+    ck.claims["BIGA-002"] = dict(ck.claims["BIGA-002"], text="Jitter is below `JITTER`, 0.75 by default, read from the environment.")
+    check("L83 a number its claim gives only as a default is flagged when stated as fixed, not when the sentence says so",
+          ck.default_as_fixed("It adds jitter below 0.75 s [BIGA-002].", ["BIGA-002"]) == ["0.75"]
+          and ck.default_as_fixed("By default it adds jitter below 0.75 s [BIGA-002].", ["BIGA-002"]) == [], "default as fixed")
     check("L78 a message quoted in part reads as the whole one and is caught; the whole message passes",
           ck.partial_quote('It raises "Deployment is invalid at tiers: Input should be a dictionary."', ["BIGA-001"]).startswith("The write")
           and not ck.partial_quote('It raises "Deployment is invalid at tiers: Input should be a dictionary. The write is rejected."', ["BIGA-001"]),

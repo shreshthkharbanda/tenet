@@ -42,6 +42,7 @@ JARGON = ("async", "asynchronous", "sync", "synchronous", "pipeline", "callback"
           "plugin", "middleware", "coroutine", "singleton", "schema", "enum", "boolean", "regex", "mutex", "payload",
           "namespace", "serialize", "serialized", "deserialize", "runtime", "thread", "semaphore")
 QUOTE = re.compile(r'"([^"\n]{20,})"')
+DEFAULT_WORDS = re.compile(r"\b(?:by default|defaults?|unless|usually|in the usual case|out of the box|configurable|can be (?:set|changed))\b", re.I)
 # parts of a story the Everyone layer hides: its text must not send the reader there (L82)
 ENGINEER_ONLY = re.compile(r"\b(?:at a glance|in one minute|the ledger|expert (?:view|layer|lens)|engineer (?:view|layer|lens))\b", re.I)
 UNIVERSAL = {"API", "APIs", "HTTP", "HTTPS", "URL", "ID", "IDs", "AI", "CPU", "UTC", "OK", "JSON", "CEO", "CTO", "IP", "US", "UK", "PDF"}
@@ -413,6 +414,21 @@ class Checker:
                 return longer[0][len(q.rstrip(".")):].lstrip(" .")
         return ""
 
+    def default_as_fixed(self, md: str, ids: list[str]) -> list[str]:
+        """Numbers md states as fixed that its cited claims give only as a default (L83: the most common
+        overstated row, "jitter below 0.75 s" for "JITTER, 0.75 by default, read from the environment")."""
+        if DEFAULT_WORDS.search(md):
+            return []
+        said = " ".join(self.claims[x]["text"] + " " + " ".join(self.claims[x].get("detail", [])) for x in ids if x in self.claims)
+        out = []
+        for n in set(NUM.findall(CODE_RE.sub(lambda m: " " + m.group(1) + " ", strip_chips(md)))):
+            if len(n) < 2 and "." not in n:
+                continue  # 0 to 9 are counts more often than settings
+            near = [said[max(0, m.start() - 60): m.end() + 60] for m in re.finditer(rf"(?<![\w.]){re.escape(n)}(?![\w])", said)]
+            if near and all(re.search(r"\bdefault", w, re.I) for w in near):
+                out.append(n)
+        return out
+
     def check(self, module: str, text: str) -> dict:
         st, errors = parse_story(text)
         warnings: list[str] = []
@@ -439,6 +455,10 @@ class Checker:
                 miss = self.unsupported(s, sid or ids or ids_fallback or [])
                 if miss:
                     errors.append(f"states {', '.join(miss[:3])} found in neither the cited claims nor their code: {where(s)}")
+                fixed = self.default_as_fixed(s, sid or ids or ids_fallback or [])
+                if fixed:
+                    warnings.append(f"states {', '.join(fixed)} as fixed, but its claims give {'it' if len(fixed) == 1 else 'them'} "
+                                    f"only as a default; say \"by default\" or what changes it: {where(s)}")
                 cnt = announced_count(s)
                 if cnt:
                     warnings.append(f"announces {cnt[0]} but lists {cnt[1]}; list them all or drop the number: {where(s)}")

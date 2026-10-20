@@ -384,6 +384,10 @@ same few ways; write against each:
   as the claims say, or that the claims name no alert;
 - a term the Everyone layer leans on with no row in Words you'll see (a routing group, a tier, a
   hook); and rows the story never uses, which the gate rejects.
+A row of Words you'll see is a definition: say what the thing is, cite the claim that defines it,
+and leave what it does under conditions to the sections. Definitions were the most overstated rows
+in round 3 ("the filters run on this path" for a path where they sometimes do not). A number a claim
+gives as a default is "5 seconds by default", never "5 seconds" (the gate warns).
 {{AUDIT_NOTES}}
 
 Run the gate and fix every error and every warning you can, until it passes:

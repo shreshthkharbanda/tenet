@@ -763,3 +763,18 @@ moving a part between layers without moving its checks, and text that refers acr
 runs every Everyone check on each row's term and meaning, and errors when Everyone text names a part
 that layer hides (At a glance, In one minute, the ledger, another lens). "flag" left the jargon list:
 readers understood it, and a tripwire that fires on plain words teaches narrators to ignore it.
+
+**L83. Definitions and defaults: the two places overstatement hides.** Found: LiteLLM Phase 9 story
+audit round 3, the first round whose judges judged every row of Words you'll see (L78). Across the
+revised stories 85% to 97% of units were supported, and distorted rows fell to 0 to 2 per module.
+The rows still not supported clustered in two places. (1) Glossary definitions said what a thing
+always does: "the pin filters run on this path", "the router copies the library-wide value",
+"selectors for every strategy but random shuffle". A definition is read as true in every case, and
+the narrator wrote it from memory of the module, citing the registration claim rather than the
+behavior claim. (2) A number the claims give as a default stated as fixed ("jitter below 0.75 s",
+"5 seconds", "300 seconds", "6000 seconds") appeared in four modules over three rounds. Class: a
+statement form that drops conditions by its nature. Fix: the narrator brief says a definition says
+what a thing is and cites the claim that defines it, with conditional behavior left to the sections.
+G8 warns when a sentence states a number that every mention in its cited claims calls a default,
+unless the sentence says "by default", "unless" or "usually". On the eleven stories it flagged the
+two such sentences the round-3 judges had found, and nothing else.
