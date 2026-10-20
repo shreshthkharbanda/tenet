@@ -596,3 +596,35 @@ Found: LiteLLM round-2 red team (B1-B7) and the runs that measured the fixes.
   coverage was missing, and ran all 293 checks on the weaker name-only test with one warning line.
   Every interpreter call that loads a module by name now uses `-P` from a neutral directory.
 
+
+**L72. A correct spec of 2,795 claims was still unreadable.** Found: LiteLLM, after validation; the
+user's goal is "read a short book on the service, then review specs instead of code", and a module
+spec is a 120-150 KB ledger of atomic claims (about 280 per module, 1.6 MB in all). Nobody reads
+that front to back, and no gate measured whether anyone could. Research applied (sources in the
+research report kept with this run): Diataxis separates explanation from reference, so a story is
+written over the ledger instead of rewriting it; NN/g found headings scanned first and more than two
+disclosure levels hurt, so headlines are assertions and claims expand in place (chip, then code);
+Huysmans et al. found decision tables beat trees and rules for conditional logic, so every
+conditional-heavy module gets a When/Then table; Larkin and Simon, and the statechart studies, say
+diagrams help where position carries meaning and nesting hurts newcomers, so figures are flat flow,
+state and sequence diagrams of at most 12 nodes; the split-attention research puts evidence beside
+the text, so a claim's code opens under it. Archify (tt-a1i/archify) showed the shape to copy: the
+writer emits structure, a renderer draws it, and a gate checks it, with stable failure messages.
+Fix: Phase 9. `site_data.py` compiles the specs into reader data (sections, claims, the source
+lines each cites, flows whose sequence-diagram participants come from each step's claim
+references, the citation graph); `build_site.py` writes a static reader (ELK-routed metro map of
+the main paths, step-through walkthroughs with a moving request, chapter ledgers whose refs expand to
+code, search, serif or sans, light or dark, motion off and reduced-motion respected). The narrator
+role writes `_meta/story/<module>.md`; G8 (`check_story.py`) rejects a sentence, row or figure label
+that states a literal or number found in neither the claims it cites nor their code, an uncited
+paragraph or figure element, an unknown ID, and over-long sentences; a failing story never reaches
+the site. Planted in the selftest: an invented `9999`, an uncited edge, a step targeting nothing, an
+uncited number and an unknown ID are each caught.
+
+**L73. A skill script named after a package shadowed it, twice.** Found: LiteLLM evidence runs; G3's
+`scripts/coverage.py` was found by `python -m coverage` run from the scripts dir (G7 silently fell
+back to its weaker test) and by the selftest's own `python -c "import coverage"` probe (which then
+believed coverage was installed). Patching each call with `-P` fixes instances, not the class. Fix:
+the G3 script is `check_coverage.py`; every interpreter call that loads a module by name runs with
+`-P` from a neutral directory; a selftest fails if any script shares a name with a module the skill
+or its checks import.

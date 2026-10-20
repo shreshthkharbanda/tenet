@@ -152,7 +152,7 @@ script in scripts/). Real specs to experiment on: copy {{SPECS}} to {{SCRATCH}}/
 work only on the copy. Repo: {{REPO}} (read-only).
 
 Find exploits: edits to a spec that are wrong, empty, or misleading, yet pass lint_specs.py,
-coverage.py, and would score well in score_probes.py. Examples of the kind of thing to try (do not
+check_coverage.py, and would score well in score_probes.py. Examples of the kind of thing to try (do not
 stop at these): refs that resolve but point at irrelevant lines; symbol dumps that satisfy symbol
 coverage without saying anything; bare-path refs that satisfy file coverage; claims that are
 unfalsifiable ("handles errors appropriately"); copying the same claim under many IDs; hedged

@@ -12,7 +12,7 @@ Per module, all from the module's OWN spec (cross-cutting refs never count for a
   - unanchored rate: claims none of whose backticked tokens occur in the cited lines +/-5; a ref to
     `::None`, a directory, or lines 1-2 resolves but points at nothing (red team E3); real specs 3-11%.
 
-Usage: coverage.py <specs_dir> --repo <root> [--min-file 0.95] [--min-symbol 0.85] [--min-lines 0.6]
+Usage: check_coverage.py <specs_dir> --repo <root> [--min-file 0.95] [--min-symbol 0.85] [--min-lines 0.6]
                    [--max-unanchored 0.15] [--max-ref-span 120]
 Exit 1 if any module is below threshold (list the misses so an extractor can re-run on them).
 """

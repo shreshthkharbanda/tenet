@@ -160,6 +160,25 @@ def parse_file(text: str) -> tuple[dict, list[dict], dict]:
     return fm, [s for s in sections if s["blocks"] or s["level"] > 1 or s["title"]], claims
 
 
+def render_story(st: dict) -> dict:
+    """A checked story with its markdown rendered to escaped HTML (chips become claim links)."""
+    def fig(f):
+        return {"kind": f["kind"], "id": f["id"], "title": html.escape(f["title"]),
+                "nodes": [{"id": n["id"], "label": n["label"], "ids": n["ids"]} for n in f["nodes"]],
+                "actors": [{"id": a["id"], "label": a["label"]} for a in f["actors"]],
+                "edges": [{"a": e["a"], "b": e["b"], "label": e["label"], "ids": e["ids"]} for e in f["edges"]],
+                "steps": [{"target": x["target"], "title": html.escape(x["title"]), "h": inline(x["md"]), "ids": x["ids"]} for x in f["steps"]]}
+    return {
+        "headline": inline(st["headline"]), "minute": [inline(p) for p in st["minute"]],
+        "glance": [{"when": inline(r["when"]), "then": inline(r["then"]), "ids": r["ids"]} for r in (st["glance"] or {}).get("rows", [])],
+        "sections": [{"title": inline(sec["title"]), "plain": plain(sec["title"]),
+                      "blocks": [{"t": "p", "h": inline(b["md"])} if b["t"] == "p" else
+                                 {"t": "ul", "items": [{"h": inline(x)} for x in b["items"]]} if b["t"] == "ul" else
+                                 {"t": "fig", **fig(b)} for b in sec["blocks"]]} for sec in st["sections"]],
+        "watch": [inline(x) for x in st["watch"]], "words": st["words"],
+    }
+
+
 def flows(sections: list[dict]) -> list[dict]:
     """The overview's numbered 'Main paths' become step-by-step walkthroughs."""
     out = []
@@ -202,6 +221,10 @@ def main() -> int:
     mods = {m["id"]: m for m in read_json(meta / "modules.json")["modules"]} if (meta / "modules.json").exists() else {}
 
     files = sorted(specs.glob("0*.md")) + sorted(specs.glob("modules/*.md"))
+    # chapter stories (references/story.md): shown only when G8 passes, so the site never shows an
+    # unchecked story; a failing one is reported and left out
+    from check_story import Checker
+    story_ck = Checker(specs, repo) if (meta / "story").exists() else None
     book = {"title": "", "repo": web, "commit": "", "files": [], "flows": [], "glossary": [], "defects": [], "owner": {}}
     total_snips = 0
     for fp in files:
@@ -260,7 +283,19 @@ def main() -> int:
                             m = re.match(r"<strong>(.+?)</strong>:?\s*(.*)$", it["h"])
                             if m:
                                 book["glossary"].append({"term": m.group(1), "h": m.group(2), "x": it["x"]})
-        write_json(out / f"f-{sl}.json", {"slug": sl, "rel": rel, "title": title, "sections": sections, "claims": claims})
+        story = None
+        sf = meta / "story" / f"{mid}.md"
+        if mid and story_ck and sf.exists():
+            r = story_ck.check(mid, sf.read_text(encoding="utf-8", errors="replace"))
+            write_json(meta / "story" / f"{mid}.check.json", {k: v for k, v in r.items() if k != "story"})
+            if r["errors"]:
+                eprint(f"WARN: {mid}: story left out, G8 has {len(r['errors'])} errors (first: {r['errors'][0]})")
+                book["files"][-1]["story_errors"] = len(r["errors"])
+            else:
+                story = render_story(r["story"])
+                book["files"][-1]["story"] = {"words": r["stats"]["words"], "figures": r["stats"]["figures"]}
+        write_json(out / f"f-{sl}.json", {"slug": sl, "rel": rel, "title": title, "sections": sections, "claims": claims,
+                                          "story": story})
         write_json(out / f"s-{sl}.json", snippets)
     # the reference graph: how often each spec file's claims and prose point into another's claims. It lays
     # out the system map and names the participants of each flow step, mechanically, from the spec itself.

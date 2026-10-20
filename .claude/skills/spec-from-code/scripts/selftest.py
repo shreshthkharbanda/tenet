@@ -249,12 +249,12 @@ def main() -> int:
     check("L08 cited-file change is stale", "stale" in out, out)
 
     # G3 coverage with ranges: range-scoped symbols
-    rc, out = run("coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
+    rc, out = run("check_coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
     cov = json.loads((meta / "coverage.json").read_text())
     check("G3 range coverage computed per module", cov["modules"]["big-b"]["file_rate"] == 1.0, json.dumps(cov["modules"]["big-b"])[:400])
     check("G3 private symbols ignored", not any("_hidden" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]))
     (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b.replace("`add` returns", "`small.add` returns")))
-    run("coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
+    run("check_coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
     cq = json.loads((meta / "coverage.json").read_text())["modules"]["big-b"]
     check("L31 qualified mention Class.method counts", not any(s.endswith("::add") for s in cq["unmentioned_symbols"]),
           json.dumps(cq["unmentioned_symbols"]))
@@ -507,17 +507,20 @@ def main() -> int:
           rc == 0 and (meta / "evidence-report.json").read_text() == before, out)
     # L71: a check that runs the system in a child process is not hollow (coverage follows the child)
     covpy = os.environ.get("SELFTEST_COVERAGE_PYTHON") or sys.executable
-    if subprocess.run([covpy, "-c", "import coverage"], capture_output=True).returncode == 0:
+    if subprocess.run([covpy, "-P", "-c", "import coverage"], capture_output=True, cwd=tmp).returncode == 0:  # -P: never pick up a script from the cwd
         (edir / "check_BIGA-001.py").write_text(
             f"# claim: BIGA-001\n# text: {txt}\nimport subprocess, sys\n"
             f"code = {f'import sys; sys.path.insert(0, {str(repo)!r}); from pkg.big import Big; assert Big().x == 1'!r}\n"
             "sys.exit(subprocess.run([sys.executable, '-c', code]).returncode)\n")
-        # run from the scripts dir, where the G3 gate's coverage.py sits beside it and must not shadow coverage.py
+        # run from the scripts dir: no script here may shadow a package a check imports (the G3 gate was once coverage.py)
         rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", covpy, "--repo", str(repo), cwd=HERE)
         check("L71 a check that drives the code in a child process is not hollow", rc == 0 and "hollow" not in out, out)
-        check("L71 the skill's own coverage.py never shadows coverage.py", "not available" not in out, out)
+        check("L71 no skill script shadows the coverage package", "not available" not in out, out)
     else:
         print("  SKIP L71 child-process coverage: no interpreter with coverage.py (set SELFTEST_COVERAGE_PYTHON)")
+    clash = {q.stem for q in HERE.glob("*.py")} & {"coverage", "json", "re", "ast", "typing", "pathlib", "subprocess", "random",
+                                                   "html", "string", "inspect", "site", "code", "token", "types", "signal", "pytest", "yaml"}
+    check("L71 no script is named after a module the skill or its checks import", not clash, str(clash))
     (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nassert True\n")
     rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable, "--repo", str(repo))
     check("L71 a hollow check (assert True) fails G7", rc == 1 and "is hollow" in out, out)
@@ -559,7 +562,7 @@ def main() -> int:
                      f"`mN` here returns v minus N when v exceeds N, else N (part {n}).\n"
                      for n, s in enumerate(range(a_lo, a_hi + 1, 100)))
     head_a = "- [BIGA-001] {confirmed} `pkg/big.py:1-3` `Big` stores `1` in `x` at construction.\n"
-    cov_args = ("coverage.py", str(specs), "--repo", str(repo), "--min-file", "0", "--min-symbol", "0")
+    cov_args = ("check_coverage.py", str(specs), "--repo", str(repo), "--min-file", "0", "--min-symbol", "0")
     (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks))
     rc, out = run(*cov_args)
     ca = json.loads((meta / "coverage.json").read_text())["modules"]["big-a"]
@@ -631,6 +634,44 @@ def main() -> int:
     check("L59 G6 counts only related pointers; bare refs into a split file are owned",
           own_r["ids"] == ["CFG-001", "CFG-002", "CFG-004"] and own_r["pointers_unrelated"] == 1, json.dumps(own_r))
     (specs / "03-config.md").unlink()
+    # L72: G8 chapter stories cite claims that exist and state only what those claims or their code say
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks))
+    sdir = meta / "story"
+    sdir.mkdir(parents=True, exist_ok=True)
+    good_story = (f"---\nmodule: big-a\n---\n# Big keeps its state and each method compares with its own bound\n\n@minute\n"
+                  f"`Big` stores `1` in `x` when it is built [BIGA-001]. Method `m{k}` returns `v - {k}` above `{k}` [BIGA-002]. "
+                  f"The other methods follow the same rule [BIGA-010].\n\n"
+                  f"## Construction always stores one value\n`Big` stores `1` in `x` [BIGA-001].\n\n"
+                  f"@figure flow id=m-rule title=\"How a method picks its result\"\n| node in | Input v | BIGA-002 |\n"
+                  f"| node test | v above bound? | BIGA-002 |\n| node out | Return result | BIGA-002 |\n| in > test | compare | BIGA-002 |\n"
+                  f"| test > out | yes | BIGA-002 |\n\n@steps m-rule\n| test | v above bound? | Method `m{k}` compares `v` with `{k}` [BIGA-002]. |\n"
+                  f"| test>out | Return result | It returns `v - {k}` [BIGA-002]. |\n\n"
+                  f"## Each method returns v minus its index above the bound\nMethod `m{k}` returns `v - {k}` when v exceeds `{k}` [BIGA-002].\n\n"
+                  f"## The later methods follow the same rule\nEvery method in a chunk follows that rule [BIGA-010].\n\n"
+                  f"## Watch out\n- `Big` keeps `x` at `1` [BIGA-001].\n")
+    (sdir / "big-a.md").write_text(good_story)
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L72 a story that cites real claims and their literals passes G8", rc == 0 and "0 errors" in out, out)
+    bad_story = (good_story.replace("[BIGA-010].\n\n## Construction", "[BIGA-010]. The cache holds `9999` entries [BIGA-001].\n\n## Construction")
+                 .replace("| in > test | compare | BIGA-002 |", "| in > test | compare | |")
+                 .replace("| test>out | Return result |", "| test>gone | Return result |")
+                 .replace("## Watch out\n- `Big` keeps `x` at `1` [BIGA-001].", "## Watch out\n- It retries 3 times.\n- See [BIGA-777]."))
+    (sdir / "big-a.md").write_text(bad_story)
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L72 G8 catches an invented value, an uncited edge, a dangling step, an uncited number and an unknown ID",
+          rc == 1 and "states 9999 found in neither" in out and "edge in>test cites no claim" in out
+          and "targets test>gone" in out and "cites no claim: It retries 3 times." in out and "unknown claim BIGA-777" in out, out)
+    site = tmp / "site"
+    rc, out = run("site_data.py", str(specs), "--out", str(site), "--repo", str(repo))
+    fa = json.loads((site / "data" / "f-modules-big-a.json").read_text())
+    check("L72 a story failing G8 never reaches the site", fa["story"] is None and "story left out" in out, out)
+    (sdir / "big-a.md").write_text(good_story)
+    rc, out = run("site_data.py", str(specs), "--out", str(site), "--repo", str(repo))
+    fa = json.loads((site / "data" / "f-modules-big-a.json").read_text())
+    check("L72 a passing story is compiled with chips as claim links and its figure",
+          fa["story"] and 'data-id="BIGA-001"' in fa["story"]["minute"][0]
+          and fa["story"]["sections"][0]["blocks"][1]["kind"] == "flow", json.dumps(fa.get("story"))[:600])
+    shutil.rmtree(sdir)
     # red team B6: a table row citing a claim states a value found in neither the claim nor its code
     rows = ("\n| Claim | Value |\n|---|---|\n| [BIGA-001] | `made_up_setting` |\n"
             "| [BIGA-001] | `self.x` holds it |\n")

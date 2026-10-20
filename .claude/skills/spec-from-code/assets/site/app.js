@@ -507,6 +507,163 @@
     return `<div class="src">${head}<div class="code"><table>${rows}</table></div>${cut > 0 ? `<div class="more">${cut} more lines in the cited range; open the file to read them.</div>` : ""}</div>`;
   }
 
+  /* ---------- chapter story: the readable layer over the ledger ---------- */
+  const chips = (ids) => ids.map((x) => `<a class="xr" href="#${x}" data-id="${x}">${x}</a>`).join(" ");
+  function storyHTML(st, f) {
+    const sec = st.sections.map((x, k) => `<section class="st-sec" id="story-${k}"><h3>${x.title}</h3>${x.blocks.map((b) =>
+      b.t === "p" ? `<p>${b.h}</p>` : b.t === "ul" ? `<ul>${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>` : figureShell(b)).join("")}</section>`).join("");
+    return `<section class="story" aria-label="Chapter in brief">
+      <p class="label">The chapter in brief · ${Math.max(1, Math.round(st.words / 238))} min</p>
+      <h2 class="headline">${st.headline}</h2>
+      <div class="minute"><span class="label">In one minute</span>${st.minute.map((p) => `<p>${p}</p>`).join("")}</div>
+      ${st.glance.length ? `<div class="glance"><span class="label">At a glance</span><div class="tbl"><table><thead><tr><th>When</th><th>Then</th><th>Claims</th></tr></thead><tbody>${st.glance.map((r) => `<tr><td>${r.when}</td><td>${r.then}</td><td class="ids">${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+      ${sec}
+      ${st.watch.length ? `<div class="watch"><span class="label">Watch out</span><ul>${st.watch.map((w) => `<li>${w}</li>`).join("")}</ul></div>` : ""}
+      <p class="to-ledger">Every claim in this chapter follows, in the order of the module (${f.claims.confirmed + f.claims.inferred + f.claims.gap} claims). Chips above open them in place.</p>
+    </section>`;
+  }
+  function figureShell(fg) {
+    return `<figure class="sfig" data-fig="${fg.id}"><div class="sfig-art"><p class="loading" style="padding:16px">Drawing…</p></div>
+      ${fg.steps.length ? `<div class="sfig-steps"><div class="controls"><span class="label">Step through</span><span style="display:flex;gap:6px"><button class="btn" data-act="prev" aria-label="Previous step">←</button><button class="btn" data-act="play">Play</button><button class="btn" data-act="next" aria-label="Next step">→</button></span></div>
+        <ol>${fg.steps.map((x, k) => `<li data-k="${k}"><b>${x.title}</b><span>${x.h}</span></li>`).join("")}</ol></div>` : ""}
+      <figcaption>${fg.title}</figcaption></figure>`;
+  }
+  const textW = (t, px = 12.5) => Math.ceil(String(t).length * px * 0.56) + 4;
+  const lbl = (t) => esc(String(t).replace(/`/g, ""));
+  async function drawFigure(fig, fg) {
+    const art = $(".sfig-art", fig);
+    let svg, geo;
+    if (fg.kind === "sequence") ({ svg, geo } = seqFigure(fg));
+    else ({ svg, geo } = await graphFigure(fg));
+    art.innerHTML = "";
+    art.appendChild(svg);
+    // claims behind any mark: click opens the first, hover shows all
+    $$("[data-ids]", svg).forEach((el) => {
+      el.addEventListener("click", () => { const ids = el.dataset.ids.split(","); if (ids[0]) location.hash = ids[0]; });
+    });
+    const items = $$(".sfig-steps li", fig);
+    if (!items.length) return;
+    let cur = -1, timer = null;
+    const token = $(".token", svg);
+    const set = (k) => {
+      if (k < 0 || k >= items.length) return;
+      cur = k;
+      items.forEach((li, j) => li.classList.toggle("on", j === k));
+      const t = fg.steps[k].target;
+      $$("[data-el]", svg).forEach((el) => el.classList.toggle("on", el.dataset.el === t));
+      $$("[data-el]", svg).forEach((el) => el.classList.toggle("dim", el.dataset.el !== t && !(t.includes(">") && t.split(">").includes(el.dataset.el))));
+      const path = $(`path[data-el="${t}"]`, svg);
+      if (path && token && motionOn()) {
+        const L = path.getTotalLength(), t0 = performance.now(), dur = 500 + L * 1.6, me = k;
+        const tick = (now) => {
+          if (cur !== me) return;
+          const q = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - q, 3), pt = path.getPointAtLength(e * L);
+          token.setAttribute("cx", pt.x); token.setAttribute("cy", pt.y); token.setAttribute("opacity", q < 1 ? "1" : "0");
+          if (q < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }
+    };
+    const stop = () => { clearInterval(timer); timer = null; const b = $('[data-act="play"]', fig); b.textContent = "Play"; b.setAttribute("aria-pressed", "false"); };
+    fig.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-act]");
+      const li = e.target.closest(".sfig-steps li");
+      if (li && !e.target.closest("a")) { stop(); set(+li.dataset.k); }
+      if (!b) return;
+      if (b.dataset.act === "prev") { stop(); set(Math.max(0, cur - 1)); }
+      if (b.dataset.act === "next") { stop(); set(cur + 1); }
+      if (b.dataset.act === "play") {
+        if (timer) return stop();
+        b.textContent = "Pause"; b.setAttribute("aria-pressed", "true");
+        set(cur >= items.length - 1 ? 0 : cur + 1);
+        timer = setInterval(() => (cur >= items.length - 1 ? stop() : set(cur + 1)), 2400);
+      }
+    });
+    cleanup.push(stop);
+  }
+  async function graphFigure(fg) {
+    const states = fg.kind === "states";
+    const nodes = fg.nodes.map((n) => {
+      const dec = /\?\s*$/.test(n.label);
+      return { id: n.id, width: Math.max(states ? 104 : 116, textW(n.label.replace(/`/g, "")) + (dec ? 48 : 30)), height: dec ? 52 : 40, dec, n };
+    });
+    const edges = fg.edges.map((e, k) => ({ id: `${e.a}>${e.b}#${k}`, sources: [e.a], targets: [e.b], e,
+      labels: e.label ? [{ id: `l${k}`, text: e.label, width: textW(e.label.replace(/`/g, ""), 11.5), height: 14 }] : [] }));
+    let g = null;
+    try {
+      const ELK = await loadELK();
+      g = await new ELK().layout({ id: "f", layoutOptions: {
+        "elk.algorithm": "layered", "elk.direction": "RIGHT", "elk.edgeRouting": "ORTHOGONAL",
+        "elk.layered.spacing.nodeNodeBetweenLayers": "56", "elk.spacing.nodeNode": "26", "elk.spacing.edgeLabel": "4",
+        "elk.edgeLabels.placement": "CENTER", "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.padding": "[top=16,left=16,bottom=16,right=16]",
+      }, children: nodes.map(({ id, width, height }) => ({ id, width, height })), edges: edges.map(({ id, sources, targets, labels }) => ({ id, sources, targets, labels })) });
+    } catch (e) { g = null; }
+    if (!g) {  // fallback: one row, straight edges
+      let x = 16;
+      g = { width: 0, height: 120, children: nodes.map((n) => { const c = { id: n.id, x, y: 30, width: n.width, height: n.height }; x += n.width + 60; return c; }), edges: [] };
+      g.width = x;
+      g.edges = edges.map((e) => { const A = g.children.find((c) => c.id === e.sources[0]), Bn = g.children.find((c) => c.id === e.targets[0]);
+        return { id: e.id, sections: [{ startPoint: { x: A.x + A.width, y: A.y + A.height / 2 }, endPoint: { x: Bn.x, y: Bn.y + Bn.height / 2 } }], labels: [] }; });
+    }
+    const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    let out = `<defs><marker id="fa-${fg.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>`;
+    g.edges.forEach((ge) => {
+      const sec = (ge.sections || [])[0];
+      if (!sec) return;
+      const meta = edges.find((x) => x.id === ge.id).e;
+      const pts = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint].map((q) => [q.x, q.y]);
+      const key = `${meta.a}>${meta.b}`;
+      out += `<path class="fe" data-el="${key}" data-ids="${meta.ids.join(",")}" d="${roundedPath(pts, 7)}" marker-end="url(#fa-${fg.id})"><title>${lbl(meta.label)}: ${meta.ids.join(", ")}</title></path>`;
+      (ge.labels || []).forEach((L) => { out += `<text class="fel" data-el="${key}" x="${L.x + L.width / 2}" y="${L.y + L.height - 3}" text-anchor="middle">${lbl(meta.label)}</text>`; });
+    });
+    g.children.forEach((c) => {
+      const n = byId[c.id];
+      const shape = n.dec
+        ? `<path d="M${c.x + 14},${c.y} L${c.x + c.width - 14},${c.y} L${c.x + c.width},${c.y + c.height / 2} L${c.x + c.width - 14},${c.y + c.height} L${c.x + 14},${c.y + c.height} L${c.x},${c.y + c.height / 2} Z"/>`
+        : `<rect x="${c.x}" y="${c.y}" width="${c.width}" height="${c.height}" rx="${states ? c.height / 2 : 8}"/>`;
+      out += `<g class="fn${n.dec ? " dec" : ""}" data-el="${c.id}" data-ids="${n.n.ids.join(",")}" tabindex="0">${shape}<text x="${c.x + c.width / 2}" y="${c.y + c.height / 2 + 4.5}" text-anchor="middle">${lbl(n.n.label)}</text><title>${lbl(n.n.label)}: ${n.n.ids.join(", ")}</title></g>`;
+    });
+    out += `<circle class="token" r="5.5" opacity="0"/>`;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${Math.ceil(g.width)} ${Math.ceil(g.height)}`);
+    svg.setAttribute("class", "sfig-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", fg.title.replace(/<[^>]+>/g, ""));
+    svg.style.maxWidth = Math.ceil(g.width * 1.15) + "px";
+    svg.innerHTML = out;
+    return { svg, geo: g };
+  }
+  function seqFigure(fg) {
+    const parts = fg.actors.length ? fg.actors : [...new Set(fg.edges.flatMap((e) => [e.a, e.b]))].map((id) => ({ id, label: id }));
+    const CW = Math.max(120, ...parts.map((p) => textW(p.label) + 26)), TOP = 54, RH = 46;
+    const W = parts.length * CW + 20, H = TOP + fg.edges.length * RH + 16;
+    const cx = (id) => parts.findIndex((p) => p.id === id) * CW + CW / 2 + 10;
+    let out = `<defs><marker id="fa-${fg.id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs>`;
+    parts.forEach((p) => { out += `<line class="life" x1="${cx(p.id)}" y1="${TOP - 6}" x2="${cx(p.id)}" y2="${H - 6}"/>`; });
+    fg.edges.forEach((e, k) => {
+      const y = TOP + k * RH + RH / 2 + 4, key = `${e.a}>${e.b}`;
+      if (e.a === e.b) {
+        const x = cx(e.a) + 4;
+        out += `<path class="fe" data-el="${key}" data-ids="${e.ids.join(",")}" d="M${x},${y - 10} C${x + 40},${y - 14} ${x + 40},${y + 10} ${x + 2},${y + 8}" marker-end="url(#fa-${fg.id})"/>`;
+        out += `<text class="fel" data-el="${key}" x="${x + 44}" y="${y + 3}">${lbl(e.label)}</text>`;
+      } else {
+        const dir = cx(e.b) > cx(e.a) ? 1 : -1, x1 = cx(e.a) + 4 * dir, x2 = cx(e.b) - 6 * dir;
+        out += `<path class="fe" data-el="${key}" data-ids="${e.ids.join(",")}" d="M${x1},${y} L${x2},${y}" marker-end="url(#fa-${fg.id})"><title>${lbl(e.label)}: ${e.ids.join(", ")}</title></path>`;
+        out += `<text class="fel" data-el="${key}" x="${(x1 + x2) / 2}" y="${y - 6}" text-anchor="middle">${lbl(e.label)}</text>`;
+      }
+    });
+    parts.forEach((p) => { out += `<g class="fn" data-el="${p.id}" data-ids=""><rect x="${cx(p.id) - CW / 2 + 8}" y="6" width="${CW - 16}" height="32" rx="8"/><text x="${cx(p.id)}" y="26.5" text-anchor="middle">${lbl(p.label)}</text></g>`; });
+    out += `<circle class="token" r="5.5" opacity="0"/>`;
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("class", "sfig-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", fg.title.replace(/<[^>]+>/g, ""));
+    svg.style.maxWidth = Math.ceil(W * 1.15) + "px";
+    svg.innerHTML = out;
+    return { svg, geo: null };
+  }
+
   async function renderChapter(slug) {
     const f = fileMeta(slug);
     const F = await loadFile(slug);
@@ -520,7 +677,9 @@
     const secId = (s) => `sec-${(n++)}-${s.id}`;
     const ids = secs.map(secId);
     const chapNo = order.filter((x) => x.kind === "module").findIndex((x) => x.slug === slug) + 1;
-    const toc = secs.map((s, k) => `<a href="#${ids[k]}" data-sec="${ids[k]}" class="${s.level > 2 ? "sub" : ""}">${esc(s.title.replace(/`/g, ""))}</a>`).join("");
+    const st = F.story;
+    const toc = (st ? `<a href="#story-top" data-sec="story-top">In brief</a>${st.sections.map((x, k) => `<a href="#story-${k}" data-sec="story-${k}" class="sub">${esc(x.plain)}</a>`).join("")}<div class="label" style="padding:14px 8px 8px">Ledger</div>` : "")
+      + secs.map((s, k) => `<a href="#${ids[k]}" data-sec="${ids[k]}" class="${s.level > 2 ? "sub" : ""}">${esc(s.title.replace(/`/g, ""))}</a>`).join("");
     const body = secs.map((s, k) => {
       const h = s.level === 2 ? `<h2 id="${ids[k]}">${s.th}</h2>` : `<h3 id="${ids[k]}">${s.th}</h3>`;
       return (s.level === 2 ? `</section><section class="sec">` : "") + h + s.blocks.map((b) => blockHTML(b, F)).join("");
@@ -541,6 +700,7 @@
           ${usedBy.length ? `<div class="neighbors"><span>Cited by</span>${usedBy.map((l) => `<a href="#${l.from}" title="${l.n} citations">${esc(nameOf(l.from))}</a>`).join("")}</div>` : ""}
           ${f.scope ? `<details class="scope"><summary>${f.scope.length} source files in scope</summary>${f.scope.map(esc).join("<br>")}</details>` : ""}
         </header>
+        ${st ? `<div id="story-top">${storyHTML(st, f)}</div>` : ""}
         <section class="sec">${body}</section>
         <nav class="pager">${prev ? `<a href="#${prev.slug}"><span>Previous</span><b>${esc(shortTitle(prev))}</b></a>` : "<span></span>"}${next ? `<a href="#${next.slug}"><span>Next</span><b>${esc(shortTitle(next))}</b></a>` : ""}</nav>
       </article></div>`;
@@ -552,7 +712,11 @@
     const io = new IntersectionObserver((ents) => {
       ents.forEach((e) => { if (e.isIntersecting) links.forEach((a) => a.classList.toggle("on", a.dataset.sec === e.target.id)); });
     }, { rootMargin: "-80px 0px -70% 0px" });
-    $$("h2[id], h3[id]", view).forEach((h) => io.observe(h));
+    $$("h2[id], h3[id], #story-top, .st-sec[id]", view).forEach((h) => io.observe(h));
+    if (st) {
+      const figs = st.sections.flatMap((x) => x.blocks.filter((b) => b.t === "fig"));
+      for (const fg of figs) { const el = $(`.sfig[data-fig="${fg.id}"]`, view); if (el) drawFigure(el, fg); }
+    }
     cleanup.push(() => io.disconnect());
     $$(".toc a", view).forEach((a) => a.addEventListener("click", (e) => { e.preventDefault(); document.getElementById(a.dataset.sec)?.scrollIntoView({ behavior: motionOn() ? "smooth" : "auto" }); }));
   }

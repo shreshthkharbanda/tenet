@@ -300,6 +300,29 @@ user in the format of `references/validation.md` section 6: verdict line, per-mo
 gaps, open questions, cost spent, limitations (section 7, stated plainly), and `specs/INDEX.md` as the
 entry point. Do not commit; say the specs are uncommitted and offer to.
 
+## Phase 9: reader site (M narrators, gate G8, then the site)
+
+The specs are the source of truth; the site is how people read them. A module spec is a ledger of
+hundreds of claims, which nobody reads front to back. Each module gets a **story** written over its
+ledger (`references/story.md`): the thesis, the module in one minute, a When/Then table, three to six
+illustrated sections and the traps. Every sentence cites the claims it rests on, and G8 rejects any
+name or number those claims or their code do not contain, so a story selects and explains but never
+adds. The site shows the story above the ledger, and every claim opens onto the lines it cites.
+```
+python3 $SKILL_DIR/scripts/render_briefs.py --role narrator --all-modules --specs $SPECS --repo $REPO --scratch $SCRATCH
+# dispatch one narrator per module (queue as usual); each runs check_story.py until it passes
+python3 $SKILL_DIR/scripts/check_story.py $SPECS                       # G8 over every story
+python3 $SKILL_DIR/scripts/build_site.py $SPECS --out $SCRATCH/site    # data/ + index.html
+```
+A story that fails G8 is left out of the site (the chapter shows its ledger only) and reported.
+Before anyone reviews from the site, run the story audit in `references/audit.md` (a story judge per
+module checks sentences against the claims they cite; story-only readers answer the held-out probes,
+and a story that leads a reader to a contradicted answer goes back to its narrator).
+To publish: where the host offers a page publisher, publish `site/index.html` with every
+`site/data/*.json` as supporting files (relative `fetch` loads them); elsewhere build with
+`--standalone` and serve the folder over HTTP. Rebuild the site after every revision round: it is
+compiled from the specs and never edited by hand.
+
 ## Operating rules
 
 - **Scripts over summaries.** A worker's reply is a claim. `gate.py` is evidence. The files are truth.
@@ -336,14 +359,17 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
 - `references/validation.md`: gates, thresholds, probe loop, rebuild loop, spot checks, final report,
   limitations.
 - `references/research-basis.md`: which paper each rule comes from and what it found.
+- `references/story.md`: the chapter story format, writing rules, figure syntax and gate G8.
+- `assets/site/`: the reader site (index.html template, CSS, JS) that `build_site.py` inlines.
 - `references/learnings.md`: every failure class found in real runs and grading, and the fix that
   removed it. Read before changing this skill; run `scripts/selftest.py` after changing any script.
 - `scripts/`: stdlib Python 3.9+, deterministic, each prints a one-line summary to stderr.
   Planning: `inventory.py`, `split_file.py`, `check_shards.py`, `changed_modules.py`.
   Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
-  Gates: `lint_specs.py`, `coverage.py`, `check_ownership.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
+  Gates: `lint_specs.py`, `check_coverage.py`, `check_ownership.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
   Reconcile: `find_overlaps.py`, `apply_claim_edits.py`, `collect_defects.py`.
   Revise: `build_revise.py`, `correct_probe.py`.
   Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
   Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`, `collect_defects.py`.
+  Reader site: `check_story.py` (G8), `site_data.py`, `build_site.py`.
   Gate regression tests: `selftest.py`.

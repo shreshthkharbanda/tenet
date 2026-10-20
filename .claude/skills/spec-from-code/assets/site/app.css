@@ -350,3 +350,51 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .drawer .tools-m { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 8px 2px; border-top: 1px solid var(--rule); margin-top: 6px; }
 @media (min-width: 901px) { .drawer .tools-m { display: none; } }
 @media (max-width: 900px) { .bar .tools #t-font, .bar .tools #t-theme, .bar .tools #t-motion { display: none; } .brand { flex: 1; } }
+
+/* chapter story */
+.story { max-width: 980px; margin: 22px 0 10px; padding: 26px 28px 20px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; }
+@media (max-width: 640px) { .story { padding: 18px 16px 14px; margin-inline: -4px; } }
+.story .headline { font-size: clamp(1.35rem, 2.6vw, 1.75rem); font-weight: 800; margin: 8px 0 16px; max-width: 30ch; }
+.story p, .story li { max-width: var(--measure); }
+.story .minute { border-left: 4px solid var(--accent); padding: 2px 0 2px 16px; margin: 0 0 22px; font-size: 1.04em; }
+.story .minute .label { display: block; margin-bottom: 6px; }
+.story .minute p { margin: 0 0 10px; }
+.story .glance { margin: 0 0 8px; }
+.story .glance .label { display: block; margin-bottom: 8px; }
+.story .glance .tbl { max-width: none; }
+.story .glance td { font: 400 0.9rem/1.5 var(--body); }
+.story .glance td:first-child { font-weight: 600; width: 42%; }
+.story .glance td.ids { white-space: normal; width: 7.5rem; }
+.story .glance td.ids .xr { display: inline-block; margin: 0 4px 4px 0; }
+.st-sec { margin-top: 28px; }
+.st-sec h3 { font-size: 1.18rem; font-weight: 800; margin: 0 0 10px; }
+.st-sec p { margin: 0 0 12px; }
+.st-sec ul { padding-left: 1.2em; }
+.watch { margin-top: 28px; padding: 14px 18px 6px; border-radius: 12px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); }
+.watch .label { color: var(--warn); }
+.watch ul { margin: 8px 0 8px; padding-left: 1.2em; }
+.watch li { margin: 0 0 8px; }
+.to-ledger { margin: 22px 0 0; font: 600 0.84rem/1.4 var(--display); color: var(--muted); }
+.sfig { margin: 16px 0 18px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1fr); } }
+.sfig-art { overflow-x: auto; min-width: 0; }
+.sfig-svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+.sfig figcaption { grid-column: 1 / -1; font: 600 0.8rem/1.4 var(--display); color: var(--muted); }
+.sfig .fn rect, .sfig .fn path { fill: var(--sheet); stroke: var(--ink-2); stroke-width: 1.4; transition: stroke 0.2s, fill 0.2s, opacity 0.2s; }
+.sfig .fn.dec path { fill: var(--warn-soft); }
+.sfig .fn text { fill: var(--ink); font: 700 12.5px var(--display); pointer-events: none; }
+.sfig .fn { cursor: pointer; transition: opacity 0.2s; }
+.sfig .fe { fill: none; stroke: var(--muted); stroke-width: 1.6; cursor: pointer; transition: stroke 0.2s, opacity 0.2s; }
+.sfig .fel { fill: var(--ink-2); font: 600 11.5px var(--display); paint-order: stroke; stroke: var(--paper); stroke-width: 4px; }
+.sfig .life { stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.sfig .on rect, .sfig .on path, .sfig g.on > path { stroke: var(--accent); stroke-width: 2.4; fill: var(--accent-soft); }
+.sfig path.fe.on { stroke: var(--accent); stroke-width: 2.8; fill: none; }
+.sfig .fel.on { fill: var(--accent); }
+.sfig .dim { opacity: 0.4; }
+.sfig .token { fill: var(--accent); stroke: var(--sheet); stroke-width: 2; }
+.sfig-steps .controls { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.sfig-steps ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.sfig-steps li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border-left: 3px solid var(--rule); cursor: pointer; font: 400 0.86rem/1.5 var(--body); }
+.sfig-steps li b { font: 700 0.84rem/1.3 var(--display); }
+.sfig-steps li.on { background: var(--accent-soft); border-left-color: var(--accent); }
