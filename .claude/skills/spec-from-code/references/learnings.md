@@ -407,3 +407,16 @@ run the declared test command to confirm a behaviour. Fix: a reviser edits only 
 any fix to a shared file goes into `decisions-revise-<module>-round-<n>.jsonl` rows that the
 single-writer `apply_claim_edits.py` applies after all revisers finish. Every brief that may execute
 code now receives `{{RUN_ENV}}`.
+
+**L56. Pointers were trusted by shape, not by target.** Found: preparing the LiteLLM cross-cutting
+rewrite. Three related holes: (a) the ownership gate accepted any `[ID]` in a claim as a hand-off, so
+46 cross-cutting claims passed G6 by pointing at another cross-cutting claim or an unrelated module;
+(b) `lint_specs.py --only` downgraded an unresolved pointer to a warning, so a worker linting its own
+file could leave pointers dangling; (c) regenerating a cross-cutting file from scratch would drop claim
+IDs that module files and answers point to. Fix: G6 counts a pointer only when it names a claim of a
+module that owns the cited lines; cross-references from the linted files resolve against every spec
+file even under `--only`; a cross-cutting rewrite converts the file in place and never deletes or
+renumbers an ID (a superseded claim becomes a pointer that keeps its ID and refs). The blind judge
+audit in the same round (37/40 reproduced, no leniency) added one checklist item: a validation
+library's exact error text and coercions (pydantic turning `12` into `12.0` in a timeout message) are
+caller-visible behavior; run the validator once and copy the text.

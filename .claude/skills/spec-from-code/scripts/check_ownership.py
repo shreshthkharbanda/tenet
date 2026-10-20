@@ -3,8 +3,10 @@
 
 Every in-scope line is owned by exactly one module (G1). A claim whose refs cite lines owned by module M
 should live in M's spec, or point to M's claim with a cross-reference [M-NNN]. This gate counts:
-  - restated: cross-cutting claims (01-04, 00) citing module-owned lines with no [ID] pointer
+  - restated: cross-cutting claims (01-04, 00) citing module-owned lines with no [ID] pointer to a
+    claim of a module that owns those lines
   - foreign: module claims whose every line ref falls in another module's lines, with no [ID] pointer
+    to a claim of that module
 Pointer claims (containing [ID]) and claims citing only out-of-scope code are fine.
 
 Usage: check_ownership.py <specs_dir> --repo <root> [--max-restated 0.2] [--max-foreign 0.1]
@@ -46,6 +48,15 @@ def main() -> int:
         lo, hi = int(m.group(2)), int(m.group(3) or m.group(2))
         return {mid for a_, b_, mid in spans if not (hi < a_ or lo > b_)}
 
+    # which module's spec defines each claim ID: a pointer counts only if it names a claim of a module
+    # that owns the cited lines (a pointer to another cross-cutting claim, or to an unrelated module, is
+    # not a hand-off to the owner)
+    id_module: dict[str, str] = {}
+    for fp in sorted(specs.glob("modules/*.md")):
+        fm, body = parse_frontmatter(fp.read_text(encoding="utf-8", errors="replace"))
+        for c in parse_claims(body):
+            id_module[c["id"]] = fm.get("module")
+
     report, fails = {}, []
     for fp in sorted(specs.glob("modules/*.md")) + sorted(specs.glob("0*.md")):
         fm, body = parse_frontmatter(fp.read_text(encoding="utf-8", errors="replace"))
@@ -54,13 +65,13 @@ def main() -> int:
         claims = [c for c in parse_claims(body) if c["section"] not in ("Open questions and gaps", "Suspected defects")]
         flagged = []
         for c in claims:
-            if XREF_RE.search(c["text"]):
-                continue  # a pointer, by construction
             os_ = set()
             for r in c["refs"]:
                 os_ |= owners(r)
             if not os_:
                 continue  # cites only out-of-scope code: nobody else owns it
+            if any(id_module.get(x) in os_ - {mine} for x in XREF_RE.findall(c["text"])):
+                continue  # points to a claim of a module that owns the cited lines
             if mine is None and os_:
                 flagged.append(c["id"])  # cross-cutting restating module-owned behavior
             elif mine is not None and mine not in os_:

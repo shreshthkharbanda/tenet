@@ -193,6 +193,11 @@ writing rules, and the template for {{XC_FILE}}; copy its frontmatter and headin
 {{REFS}}/implicit-decisions.md.
 
 How to write it:
+0. If {{SPECS}}/{{XC_FILE}} already exists, it is an earlier version: convert it rather than starting
+   over. Never delete or renumber a claim ID: other files and answers point to them, and the full lint
+   fails on a dangling pointer. A claim whose fact a module claim owns becomes a pointer that keeps its
+   ID and refs, e.g. "- [CFG-123] {confirmed} `path:10-20` Fallback depth is specified in [FAIL-045]."
+   Keep a claim as it is only when no module claim states its fact.
 1. Read the module specs under {{SPECS}}/modules/ (their Public surface, Configuration, State and data,
    and Error handling sections first). Build the index the template asks for (entry points, error
    catalog, settings, stores...), with one row per item and, in each row, the module claim IDs that

@@ -147,6 +147,12 @@ def main() -> int:
                    "does not parse", "does not resolve", "credential literal"):
         check(f"G2 catches: {needle}", rc == 1 and needle in out, out)
     (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
+    # L56: --only still resolves pointers against every file and fails a dangling one
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a + "See [BIGB-002] and [BIGB-999].\n"))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo), "--only", "modules/big-a.md")
+    check("L56 --only resolves pointers into other files, fails a dangling one",
+          rc == 1 and "[BIGB-999] does not resolve" in out and "[BIGB-002]" not in out, out)
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
 
     from _common import parse_claims
     pc = parse_claims("- [AB-001] {confirmed} `pkg/a.py:1-2`, `pkg/b.py::X` `add` returns `3`.\n"
@@ -182,12 +188,14 @@ def main() -> int:
     # L36: ownership gate: cross-cutting restatement fails, pointers pass
     xc = ("---\nkind: config\nprefix: CFG\ncommit: " + head + "\nstatus: draft\n---\n# Config\n\n## Settings\n"
           "- [CFG-001] {confirmed} `pkg/small.py:1-2` `add` sums its arguments without checks.\n"
-          "- [CFG-002] {confirmed} `pkg/small.py:1-2` `add` behavior is specified in [BIGB-001].\n\n## Precedence\nNone.\n")
+          "- [CFG-002] {confirmed} `pkg/small.py:1-2` `add` behavior is specified in [BIGB-001].\n"
+          "- [CFG-003] {confirmed} `pkg/small.py:1-2` `add` sums its arguments, as in [CFG-001].\n\n## Precedence\nNone.\n")
     (specs / "03-config.md").write_text(xc)
     rc, out = run("check_ownership.py", str(specs), "--repo", str(repo), "--max-restated", "0.4")
     own_r = json.loads((meta / "ownership.json").read_text())
-    check("L36 restating module lines without a pointer is counted", own_r["03-config.md"]["flagged"] == 1
-          and own_r["03-config.md"]["ids"] == ["CFG-001"] and rc == 1, out)
+    check("L36 restating module lines without a pointer to the owner is counted (L56: a pointer to a "
+          "cross-cutting claim is not a hand-off)", own_r["03-config.md"]["flagged"] == 2
+          and own_r["03-config.md"]["ids"] == ["CFG-001", "CFG-003"] and rc == 1, out)
     (specs / "03-config.md").unlink()
 
     # L08: freshness is per cited file

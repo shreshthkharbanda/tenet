@@ -208,15 +208,18 @@ def main() -> int:
         per_file[relp] = {"kind": kind, "prefix": prefix, "module": fm.get("module"), "status": fm.get("status"),
                           "claims": counts, "total_claims": len(claims)}
 
-    # cross-refs
+    # cross-refs from the linted files resolve against every spec file, so --only no longer turns a
+    # dangling pointer into a warning; pointers into a rewritten file are caught by the full lint (L56)
+    known = set(all_ids)
+    for fp in sorted(p for p in specs.rglob("*.md") if "_meta" not in p.relative_to(specs).parts):
+        if fp not in files:
+            known |= {c["id"] for c in parse_claims(fp.read_text(encoding="utf-8", errors="replace"))}
     for fp in files:
         relp = fp.relative_to(specs).as_posix()
         body = fp.read_text(encoding="utf-8", errors="replace")
-        own = {c["id"] for c in claims_by_file.get(relp, [])}
-        for xid in set(XREF_RE.findall(body)):
-            if xid not in all_ids and xid not in own:
-                msg = f"{relp}: cross-reference [{xid}] does not resolve to any claim"
-                (warnings if args.only else errors).append(msg + (" (unverifiable with --only)" if args.only else ""))
+        for xid in sorted(set(XREF_RE.findall(body))):
+            if xid not in known:
+                errors.append(f"{relp}: cross-reference [{xid}] does not resolve to any claim")
 
     report = {"errors": errors, "warnings": warnings, "files": per_file, "total_claims": len(all_ids), "head": head}
     if args.out:

@@ -66,6 +66,9 @@ The rule that makes this work: **absence of a safeguard is a behavior.** "No tim
   generated tables): every one, with where it is bound.
 - Wire formats, field order where it matters, versioning, deprecations still honored.
 - Library behaviors that leak through (hash algorithms and costs, serialization quirks, default headers).
+- Validation-library output a caller sees: the exact error text a schema or validation library
+  produces for each invalid input this code accepts, and its coercions (int to float, str to int,
+  tuple to list) that show up in later messages or values. Run the validator once and copy the text.
 - Exit codes, signals handled, stdout vs stderr.
 
 ## Resource limits
