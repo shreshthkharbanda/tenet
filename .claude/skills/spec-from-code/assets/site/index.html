@@ -13,6 +13,7 @@
       <a href="#">Overview</a><a href="#paths">Paths</a><a href="#chapters">Chapters</a><a href="#defects">Defects</a><a href="#glossary">Glossary</a>
     </nav>
     <div class="tools">
+      <span class="lens" role="group" aria-label="Reading level"><button data-lens-set="everyone" aria-pressed="false" title="Plain words and pictures, no code">Everyone</button><button data-lens-set="engineer" aria-pressed="true" title="Adds how it works and the names it goes by">Engineer</button><button data-lens-set="expert" aria-pressed="false" title="Adds every claim and the code it cites">Expert</button></span>
       <button class="btn search-btn" id="t-search" aria-label="Search claims"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="t">Search claims</span><kbd>/</kbd></button>
       <button class="btn" id="t-font" aria-pressed="false" title="Switch between serif and sans body text">Aa serif</button>
       <button class="btn" id="t-theme" title="Theme: auto, light, dark">Auto</button>
@@ -22,6 +23,7 @@
   </div>
 </header>
 <nav class="drawer" id="drawer" hidden aria-label="Book"><a href="#">Overview</a><a href="#paths">Paths</a><a href="#chapters">Chapters</a><a href="#defects">Defects</a><a href="#glossary">Glossary</a>
+  <span class="lens" role="group" aria-label="Reading level"><button data-lens-set="everyone" aria-pressed="false">Everyone</button><button data-lens-set="engineer" aria-pressed="true">Engineer</button><button data-lens-set="expert" aria-pressed="false">Expert</button></span>
   <div class="tools-m"><button class="btn" data-proxy="t-font">Serif / sans</button><button class="btn" data-proxy="t-theme">Theme</button><button class="btn" data-proxy="t-motion">Motion</button></div></nav>
 <main id="view" class="view"><p class="loading">Loading the book…</p></main>
 <footer class="foot" id="foot"></footer>

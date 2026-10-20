@@ -647,29 +647,71 @@ def main() -> int:
     (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks))
     sdir = meta / "story"
     sdir.mkdir(parents=True, exist_ok=True)
-    good_story = (f"---\nmodule: big-a\n---\n# Big keeps its state and each method compares with its own bound\n\n@minute\n"
-                  f"`Big` stores `1` in `x` when it is built [BIGA-001]. Method `m{k}` returns `v - {k}` above `{k}` [BIGA-002]. "
-                  f"The other methods follow the same rule [BIGA-010].\n\n"
-                  f"## Construction always stores one value\n`Big` stores `1` in `x` [BIGA-001].\n\n"
-                  f"@figure flow id=m-rule title=\"How a method picks its result\"\n| node in | Input v | BIGA-002 |\n"
-                  f"| node test | v above bound? | BIGA-002 |\n| node out | Return result | BIGA-002 |\n| in > test | compare | BIGA-002 |\n"
-                  f"| test > out | yes | BIGA-002 |\n\n@steps m-rule\n| test | v above bound? | Method `m{k}` compares `v` with `{k}` [BIGA-002]. |\n"
-                  f"| test>out | Return result | It returns `v - {k}` [BIGA-002]. |\n\n"
-                  f"## Each method returns v minus its index above the bound\nMethod `m{k}` returns `v - {k}` when v exceeds `{k}` [BIGA-002].\n\n"
+    good_story = (f"---\nmodule: big-a\n---\n# Big keeps one stored value and each method compares with its own bound\n\n@plain\n"
+                  f"A Big object remembers one number from the moment it is made [BIGA-001]. Each of its methods takes a number and "
+                  f"compares it with a bound of its own [BIGA-002]. When the number is above the bound, the method gives back the "
+                  f"difference, and otherwise it gives back the bound [BIGA-002]. The later methods follow the same rule [BIGA-010].\n\n"
+                  f"@minute\nA Big object stores `1` in its stored value when it is built, and keeps it for its whole life [BIGA-001]. "
+                  f"Method `m{k}` compares the number it gets with its bound and gives back the difference when the number is larger, "
+                  f"or the bound when it is not [BIGA-002]. Every later method in the class follows the same rule with its own bound [BIGA-010].\n\n"
+                  f"## Words you'll see\n| Term | Means | In the code | Claims |\n| --- | --- | --- | --- |\n"
+                  f"| Big object | the class this chapter describes | `Big` | BIGA-001 |\n| stored value | the number a Big object keeps | `x` | BIGA-001 |\n"
+                  f"| method with bound {k} | one of the comparing methods | `m{k}` | BIGA-002 |\n| the result | what the method gives back | `v - {k}` | BIGA-002 |\n\n"
+                  f"## Construction always stores one value\nWhen a Big object is built, it puts the number `1` into its stored value, `x` [BIGA-001]. "
+                  f"Nothing in the class changes that number afterwards [BIGA-001]. So every object starts and stays the same [BIGA-001].\n\n"
+                  f"@figure flow id=m-rule title=\"How a method picks its result\"\n| node in | Input number | BIGA-002 |\n"
+                  f"| node test | Above the bound? | BIGA-002 |\n| node out | Return the difference | BIGA-002 |\n| in > test | compare | BIGA-002 |\n"
+                  f"| test > out | yes | BIGA-002 |\n\n@steps m-rule\n| test | Above the bound? | The method compares the number with its bound [BIGA-002]. |\n"
+                  f"| test>out | Return the difference | It gives back the number minus the bound [BIGA-002]. |\n\n"
+                  f"## Each method returns the number minus its bound above the bound\nThe method with bound `{k}` looks at the number it is given [BIGA-002]. "
+                  f"It gives back the number minus that bound, written `v - {k}`, when the number is larger [BIGA-002]. "
+                  f"For any smaller number it gives back the bound itself [BIGA-002].\n\n"
+                  f"@figure timeline id=ex title=\"Example: one object, two calls\"\n| lane obj | The object |\n"
+                  f"| 0s | obj | made | holds one | BIGA-001 |\n| 1s | obj | method called | answered | BIGA-002 |\n\n"
                   f"## The later methods follow the same rule\nEvery method in a chunk follows that rule [BIGA-010].\n\n"
-                  f"## Watch out\n- `Big` keeps `x` at `1` [BIGA-001].\n")
+                  f"## Watch out\n- A Big object always starts with the number one [BIGA-001].\n")
     (sdir / "big-a.md").write_text(good_story)
     rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
-    check("L72 a story that cites real claims and their literals passes G8", rc == 0 and "0 errors" in out, out)
-    bad_story = (good_story.replace("[BIGA-010].\n\n## Construction", "[BIGA-010]. The cache holds `9999` entries [BIGA-001].\n\n## Construction")
+    check("L72 a story that cites real claims and their literals passes G8", rc == 0 and ": 0 errors" in out, out)
+    bad_story = (good_story.replace("[BIGA-010].\n\n## Words", "[BIGA-010]. The cache holds `9999` entries [BIGA-001].\n\n## Words")
                  .replace("| in > test | compare | BIGA-002 |", "| in > test | compare | |")
-                 .replace("| test>out | Return result |", "| test>gone | Return result |")
-                 .replace("## Watch out\n- `Big` keeps `x` at `1` [BIGA-001].", "## Watch out\n- It retries 3 times.\n- See [BIGA-777]."))
+                 .replace("| test>out | Return the difference |", "| test>gone | Return the difference |")
+                 .replace("## Watch out\n- A Big object always starts with the number one [BIGA-001].", "## Watch out\n- It retries 3 times.\n- See [BIGA-777]."))
     (sdir / "big-a.md").write_text(bad_story)
     rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
     check("L72 G8 catches an invented value, an uncited edge, a dangling step, an uncited number and an unknown ID",
           rc == 1 and "states 9999 found in neither" in out and "edge in>test cites no claim" in out
           and "targets test>gone" in out and "cites no claim: It retries 3 times." in out and "unknown claim BIGA-777" in out, out)
+    # L75: the readability standard: no code in the Everyone layer, every code name bridged to a plain term,
+    # acronyms spelled out, timelines move forward and are labelled as examples
+    worse = (good_story.replace("| node out | Return the difference |", "| node out | Return `v - 1` |")
+             .replace("Every method in a chunk follows that rule [BIGA-010].", "Every method in a chunk calls `big_helper` [BIGA-010].")
+             .replace("- A Big object always starts with the number one [BIGA-001].", "- A Big object keeps its TPM at one [BIGA-001].")
+             .replace("| 1s | obj | method called |", "| 0.5s | obj | method called |").replace("| 0s | obj | made |", "| 2s | obj | made |")
+             .replace('title=\"Example: one object, two calls\"', 'title=\"One object, two calls\"'))
+    (sdir / "big-a.md").write_text(worse)
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L75 G8 enforces the layers: code in a figure, an undefined code name, an unexplained acronym, a backwards untitled timeline",
+          rc == 1 and "uses code formatting" in out and "`big_helper` is not defined in Words you'll see" in out
+          and "acronym TPM is never spelled out" in out and "events go back in time" in out and 'starts with "Example:"' in out, out)
+    (specs / "00-overview.md").write_text("---\nkind: overview\nprefix: SYS\ncommit: " + head + "\nstatus: draft\n---\n# X: overview\n\n"
+                                          "## Main paths\n\n### 1. One call\n1. The object is made [BIGA-001].\n2. A method runs [BIGA-002].\n")
+    sys_story = ("---\nmodule: _system\n---\n# Big objects remember a number and compare others with it\n\n@plain\n"
+                 "A Big object remembers one number from the moment it is made [BIGA-001]. Its methods compare any number they get with "
+                 "a bound of their own and give back the difference when the number is larger [BIGA-002]. Each method has a different "
+                 "bound, so the same number can give different answers from different methods [BIGA-002]. Nothing else changes inside "
+                 "the object, and the later methods follow the same rule [BIGA-010].\n\n## What happens when a method is called\nFirst the object exists, then a method answers [BIGA-002].\n\n"
+                 "@path flow-one-call\n| 1 | The object is made and keeps the number one [BIGA-001]. |\n\n"
+                 "## The later methods follow the same rule\nEach later method behaves the same way [BIGA-010].\n\n"
+                 "## Watch out\n- The number is always one at the start [BIGA-001].\n")
+    (sdir / "_system.md").write_text(sys_story)
+    rc, out = run("check_story.py", str(specs), "--module", "_system", "--repo", str(repo))
+    check("L75 the system story must give every step of every main path", rc == 1 and "@path flow-one-call has steps [1]; the path has 2" in out, out)
+    (sdir / "_system.md").write_text(sys_story.replace("[BIGA-001]. |\n\n## The later", "[BIGA-001]. |\n| 2 | A method compares a number with its bound [BIGA-002]. |\n\n## The later"))
+    rc, out = run("check_story.py", str(specs), "--module", "_system", "--repo", str(repo))
+    check("L75 a complete system story passes", rc == 0, out)
+    (sdir / "_system.md").unlink()
+    (specs / "00-overview.md").unlink()
     site = tmp / "site"
     rc, out = run("site_data.py", str(specs), "--out", str(site), "--repo", str(repo))
     fa = json.loads((site / "data" / "f-modules-big-a.json").read_text())

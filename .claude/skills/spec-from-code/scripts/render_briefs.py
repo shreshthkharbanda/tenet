@@ -124,8 +124,8 @@ def main() -> int:
             vals = base | {"SLICE": f"{lo}-{hi}", "SLICE_NAME": f"{k:02d}"}
             rendered.append((role, f"slice-{k:02d}", out_dir / f"pairjudge-{k:02d}.md", fill(blocks[role], vals, must)))
         (meta / "reconcile").mkdir(parents=True, exist_ok=True)
-    elif role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
-        name = f"audit-{role}-round-{args.round}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
+    elif role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker", "system-narrator"):
+        name = f"audit-{role}-round-{args.round}.md" if role not in ("surveyor", "reconciler", "system-narrator") else f"{role}.md"
         dest = out_dir / name
         if role == "control":  # the control may read only its own directory, so its brief lives there
             dest = Path(base["CONTROL_DIR"]).resolve() / "_brief.md" if "CONTROL_DIR" in base else dest
@@ -168,6 +168,12 @@ def main() -> int:
             vals = base | {"MODULE_ID": mid, "PREFIX": m["prefix"], "MODULE_NAME": m.get("name", mid),
                            "GLOBS": ", ".join(m.get("globs", [])), "FILES": files, "TEST_FILES": tlist,
                            "SCOPE_NOTE": note}
+            if role == "narrator":
+                # a story judge's rows (spec-side; never probe content) on this module's previous story
+                prev = meta / "audit" / "story" / f"{mid}.jsonl"
+                vals["AUDIT_NOTES"] = (f"A story judge labelled every sentence of this module's previous story against its claims: "
+                                       f"{prev}. Read it. Every overstated or distorted row is a mistake your rewrite must not "
+                                       f"repeat; the note says what the claims actually say." if prev.exists() else "")
             if role == "answerer":
                 if not args.snapshot:
                     raise SystemExit("--snapshot required for answerer")

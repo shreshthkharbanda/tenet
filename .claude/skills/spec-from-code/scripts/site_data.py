@@ -166,16 +166,29 @@ def render_story(st: dict) -> dict:
         return {"kind": f["kind"], "id": f["id"], "title": html.escape(f["title"]),
                 "nodes": [{"id": n["id"], "label": n["label"], "ids": n["ids"]} for n in f["nodes"]],
                 "actors": [{"id": a["id"], "label": a["label"]} for a in f["actors"]],
+                "lanes": [{"id": x["id"], "label": x["label"]} for x in f.get("lanes", [])],
+                "events": [{"time": e["time"], "t": e["t"], "lane": e["lane"], "label": e["label"], "state": e["state"],
+                            "ids": e["ids"]} for e in f.get("events", [])],
                 "edges": [{"a": e["a"], "b": e["b"], "label": e["label"], "ids": e["ids"]} for e in f["edges"]],
                 "steps": [{"target": x["target"], "title": html.escape(x["title"]), "h": inline(x["md"]), "ids": x["ids"]} for x in f["steps"]]}
+
+    def block(b):
+        if b["t"] == "p":
+            return {"t": "p", "h": inline(b["md"])}
+        if b["t"] == "ul":
+            return {"t": "ul", "items": [{"h": inline(x)} for x in b["items"]]}
+        if b["t"] == "path":
+            return {"t": "path", "flow": b["flow"], "steps": [{"n": x["n"], "h": inline(x["md"])} for x in b["steps"]]}
+        return {"t": "fig", **fig(b)}
     return {
-        "headline": inline(st["headline"]), "minute": [inline(p) for p in st["minute"]],
+        "headline": inline(st["headline"]), "plain": [inline(p) for p in st.get("plain", [])],
+        "minute": [inline(p) for p in st["minute"]],
+        "words": [{"term": inline(r["term"]), "means": inline(r["means"]), "code": inline(r["code"]), "ids": r["ids"]}
+                  for r in st.get("words_table", [])],
         "glance": [{"when": inline(r["when"]), "then": inline(r["then"]), "ids": r["ids"]} for r in (st["glance"] or {}).get("rows", [])],
-        "sections": [{"title": inline(sec["title"]), "plain": plain(sec["title"]),
-                      "blocks": [{"t": "p", "h": inline(b["md"])} if b["t"] == "p" else
-                                 {"t": "ul", "items": [{"h": inline(x)} for x in b["items"]]} if b["t"] == "ul" else
-                                 {"t": "fig", **fig(b)} for b in sec["blocks"]]} for sec in st["sections"]],
-        "watch": [inline(x) for x in st["watch"]], "words": st["words"],
+        "sections": [{"title": inline(sec["title"]), "plain": plain(sec["title"]), "blocks": [block(b) for b in sec["blocks"]]}
+                     for sec in st["sections"]],
+        "watch": [inline(x) for x in st["watch"]], "words_n": st["words"],
     }
 
 
@@ -293,7 +306,9 @@ def main() -> int:
                 book["files"][-1]["story_errors"] = len(r["errors"])
             else:
                 story = render_story(r["story"])
-                book["files"][-1]["story"] = {"words": r["stats"]["words"], "figures": r["stats"]["figures"]}
+                book["files"][-1]["story"] = {"words": r["stats"]["words"], "figures": r["stats"]["figures"],
+                                              "headline": inline(r["story"]["headline"]),
+                                              "grade": r["stats"]["plain_grade"], "code_per_100": r["stats"]["code_per_100"]}
         write_json(out / f"f-{sl}.json", {"slug": sl, "rel": rel, "title": title, "sections": sections, "claims": claims,
                                           "story": story})
         write_json(out / f"s-{sl}.json", snippets)
@@ -329,6 +344,23 @@ def main() -> int:
         dids = {d["id"] for d in book["defects"]}
         book["headline_defects"] = [x for x in dict.fromkeys(XREF_RE.findall(otext)) if x in dids]
     book["order"] = order + [f["slug"] for f in book["files"] if f["slug"] not in order]
+    # the system story opens the book; its @path blocks give each walkthrough its plain-words steps
+    sysf = meta / "story" / "_system.md"
+    if story_ck and sysf.exists():
+        r = story_ck.check("_system", sysf.read_text(encoding="utf-8", errors="replace"))
+        write_json(meta / "story" / "_system.check.json", {k: v for k, v in r.items() if k != "story"})
+        if r["errors"]:
+            eprint(f"WARN: the system story is left out, G8 has {len(r['errors'])} errors (first: {r['errors'][0]})")
+        else:
+            book["system"] = render_story(r["story"])
+            for sec in book["system"]["sections"]:
+                for b in sec["blocks"]:
+                    if b["t"] == "path":
+                        for fl in book["flows"]:
+                            if fl["id"] == b["flow"]:
+                                for st_, ps in zip(fl["steps"], b["steps"]):
+                                    st_["plain"] = ps["h"]
+                                fl["section"] = sec["title"]
     book["stats"] = {"files": len(files), "claims": len(book["owner"]), "defects": len(book["defects"]), "snippets": total_snips}
     write_json(out / "book.json", book)
     size = sum(f.stat().st_size for f in out.glob("*.json"))

@@ -333,48 +333,95 @@ Report: write your worker report with the CLI, not by hand (the gate verifies it
 This replaces any other instruction above about the report's file name or format.
 ```
 
-## 2d. Narrator (chapter story over a module's claims; G8)
+## 2d. Narrator (a module's story, in reading layers; G8)
 
 <!-- brief:narrator -->
 ```
-You are writing the readable chapter for one module of a behavioral specification. The module spec
-is a ledger of atomic claims, each citing code. Readers do not learn from ledgers: they learn from
-an explanation that leads with the answer, shows what happens when in a table, walks the mechanism
-with a picture, and warns about the traps. You write that explanation as a story. It sits above the
-ledger in the reader site, and every sentence carries the claim IDs it rests on, which open the
-claim and its code in place. You select, order, connect and illustrate claims; you never add a fact.
+You are writing the readable chapter for one module of a behavioral specification, for people who
+will never open the code: a student, an intern, a new graduate, a senior or staff engineer joining
+the team, a principal reviewing a design, a CTO deciding what to fund, a sales engineer explaining
+the product. The module spec is a ledger of exact claims, each citing code. You write the story over
+it, in layers the reader chooses between: Everyone (plain words and pictures, no code at all),
+Engineer (the mechanism, with a few exact names, each bridged to a plain term), Expert (the ledger,
+which already exists). You select, order, connect and illustrate claims; you never add a fact.
 
 Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}} ("{{MODULE_NAME}}").
-Read: {{SPECS}}/modules/{{MODULE_ID}}.md (the ledger you explain), {{SPECS}}/00-overview.md
-(the system, its main paths and the glossary, whose terms you use), and the format, rules and
-figure syntax in {{SKILL_DIR}}/references/story.md. You may open the source lines a claim cites to
-understand it. Do not read anything under the eval directory or answer snapshots.
+Read first, fully: {{SKILL_DIR}}/references/readability.md (the standard, and why each rule exists)
+and {{SKILL_DIR}}/references/story.md (the format, the layers, the figure syntax). Then read
+{{SPECS}}/modules/{{MODULE_ID}}.md (the ledger you explain) and {{SPECS}}/00-overview.md (the system,
+its main paths and the glossary, whose terms you use). You may open the source lines a claim cites to
+understand it. Never read the eval directory or any answer or story snapshot.
+{{SCOPE_NOTE}}
 
-Write {{SPECS}}/_meta/story/{{MODULE_ID}}.md exactly in the format of story.md:
-- The headline: the module's thesis as one assertion.
-- @minute: the module in at most 120 words, for a newcomer who reads nothing else.
-- At a glance: the module's conditional behavior as When | Then | Claims rows, most common first.
-- Three to six sections, in the order the mechanism runs, each answering one question a newcomer
-  asks, each headed by an assertion. Give the two or three central mechanisms a figure: `states` for
-  the lifecycle of one thing, `flow` for an ordered set of gates or branches, `sequence` for hops
-  between parties. Add @steps to every figure, so the reader can walk it.
-- Watch out: what surprises callers, including the module's most consequential suspected defects.
-Choose by consequence: what a caller observes and what they would get wrong. Leave detail to the
-ledger. Ground each rule in one concrete example the claims give (a value, a key, a message).
+Write {{SPECS}}/_meta/story/{{MODULE_ID}}.md in the format of story.md. Work in this order:
+1. Find the one idea a newcomer must leave with, and write it as the headline.
+2. Write "In plain words" for someone who knows what an AI provider and a web request are and nothing
+   else: what this part is for, how it works as one picture in words, and what a customer or the
+   business would notice when it goes wrong. No code names at all; spell out every acronym.
+3. List the terms the chapter needs in "Words you'll see", plain meaning first, code names second.
+4. Write the mechanism sections in the order it runs, each heading an assertion, each paragraph
+   leading with its point. Prefer the plain term; use a code name only where an engineer needs the
+   exact name, and only once it is in Words you'll see.
+5. Draw the central mechanism (states, flow or sequence, plain labels, with steps), and give it one
+   example timeline: concrete deployments and real values from the claims, played out over time.
+6. Write At a glance (When/Then, most common case first) and Watch out (plain words, what surprises
+   a caller, including the most consequential suspected defects).
+Keep every condition a claim states. A story audit judged earlier stories sentence by sentence: the
+most common fault was a dropped condition ("the check applies" where the claim says "when the router
+was built with it"), and readers then generalized the rule to cases it does not cover and answered
+wrongly. When you shorten a rule, keep its condition or say "in the usual case" and put the
+exception in At a glance or Watch out. Name the edge cases a reader would otherwise guess wrong.
+{{AUDIT_NOTES}}
 
-Run the gate and fix every error, and every warning you can, until it passes:
+Run the gate and fix every error and every warning you can, until it passes:
   python3 {{SKILL_DIR}}/scripts/check_story.py {{SPECS}} --module {{MODULE_ID}}
-Its literal rule is strict on purpose: a name or number not in the claims you cite (or their code)
-is an error. Fix the citation or drop the value; never weaken the sentence to dodge the rule.
-Never edit spec files. If explaining the module exposes a claim that is unclear, contradicts another
-or seems to miss a case, do not paper over it in the story: report it as a note in the form
-"module claim {{PREFIX}}-NNN: <the problem>", and it goes to the module's reviser.
+Its rules are strict on purpose: a value not in the claims you cite is an error; code in the Everyone
+layer is an error; a code name not bridged in Words you'll see is an error. Fix the text, never the
+meaning. Never edit spec files. If explaining the module exposes a claim that is unclear, contradicts
+another or misses a case, report it as a note "module claim {{PREFIX}}-NNN: <the problem>".
 Durability: write the story file early and rewrite it as you go; if you are told you were resumed,
 read the file and the gate's output and continue.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role narrator --module {{MODULE_ID}} \
     --output {{SPECS}}/_meta/story/{{MODULE_ID}}.md --read-from <a file listing every path you read> \
     [--note "..."]
+This replaces any other instruction above about the report's file name or format.
+```
+
+## 2e. System narrator (the book's opening and the plain walkthroughs; G8)
+
+<!-- brief:system-narrator -->
+```
+You are writing the opening of a book about one system, for every reader from a student to a CTO or
+a sales engineer: what the system is for, how a request moves through it in plain words, and what
+can go wrong for the business. You select, order, connect and illustrate claims; you never add a fact.
+
+Repo: {{REPO}} (commit {{COMMIT}}).
+Read first, fully: {{SKILL_DIR}}/references/readability.md and {{SKILL_DIR}}/references/story.md
+(the section "System story" is your format). Then read {{SPECS}}/00-overview.md (the system, the
+main paths you will retell, the glossary), every module story under {{SPECS}}/_meta/story/ (written
+by the module narrators; reuse their plain terms so the book speaks one language), and the module
+specs under {{SPECS}}/modules/ where you need a claim. Never read the eval directory or any snapshot.
+
+Write {{SPECS}}/_meta/story/_system.md:
+- a headline: the system's purpose as one assertion;
+- "In plain words": the whole system for anyone, 50 to 130 words, no code names, every acronym
+  spelled out;
+- "Words you'll see": the terms every chapter relies on (model group, deployment, and so on);
+- one section per main path of the overview, in the overview's order: a heading that says what
+  happens, one or two plain paragraphs, and an @path block retelling every step of that path in plain
+  words, numbered exactly as the overview numbers it, each step citing the claims the overview step
+  cites (or narrower ones);
+- a section on what can go wrong for the business (outages, slow replies, cost, security exposure),
+  citing the suspected defects that matter most, with one figure that shows the request lifecycle or
+  the failure path in plain labels;
+- Watch out: the top risks, in plain words.
+Run the gate until it passes:
+  python3 {{SKILL_DIR}}/scripts/check_story.py {{SPECS}} --module _system
+Never edit spec files or module stories. Report unclear or conflicting claims as notes
+"module claim <ID>: <the problem>".
+Report: python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role system-narrator --module all \
+  --output {{SPECS}}/_meta/story/_system.md --read-from <a file listing every path you read> [--note "..."]
 This replaces any other instruction above about the report's file name or format.
 ```
 

@@ -48,6 +48,12 @@
     if (font) root.dataset.font = font;
     const motion = store.get("motion");
     if (motion) root.dataset.motion = motion;
+    // reading depth: Everyone (no code), Engineer (adds the mechanism), Expert (adds every claim)
+    root.dataset.lens = store.get("lens") || "engineer";
+    const lensBtns = $$("[data-lens-set]");
+    const syncLens = () => lensBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lensSet === root.dataset.lens)));
+    lensBtns.forEach((b) => b.addEventListener("click", () => { root.dataset.lens = b.dataset.lensSet; store.set("lens", b.dataset.lensSet); syncLens(); }));
+    syncLens();
     const sync = () => {
       $("#t-font").setAttribute("aria-pressed", root.dataset.font === "sans" ? "true" : "false");
       $("#t-font").textContent = root.dataset.font === "sans" ? "Aa sans" : "Aa serif";
@@ -64,6 +70,10 @@
       store.set("theme", next === "system" ? "" : next); sync();
     };
     $("#t-search").onclick = openSearch;
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-lens-go]");
+      if (b) { root.dataset.lens = b.dataset.lensGo; store.set("lens", b.dataset.lensGo); $$("[data-lens-set]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.lensSet === root.dataset.lens))); }
+    });
     $("#t-menu").onclick = () => { const d = $("#drawer"); d.hidden = !d.hidden; $("#t-menu").setAttribute("aria-expanded", String(!d.hidden)); };
     $("#drawer").addEventListener("click", (e) => {
       const px = e.target.closest("[data-proxy]");
@@ -154,7 +164,7 @@
   }
   function chapterRow(f, n) {
     return `<a class="chap" href="#${f.slug}"><span class="n">${n}</span>
-      <div><h3>${esc(shortTitle(f))}</h3><p>${f.lede || ""}</p></div>
+      <div><h3>${esc(shortTitle(f))}</h3><p>${f.story && f.story.headline ? f.story.headline : f.lede || ""}</p></div>
       <div class="stats">${f.kind === "module" ? `<div style="display:flex;gap:8px;align-items:center">${meter(f)} ${pill(f.status)}</div>` : ""}
         <div class="kv">${f.story ? `<span class="brief-badge" title="This chapter opens with a short illustrated story">In brief · <b>${Math.max(1, Math.round(f.story.words / 238))}</b> min</span>` : ""}<span><b>${f.claims.confirmed + f.claims.inferred + f.claims.gap}</b> claims</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}<span><b>${readingMinutes(f)}</b> min</span></div></div></a>`;
   }
@@ -403,7 +413,7 @@
     view.innerHTML = `
       <div class="cover">
         <div><h1><small>Behavioral specification</small>${esc(sysName)}</h1>
-          <p class="lede">${ov ? ov.lede : ""}</p></div>
+          <p class="lede">${B.system && B.system.plain.length ? B.system.plain[0] : ov ? ov.lede : ""}</p></div>
         <aside class="cover-side">
           <div class="facts">
             <div><b>${B.stats.claims.toLocaleString()}</b><span>claims, each citing code</span></div>
@@ -416,6 +426,7 @@
           <p class="label">Compiled from <a href="${esc(B.repo)}/tree/${esc(B.commit)}" target="_blank" rel="noopener">${esc(B.repo.replace(/^https?:\/\//, ""))}</a> at <span class="mono">${esc(B.commit.slice(0, 10))}</span></p>
         </aside>
       </div>
+      ${B.system ? `<div class="system-story">${storyHTML(B.system, null)}</div>` : ""}
       <figure class="mapcard"><div class="head"><span class="label">System map</span><span class="label" style="text-transform:none;letter-spacing:0">Pick a path to trace it; pick a box to open its chapter</span></div>
         <div class="mapwrap" id="map"></div>
         <div class="legend" id="legend"></div>
@@ -425,7 +436,7 @@
         <div class="paths">${B.flows.map(pathCard).join("")}</div></section>
       <section class="block"><header><h2>Chapters</h2><p>In reading order. Held-out score: questions a reader answered correctly from the spec alone.</p></header>
         <div class="chapters">${ordered().filter((f) => f.kind === "module").map((f, k) => chapterRow(f, k + 1)).join("")}</div></section>
-      <section class="block"><header><h2>Needs a decision</h2><p>${B.stats.defects} suspected defects: behavior the code has that looks unintended.</p></header>
+      <section class="block L2"><header><h2>Needs a decision</h2><p>${B.stats.defects} suspected defects: behavior the code has that looks unintended.</p></header>
         <div class="defect-list">${(B.headline_defects || []).concat(B.defects.map((d) => d.id)).filter((v, k, a) => a.indexOf(v) === k).slice(0, 6).map((id) => B.defects.find((d) => d.id === id)).filter(Boolean).map(defectCard).join("")}</div>
         <p style="margin-top:14px"><a href="#defects">All ${B.stats.defects} suspected defects →</a></p></section>
       <section class="block"><header><h2>Reference</h2><p>Facts that span chapters.</p></header>
@@ -510,17 +521,91 @@
   /* ---------- chapter story: the readable layer over the ledger ---------- */
   const chips = (ids) => ids.map((x) => `<a class="xr" href="#${x}" data-id="${x}">${x}</a>`).join(" ");
   function storyHTML(st, f) {
+    const n = f ? f.claims.confirmed + f.claims.inferred + f.claims.gap : 0;
     const sec = st.sections.map((x, k) => `<section class="st-sec" id="story-${k}"><h3>${x.title}</h3>${x.blocks.map((b) =>
-      b.t === "p" ? `<p>${b.h}</p>` : b.t === "ul" ? `<ul>${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>` : figureShell(b)).join("")}</section>`).join("");
+      b.t === "p" ? `<p class="L2">${b.h}</p>` : b.t === "ul" ? `<ul class="L2">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
+        : b.t === "path" ? pathBlock(b) : figureShell(b)).join("")}</section>`).join("");
+    const mins = Math.max(1, Math.round((st.words_n || st.words || 0) / 238));
     return `<section class="story" aria-label="Chapter in brief">
-      <p class="label">The chapter in brief · ${Math.max(1, Math.round(st.words / 238))} min</p>
+      <p class="label">${f ? "The chapter in brief" : "Start here"} · ${mins} min</p>
       <h2 class="headline">${st.headline}</h2>
-      <div class="minute"><span class="label">In one minute</span>${st.minute.map((p) => `<p>${p}</p>`).join("")}</div>
-      ${st.glance.length ? `<div class="glance"><span class="label">At a glance</span><div class="tbl"><table><thead><tr><th>When</th><th>Then</th><th>Claims</th></tr></thead><tbody>${st.glance.map((r) => `<tr><td>${r.when}</td><td>${r.then}</td><td class="ids">${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
+      ${st.plain.length ? `<div class="plain L1"><span class="label">In plain words</span>${st.plain.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
+      ${st.minute.length ? `<div class="minute L2"><span class="label">In one minute</span>${st.minute.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
+      ${st.words.length ? `<details class="words L2" open><summary class="label">Words you'll see (${st.words.length})</summary><dl>${st.words.map((w) =>
+        `<div><dt>${w.term}</dt><dd>${w.means}<span class="code-names">${w.code} ${chips(w.ids)}</span></dd></div>`).join("")}</dl></details>` : ""}
+      ${st.glance.length ? `<div class="glance L2"><span class="label">At a glance</span><div class="tbl"><table><thead><tr><th>When</th><th>Then</th><th>Claims</th></tr></thead><tbody>${st.glance.map((r) => `<tr><td>${r.when}</td><td>${r.then}</td><td class="ids">${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
       ${sec}
       ${st.watch.length ? `<div class="watch"><span class="label">Watch out</span><ul>${st.watch.map((w) => `<li>${w}</li>`).join("")}</ul></div>` : ""}
-      <p class="to-ledger">Every claim in this chapter follows, in the order of the module (${f.claims.confirmed + f.claims.inferred + f.claims.gap} claims). Chips above open them in place.</p>
+      ${f ? `<p class="to-ledger L2">Every claim in this chapter follows, in the order of the module (${n} claims). <button class="btn lens-jump" data-lens-go="expert">Show all ${n} claims</button></p>` : ""}
     </section>`;
+  }
+  function pathBlock(b) {
+    const i = B.flows.findIndex((x) => x.id === b.flow);
+    const fl = B.flows[i];
+    return `<ol class="pathsteps" style="--c:${flowColor(Math.max(0, i))}">${b.steps.map((x) => `<li><span class="n">${x.n}</span><span>${x.h}</span></li>`).join("")}</ol>
+      ${fl ? `<p><a class="btn" href="#${fl.id}">Walk through it step by step →</a></p>` : ""}`;
+  }
+  // an example played out over time: one lane per actor, state bands, event markers, a playhead the
+  // reader can play or scrub; the event list beside it lights up as the playhead passes
+  function drawTimeline(fig, fg) {
+    const art = $(".sfig-art", fig);
+    const lanes = fg.lanes, evs = fg.events;
+    const tmax = Math.max(1, ...evs.map((e) => e.t)) * 1.12;
+    const LW = 128, W = 680, LH = 52, TOP = 26, H = TOP + lanes.length * LH + 34;
+    const x = (t) => LW + (t / tmax) * (W - LW - 16);
+    const states = [...new Set(evs.map((e) => e.state))];
+    const hue = (st) => `var(--l${(states.indexOf(st) % 6) + 1})`;
+    let out = `<line class="tl-axis" x1="${LW}" y1="${H - 26}" x2="${W - 10}" y2="${H - 26}"/>`;
+    [...new Set(evs.map((e) => e.t))].forEach((t) => {
+      const lab = evs.find((e) => e.t === t).time;
+      out += `<line class="tl-tick" x1="${x(t)}" y1="${TOP - 6}" x2="${x(t)}" y2="${H - 26}"/><text class="tl-time" x="${x(t)}" y="${H - 10}" text-anchor="middle">${lbl(lab)}</text>`;
+    });
+    lanes.forEach((ln, k) => {
+      const y = TOP + k * LH;
+      out += `<text class="tl-lane" x="8" y="${y + LH / 2 + 4}">${lbl(ln.label)}</text>`;
+      const le = evs.filter((e) => e.lane === ln.id);
+      le.forEach((e, j) => {
+        const x0 = x(e.t), x1 = j + 1 < le.length ? x(le[j + 1].t) : W - 12;
+        out += `<rect class="tl-band" data-k="${evs.indexOf(e)}" x="${x0}" y="${y + 10}" width="${Math.max(2, x1 - x0)}" height="${LH - 20}" rx="6" style="fill:${hue(e.state)}"/>`;
+        if (x1 - x0 > 60) out += `<text class="tl-state" x="${x0 + 8}" y="${y + LH / 2 + 4}">${lbl(e.state)}</text>`;
+      });
+      le.forEach((e) => { out += `<circle class="tl-ev" data-k="${evs.indexOf(e)}" cx="${x(e.t)}" cy="${y + 10}" r="6"><title>${lbl(e.time)}: ${lbl(e.label)}</title></circle>`; });
+    });
+    out += `<line class="tl-head" x1="${LW}" y1="${TOP - 10}" x2="${LW}" y2="${H - 26}"/>`;
+    art.innerHTML = `<svg class="sfig-svg tl" viewBox="0 0 ${W} ${H}" role="img" aria-label="${lbl(fg.title.replace(/<[^>]+>/g, ""))}" style="min-width:${Math.min(W, 520)}px">${out}</svg>
+      <div class="tl-controls"><button class="btn" data-act="tl-play" aria-pressed="false">Play</button><input type="range" min="0" max="1000" value="1000" aria-label="Time in the example"><span class="label tl-now">end</span></div>`;
+    const steps = $(".sfig-steps", fig);
+    if (steps) steps.remove();
+    fig.insertAdjacentHTML("beforeend", `<ol class="tl-events">${evs.map((e, k) => `<li data-k="${k}"><b>${lbl(e.time)}</b><span><strong>${lbl(lanes.find((l) => l.id === e.lane)?.label || e.lane)}:</strong> ${lbl(e.label)} → <em>${lbl(e.state)}</em> ${chips(e.ids)}</span></li>`).join("")}</ol>`);
+    const svg = $("svg", art), head = $(".tl-head", svg), range = $("input", art), now = $(".tl-now", art), items = $$(".tl-events li", fig);
+    const show = (t) => {
+      head.setAttribute("x1", x(t)); head.setAttribute("x2", x(t));
+      $$(".tl-band", svg).forEach((b) => b.classList.toggle("future", evs[+b.dataset.k].t > t + 1e-9));
+      $$(".tl-ev", svg).forEach((c) => c.classList.toggle("future", evs[+c.dataset.k].t > t + 1e-9));
+      let last = -1;
+      evs.forEach((e, k) => { if (e.t <= t + 1e-9) last = k; });
+      items.forEach((li, k) => { li.classList.toggle("on", k === last); li.classList.toggle("future", evs[k].t > t + 1e-9); });
+      now.textContent = t >= tmax / 1.12 - 1e-9 ? "end" : `${(Math.round(t * 10) / 10)}s`;
+    };
+    range.addEventListener("input", () => show((range.value / 1000) * tmax));
+    items.forEach((li) => li.addEventListener("click", (e) => { if (e.target.closest("a")) return; const t = evs[+li.dataset.k].t; range.value = (t / tmax) * 1000; show(t); }));
+    let raf = 0;
+    const btn = $('[data-act="tl-play"]', art);
+    const stop = () => { cancelAnimationFrame(raf); btn.textContent = "Play"; btn.setAttribute("aria-pressed", "false"); };
+    btn.addEventListener("click", () => {
+      if (btn.getAttribute("aria-pressed") === "true") return stop();
+      btn.textContent = "Pause"; btn.setAttribute("aria-pressed", "true");
+      if (!motionOn()) { range.value = 1000; show(tmax); return stop(); }
+      const t0 = performance.now(), from = +range.value >= 1000 ? 0 : (range.value / 1000) * tmax, dur = 1200 + evs.length * 900;
+      const tick = (nw) => {
+        const q = Math.min(1, (nw - t0) / dur), t = from + (tmax - from) * q;
+        range.value = (t / tmax) * 1000; show(t);
+        if (q < 1) raf = requestAnimationFrame(tick); else stop();
+      };
+      raf = requestAnimationFrame(tick);
+    });
+    cleanup.push(stop);
+    show(tmax);  // complete at rest: the whole example is visible before anyone presses play
   }
   function figureShell(fg) {
     return `<figure class="sfig" data-fig="${fg.id}"><div class="sfig-art"><p class="loading" style="padding:16px">Drawing…</p></div>
@@ -533,6 +618,7 @@
   async function drawFigure(fig, fg) {
     const art = $(".sfig-art", fig);
     let svg, geo;
+    if (fg.kind === "timeline") return drawTimeline(fig, fg);
     if (fg.kind === "sequence") ({ svg, geo } = seqFigure(fg));
     else ({ svg, geo } = await graphFigure(fg));
     art.innerHTML = "";
@@ -685,8 +771,8 @@
     const ids = secs.map(secId);
     const chapNo = order.filter((x) => x.kind === "module").findIndex((x) => x.slug === slug) + 1;
     const st = F.story;
-    const toc = (st ? `<a href="#story-top" data-sec="story-top">In brief</a>${st.sections.map((x, k) => `<a href="#story-${k}" data-sec="story-${k}" class="sub">${esc(x.plain)}</a>`).join("")}<div class="label" style="padding:14px 8px 8px">Ledger</div>` : "")
-      + secs.map((s, k) => `<a href="#${ids[k]}" data-sec="${ids[k]}" class="${s.level > 2 ? "sub" : ""}">${esc(s.title.replace(/`/g, ""))}</a>`).join("");
+    const toc = (st ? `<a href="#story-top" data-sec="story-top">In brief</a>${st.sections.map((x, k) => `<a href="#story-${k}" data-sec="story-${k}" class="sub">${esc(x.plain)}</a>`).join("")}<div class="label L3" style="padding:14px 8px 8px">Ledger</div>` : "")
+      + `<div class="${st ? "L3" : ""}">` + secs.map((s, k) => `<a href="#${ids[k]}" data-sec="${ids[k]}" class="${s.level > 2 ? "sub" : ""}">${esc(s.title.replace(/`/g, ""))}</a>`).join("") + "</div>";
     const body = secs.map((s, k) => {
       const h = s.level === 2 ? `<h2 id="${ids[k]}">${s.th}</h2>` : `<h3 id="${ids[k]}">${s.th}</h3>`;
       return (s.level === 2 ? `</section><section class="sec">` : "") + h + s.blocks.map((b) => blockHTML(b, F)).join("");
@@ -703,12 +789,12 @@
             ${glyphCounts(f.claims)}
             <span class="kv">${f.story ? `<span><b>${Math.max(1, Math.round(f.story.words / 238))}</b> min story</span><span><b>${readingMinutes(f)}</b> min ledger</span>` : `<span><b>${readingMinutes(f)}</b> min read</span>`}${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
           </div>
-          ${uses.length ? `<div class="neighbors"><span>Cites</span>${uses.map((l) => `<a href="#${l.to}" title="${l.n} citations">${esc(nameOf(l.to))}</a>`).join("")}</div>` : ""}
-          ${usedBy.length ? `<div class="neighbors"><span>Cited by</span>${usedBy.map((l) => `<a href="#${l.from}" title="${l.n} citations">${esc(nameOf(l.from))}</a>`).join("")}</div>` : ""}
-          ${f.scope ? `<details class="scope"><summary>${f.scope.length} source files in scope</summary>${f.scope.map(esc).join("<br>")}</details>` : ""}
+          ${uses.length ? `<div class="neighbors L2"><span>Cites</span>${uses.map((l) => `<a href="#${l.to}" title="${l.n} citations">${esc(nameOf(l.to))}</a>`).join("")}</div>` : ""}
+          ${usedBy.length ? `<div class="neighbors L2"><span>Cited by</span>${usedBy.map((l) => `<a href="#${l.from}" title="${l.n} citations">${esc(nameOf(l.from))}</a>`).join("")}</div>` : ""}
+          ${f.scope ? `<details class="scope L3"><summary>${f.scope.length} source files in scope</summary>${f.scope.map(esc).join("<br>")}</details>` : ""}
         </header>
-        ${st ? `<div id="story-top">${storyHTML(st, f)}</div>` : ""}
-        <section class="sec">${body}</section>
+        ${st ? `<div id="story-top">${storyHTML(st, f)}</div>` : `<p class="nostory L1">This chapter has no plain-language story yet, so every reading level shows its full ledger.</p>`}
+        <section class="sec${st ? " L3" : ""}">${body}</section>
         <nav class="pager">${prev ? `<a href="#${prev.slug}"><span>Previous</span><b>${esc(shortTitle(prev))}</b></a>` : "<span></span>"}${next ? `<a href="#${next.slug}"><span>Next</span><b>${esc(shortTitle(next))}</b></a>` : ""}</nav>
       </article></div>`;
     // source viewer: expands in place, loads the file's snippets once
@@ -780,7 +866,7 @@
       <div class="flow">
         <ol class="steps">${fl.steps.map((st, k) => `<li class="stepi" data-k="${k}"><span class="n">${k + 1}</span><div>
           <div class="who">${st.who.filter((w) => (fileMeta(w) || {}).kind === "module").map((w) => `<a href="#${w}">${esc(nameOf(w))}</a>`).join("")}</div>
-          <div class="tx">${st.h}</div></div></li>`).join("")}</ol>
+          ${st.plain ? `<div class="tx L-plain">${st.plain}</div><div class="tx L3 exact"><span class="label">Exact</span> ${st.h}</div>` : `<div class="tx">${st.h}</div>`}</div></li>`).join("")}</ol>
         <aside class="stage" aria-label="Sequence diagram"><div class="controls"><span class="label">Step <span id="stepno" class="num">1</span> of ${fl.steps.length}</span>
           <span style="display:flex;gap:6px"><button class="btn" id="s-prev" aria-label="Previous step">←</button><button class="btn" id="s-play" aria-pressed="false">Play</button><button class="btn" id="s-next" aria-label="Next step">→</button></span></div>
           <div class="seq-scroll">${s}</div></aside>

@@ -88,7 +88,7 @@ def reports_dirs(specs: Path) -> list[Path]:
     return [Path(specs).resolve() / "_meta" / "worker-reports", eval_dir(specs) / "worker-reports"]
 
 
-ALL_SCOPE_ROLES = {"surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control",
+ALL_SCOPE_ROLES = {"surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control", "system-narrator",
                    "interfaces", "data", "config", "operations"}
 
 
