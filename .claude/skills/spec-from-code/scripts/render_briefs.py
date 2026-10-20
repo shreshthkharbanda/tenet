@@ -100,7 +100,10 @@ def main() -> int:
         "\nHarness hygiene: work in a new subdirectory of your own (scratch dirs persist across rounds); name "
         "scripts check_<claim-or-probe-id>.py, never a short name that can shadow a package (a stray h2.py "
         "shadowed the real h2 HTTP/2 package, L60); run them with `python -P` (Python 3.11+; on older versions run "
-        "them from a different directory) so their directory is not on sys.path.")
+        "them from a different directory) so their directory is not on sys.path. Process-global state "
+        "(registries, callback lists, module-level caches) leaks between instances built in one process: build one "
+        "instance of the system per check process unless the claim is about that sharing, and never assert an order "
+        "that depends on thread or task timing (L65).")
     for kv in args.set:
         if "=" not in kv:
             raise SystemExit(f"--set expects KEY=VALUE, got {kv!r}")

@@ -84,6 +84,19 @@ def main() -> int:
                     seen.add(("note", cid))
                     add.append({"source": "note", "id": cid, "verdict": "reported", "judge_note": problem.strip()[:1500],
                                 "reporter": rf.stem})
+        # a failing or stale evidence check means the claim and the code (or the check) disagree: the owner
+        # resolves it, by correcting the claim or by fixing a check that was wrong (L65)
+        er = meta / "evidence-report.json"
+        if er.exists():
+            emod = read_json(er).get("modules", {}).get(mid, {})
+            for kind in ("failed", "stale"):
+                for cid in emod.get(kind, []):
+                    if ("evidence", cid) not in seen:
+                        seen.add(("evidence", cid))
+                        add.append({"source": "evidence", "id": cid, "verdict": kind,
+                                    "judge_note": f"_meta/evidence/{mid}/check_{cid}.py is {kind}: run it, then fix the "
+                                                  f"claim, or fix the check if it tests the wrong thing (shared process "
+                                                  f"state, timing), keeping its '# text:' line equal to the claim"})
         rb = meta / "rebuild" / f"{mid}.json"
         if rb.exists():
             r = read_json(rb)

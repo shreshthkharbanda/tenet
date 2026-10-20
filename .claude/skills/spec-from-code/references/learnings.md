@@ -509,3 +509,13 @@ round-1 judgments "to keep verdicts consistent" and carried two lenient calls fo
 fidelity is only a measurement if its verdicts are independent. Fix: the judge brief forbids reading
 other rounds' judgments and answers, and G5 flags a judge whose transcript touches them. The affected
 round-2 judgments are re-run rather than waived.
+
+**L65. Checks inherited the system's own shared-state bug.** Found: LiteLLM G7 run; AFFINITY-180's
+check built a second "fresh pod" Router in the same process, and LiteLLM's process-global callback list
+keeps one instance per class, so the second router silently used the first router's cache, and the
+check's verdict also depended on which concurrent write landed last. It passed for its author and failed
+under the gate's parallel load. Three verifiers independently hit the same leak. Fix: the run-environment
+hygiene line tells every executing worker to build one instance of the system per check process and
+never to assert timing-dependent order; failing and stale evidence checks go to the owner's revise
+worklist (source "evidence") to fix the claim or the check; G7 runs checks in parallel, each in its own
+working directory, with one serial re-run that separates a flaky check from a wrong claim.

@@ -599,6 +599,9 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
 - rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding;
 - note: another worker (a cross-cutting writer, a falsifier, the reconciler) reported this claim as
   wrong or incomplete while working on its own file; verify it in the code before acting on it.
+- evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails or is stale. Run
+  it; correct the claim if the code disagrees, or fix the check if it tests the wrong thing, and keep
+  its `# text:` line equal to the claim's final text.
 The probe rows are revision-split only; a separate held-out set you will never see is scored
 afterwards, so fixing exactly these questions is not the goal. Fixing what they reveal is.
 
