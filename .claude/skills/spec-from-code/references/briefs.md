@@ -509,10 +509,17 @@ You are revising the specification of one module after fidelity probing found co
 gaps. Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}}, prefix {{PREFIX}}.
 Spec to revise: {{SPECS}}/modules/{{MODULE_ID}}.md (also fix 01-interfaces.md / 02-data.md /
 03-config.md if a failure's root cause lives there).
-Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl (question, reference answer,
-refs, the spec-only answer, verdict, judge note). These are the revision-split probes only; a separate
-held-out set you will never see is scored afterwards, so fixing exactly these questions is not the
-goal. Fixing what they reveal is.
+Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row has a "category":
+- probe: a revision-split probe the spec answered wrongly (contradict) or not at all (gap), with the
+  question, reference answer, refs, the spec-only answer, and the judge's note;
+- answer_note / defect_note: the answer agreed, but the answerer or judge saw the spec was silent,
+  ambiguous, or self-contradictory there;
+- falsifier: a sampled claim shown false or imprecise, with the evidence and counterexample;
+- omission: a high-consequence behavior the spec states vaguely, omits, or contradicts;
+- lint: a placeholder template without rendering, or a table row carrying untracked values;
+- rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding.
+The probe rows are revision-split only; a separate held-out set you will never see is scored
+afterwards, so fixing exactly these questions is not the goal. Fixing what they reveal is.
 
 Read {{REFS}}/templates.md (grammar, rules) and
 {{REFS}}/implicit-decisions.md first.

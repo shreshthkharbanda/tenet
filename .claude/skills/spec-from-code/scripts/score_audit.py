@@ -6,7 +6,8 @@ and build the blind sample the judge auditor re-judges.
   score_audit.py <specs> --round N                                          -> report
 
 Pass thresholds (the audit's definition of "good enough to review specs instead of code"):
-  falsification: false + imprecise of HIGH severity <= 5% of sampled claims, per module
+  falsification (aggregated over all audited modules; 12 samples per module is too few to judge one):
+    false claims <= 5%, false or imprecise of medium+ severity <= 10%, and no high-severity failure
   omission: >= 80% of the top behaviors "stated", zero "contradicted", per module
   judges: auditor agreement >= 90%, leniency (original agree, auditor not) <= 5%
   lifecycle: zero "incorrect" steps
@@ -21,7 +22,9 @@ from pathlib import Path
 
 from _common import eprint, read_json, read_jsonl, write_json, write_jsonl
 
-TH = {"falsify_high": 0.05, "omission_stated": 0.80, "judge_agree": 0.90, "judge_lenient": 0.05, "lift": 0.30}
+TH = {"falsify_false": 0.05, "falsify_medium_plus": 0.10, "falsify_high": 0.0, "omission_stated": 0.80,
+      "judge_agree": 0.90, "judge_lenient": 0.05, "lift": 0.30}
+SEV = {"low": 0, "medium": 1, "high": 2}
 
 
 def main() -> int:
@@ -66,9 +69,10 @@ def main() -> int:
     # falsification + omission per module
     mods = sorted({p.stem.split("-", 1)[1] for p in audit.glob("falsify-*.jsonl")} |
                   {p.stem.split("-", 1)[1] for p in audit.glob("omission-*.jsonl")})
-    lines += ["| Module | Claims attacked | False | Imprecise | High-severity rate | Ref wrong | Top behaviors | Stated | Vague | Missing | Contradicted | Pass |",
+    lines += ["| Module | Claims attacked | False | Imprecise | Severity | Ref wrong | Top behaviors | Stated | Vague | Missing | Contradicted | Omission pass |",
               "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     worst = []
+    agg = {"n": 0, "false": 0, "med": 0, "high": 0}
     for mid in mods:
         m = {}
         ff = audit / f"falsify-{mid}.jsonl"
@@ -76,11 +80,16 @@ def main() -> int:
             rows = read_jsonl(ff)
             n = len(rows)
             c = {k: sum(1 for r in rows if r.get("verdict") == k) for k in ("holds", "false", "imprecise", "ref_wrong")}
-            hi = sum(1 for r in rows if r.get("verdict") in ("false", "imprecise") and r.get("severity") == "high")
-            m.update(attacked=n, **c, high_rate=round(hi / n, 3) if n else 0.0)
-            worst += [dict(r, module=mid) for r in rows if r.get("verdict") in ("false", "imprecise") and r.get("severity") == "high"]
+            bad = [r for r in rows if r.get("verdict") in ("false", "imprecise")]
+            med = sum(1 for r in bad if SEV.get(r.get("severity", "low"), 0) >= 1)
+            hi = sum(1 for r in bad if r.get("severity") == "high")
+            m.update(attacked=n, **c, medium_plus=med, high=hi, high_rate=round(hi / n, 3) if n else 0.0)
+            agg["n"] += n; agg["false"] += c["false"]; agg["med"] += med; agg["high"] += hi
+            worst += [dict(r, module=mid) for r in bad if SEV.get(r.get("severity", "low"), 0) >= 1]
         of = audit / f"omission-{mid}.jsonl"
-        if of.exists():
+        if of.exists() and any("spec_status" not in r for r in read_jsonl(of)):
+            m["omission"] = "pending"  # step 1 written, step 2 (grading against the spec) not finished
+        elif of.exists():
             rows = read_jsonl(of)
             n = len(rows)
             c = {k: sum(1 for r in rows if r.get("spec_status") == k) for k in ("stated", "vague", "missing", "contradicted")}
@@ -88,15 +97,23 @@ def main() -> int:
                      stated_rate=round(c["stated"] / n, 3) if n else 0.0)
             worst += [dict(r, module=mid, verdict=r.get("spec_status")) for r in rows
                       if r.get("spec_status") in ("missing", "contradicted") and r.get("rank", 99) <= 5]
-        ok = (m.get("high_rate", 0) <= TH["falsify_high"] and m.get("stated_rate", 1) >= TH["omission_stated"]
-              and m.get("om_contradicted", 0) == 0)
+        ok = m.get("stated_rate", 1) >= TH["omission_stated"] and m.get("om_contradicted", 0) == 0
         m["pass"] = ok
         if not ok:
             fails.append(mid)
         rep["modules"][mid] = m
         lines.append(f"| {mid} | {m.get('attacked', '')} | {m.get('false', '')} | {m.get('imprecise', '')} | "
-                     f"{m.get('high_rate', 0):.0%} | {m.get('ref_wrong', '')} | {m.get('behaviors', '')} | {m.get('om_stated', '')} | "
+                     f"{m.get('medium_plus', '')} med+ / {m.get('high', 0)} high | {m.get('ref_wrong', '')} | {m.get('behaviors', m.get('omission', ''))} | {m.get('om_stated', '')} | "
                      f"{m.get('om_vague', '')} | {m.get('om_missing', '')} | {m.get('om_contradicted', '')} | {'yes' if ok else 'NO'} |")
+    if agg["n"]:
+        fr, mr = agg["false"] / agg["n"], agg["med"] / agg["n"]
+        ok = fr <= TH["falsify_false"] and mr <= TH["falsify_medium_plus"] and agg["high"] == 0
+        rep["checks"]["falsification"] = {"n": agg["n"], "false_rate": round(fr, 3), "medium_plus_rate": round(mr, 3),
+                                          "high": agg["high"], "pass": ok}
+        if not ok:
+            fails.append("falsification")
+        lines += ["", f"Falsification over {agg['n']} sampled claims: {agg['false']} false ({fr:.0%}), {agg['med']} false or "
+                  f"imprecise at medium+ severity ({mr:.0%}), {agg['high']} high. {'Pass' if ok else 'FAIL'}."]
     # judge audit
     ja = audit / "judge-audit.jsonl"
     if ja.exists():

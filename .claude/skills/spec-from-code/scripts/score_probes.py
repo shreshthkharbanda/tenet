@@ -44,7 +44,12 @@ def tokens(text: str) -> set[str]:
 
 
 def distinctive_token(t: str) -> bool:
-    return (t.isdigit() and len(t) >= 3) or (len(t) >= 5 and any(c.isalpha() for c in t))
+    # Numbers and hex digests are excluded: answerers legitimately compute them from spec rules and the
+    # question's values (sums, 2**64-1, a SHA-256 of a rule-built string). Identifiers and message words
+    # cannot be computed, so they remain the leak signal.
+    if t.isdigit() or re.fullmatch(r"[0-9a-f]{16,}", t):
+        return False
+    return len(t) >= 5 and any(c.isalpha() for c in t)
 
 
 def distinctive_literals(text: str) -> set[str]:

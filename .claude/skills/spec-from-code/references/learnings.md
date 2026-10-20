@@ -371,3 +371,22 @@ do, and the Router uses a different, similarly named method. The module also had
 any audited module (7 of 12 claims false or imprecise). Fix: the extractor brief requires caller claims
 to cite the call sites found by search, and treats "no production caller" as a universal claim with a
 stated scope.
+
+**L51. Mechanisms stated per path, consequences never contrasted.** Found: LiteLLM router-calls
+omission hunter; the spec said the concurrency slot is held "for the life of a chat stream" and
+"around the provider call" for other wrappers, both true, without saying that open Responses/Messages
+streams are therefore uncapped (filed as a suspected bug). Fix: implicit-decisions gains a Sibling
+paths section: when one mechanism differs across sibling entry points, state the difference side by
+side with its consequence for a caller.
+
+**L52. Audit thresholds tied to a label nobody used; in-progress output scored as failure.** Found:
+first LiteLLM audit score. Falsification passed because it counted only "high" severity, which no
+falsifier assigned, while 24 of 60 sampled claims (40%) were false or imprecise and 10 of those medium
+severity; and omission hunters still mid-run (behaviors listed, not yet graded) scored "0 stated".
+Fix: falsification is judged in aggregate over audited modules (12 samples per module is too few) on
+false <= 5%, medium-or-worse <= 10%, and zero high; ungraded omission rows read as pending.
+
+**L53. The rebuilder's own brief tripped its isolation check.** Found: scoring the LiteLLM rebuild
+(454/454 baseline tests recovered from the spec alone); the verifier flagged the brief path outside the
+rebuild copy. Fix: rebuilder briefs render into `<scratch>/rebuild-<module>/_brief.md`, as answer and
+control briefs render inside their snapshots.

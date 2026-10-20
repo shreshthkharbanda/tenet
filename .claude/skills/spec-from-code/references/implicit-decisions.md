@@ -78,6 +78,13 @@ The rule that makes this work: **absence of a safeguard is a behavior.** "No tim
 ## Lifecycle
 - Startup order and failures, readiness, graceful shutdown, what is flushed, what is lost.
 
+## Sibling paths
+- When one mechanism behaves differently across sibling entry points (chat vs other endpoints, sync vs
+  async, streaming vs non-streaming, router vs direct SDK use), state the difference side by side and
+  its consequence for a caller ("the concurrency slot is held for the life of a chat stream but released
+  when a Responses stream object is returned, so open Responses streams are not capped"). Stating each
+  path's mechanism separately is not enough: readers do not diff them.
+
 ## Dead and conditional code
 - Branches that cannot be reached, flags that are always on, compatibility shims: say so. A reviewer
   needs to know what is live.

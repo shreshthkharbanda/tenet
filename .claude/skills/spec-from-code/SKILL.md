@@ -189,8 +189,11 @@ unless, only) are where writers overreach; false and imprecise verdicts join tha
 file (category `falsifier`) so the Reviser fixes them with the probe failures.
 
 
-For each module not `validated`: copy its spec to `_meta/rounds/round-1/<module>.md`, dispatch a
-Reviser with the failures file, re-run lint, then re-run Answerer (fresh snapshot) and Judge for that
+Build each module's failures file from every source with
+`python3 $SKILL_DIR/scripts/build_revise.py $SPECS --repo $REPO --round N` (probe failures and notes,
+falsifier and omission findings, lint warnings, rebuild guesses). For each module not `validated`, and
+for any validated module whose file has falsifier, omission, or rebuild rows: copy its spec to
+`_meta/rounds/round-1/<module>.md`, dispatch a Reviser with the failures file, re-run lint, then re-run Answerer (fresh snapshot) and Judge for that
 module as round 2, and score with `--round 2`. Repeat to round 3 at most. Stop early per module when
 validated or when the report says REGRESSION (restore the snapshot; keep the earlier status). Probes
 never change between rounds; only the spec does. If more than 25% of a module's probes are judged
@@ -283,6 +286,7 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
   Gates: `lint_specs.py`, `coverage.py`, `check_ownership.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
   Reconcile: `find_overlaps.py`, `apply_claim_edits.py`, `collect_defects.py`.
+  Revise: `build_revise.py`, `correct_probe.py`.
   Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
   Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`, `collect_defects.py`.
   Gate regression tests: `selftest.py`.

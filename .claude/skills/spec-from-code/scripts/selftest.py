@@ -289,7 +289,12 @@ def main() -> int:
                                                        for i, s in enumerate(["stated"] * 9 + ["missing"], 1)) + "\n")
     rc, out = run("score_audit.py", str(specs), "--round", "1")
     a1 = json.loads((meta / "audit.json").read_text())
-    check("L22 audit fails 10% high-severity falsification", rc == 1 and "big-a" in a1["fails"], out)
+    check("L52 audit fails on a high-severity falsification", rc == 1 and "falsification" in a1["fails"], out)
+    (aud / "omission-big-a.jsonl").write_text(json.dumps({"rank": 1, "behavior": "b"}) + "\n")  # step 1 only
+    rc, out = run("score_audit.py", str(specs), "--round", "1")
+    a2 = json.loads((meta / "audit.json").read_text())
+    check("L52 ungraded omission rows read as pending, not failure", a2["modules"]["big-a"].get("omission") == "pending"
+          and "big-a" not in a2["fails"], json.dumps(a2["modules"]["big-a"]))
     (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": "holds", "severity": "low"}) for i in range(10)) + "\n")
     rc, out = run("score_audit.py", str(specs), "--round", "1", "--make-judge-sample", "--n", "6")
     js = [json.loads(l) for l in (aud / "judge-sample.jsonl").read_text().splitlines()]
