@@ -76,7 +76,6 @@ def main() -> int:
         status = "SKIP" if rc == -1 else "PASS" if rc == 0 else "FAIL"
         failed += 1 if rc > 0 else 0
         print(f"{name:<14}{status:<10}{tail}")
-    import json
     (meta).mkdir(parents=True, exist_ok=True)
     (meta / "status.json").write_text(json.dumps({n: {"rc": rc, "summary": t} for n, rc, t in results}, indent=2) + "\n")
     return 1 if failed else 0

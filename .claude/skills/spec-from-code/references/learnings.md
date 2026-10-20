@@ -468,3 +468,38 @@ refs that name no definition, and an unknown commit stamp; find_overlaps pairs s
 wide-ref claims; a G6 pointer must name a related claim (overlapping lines or a shared literal;
 honest pointers kept 204/205). Every threshold was set from the false-positive rate measured on the
 real specs before it was turned on.
+
+**L60. Scratch harnesses outlived their round and shadowed packages.** Found: LiteLLM round-2
+falsifier; a round-1 `h2.py` left in the shared scratch dir shadowed the real `h2` HTTP/2 package when
+the proxy was imported. Fix: every run environment handed to a worker ends with a hygiene line: a new
+subdirectory per task, scripts named `check_<id>.py`, run with `python -P`.
+
+**L61. Revision does not move the spec-wide error rate; execution does.** Found: LiteLLM round 2. A
+fresh falsification sample after a full revision round found 10% of claims false and 21% wrong at
+medium+ severity (round 1: 7% and 17%), spread evenly: universal 41% false-or-imprecise, plain 39%;
+{confirmed} 35%, {inferred} 59%. Revision fixes what a probe or audit happened to touch, about 3% of
+claims per round. The wrong claims share one shape: they state what code outside the cited lines does
+(what the provider call receives after a "sanitizing" helper, how a dependency logs, what a sync
+sibling path does, whether a dict is copied). Falsifiers find them by driving the public entry point;
+writers state them from reading. Fix: G7 executable evidence. A verifier role backs each {confirmed}
+normative claim with `_meta/evidence/<module>/check_<ID>.py` (drives the entry point, asserts the
+observables, records the claim text it verified) or a pinning test, and corrects the claim through a
+decision row when the check disagrees; `check_evidence.py` re-runs every check, flags stale ones (claim
+text changed) and orphans, and reports an evidence rate. Re-running the evidence after a code change
+lists exactly the claims that went stale. Also: notes of the form "module claim X-NNN: problem" in any
+worker report now reach the owner's revise worklist (they were read by no one), out-of-sample falsifier
+findings are fixed without being counted, and one-time findings (rebuild guesses, notes) are never
+handed to a second round (27 already-fixed rebuild rows came back).
+
+**L62. Run environment missing from writers that verify.** Found: LiteLLM cross-cutting conversion;
+the config writer could not import the project (system Python, no `openai`) and settled facts by
+reading, because its brief had no `{{RUN_ENV}}` (L55 fixed only the briefs found then). Fix: crosscut,
+reconciler and surveyor briefs get it, and a selftest asserts every executing role has it while the
+spec-only roles (answerer, control, rebuilder) never do.
+
+**L63. Moving outputs after the fact broke the audit trail.** Found: LiteLLM round 2. Archiving the
+round-1 audit outputs by hand broke five omission reports' paths (G5 failed), and round-2 falsifier
+reports overwrote round-1's because report names carried no round. Fix: every audit role is rendered
+and reported with `--round N` and writes under `_meta/audit/round-N/` (`$EVAL/audit/round-N/` for the
+judge audit); one shared brief-to-report mapping (`_common.expected_report`) serves dispatch and G5;
+never move a worker's outputs by hand.

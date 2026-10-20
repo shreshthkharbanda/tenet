@@ -36,10 +36,10 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=7)
     a = ap.parse_args()
     meta = Path(a.specs).resolve() / "_meta"
-    audit = meta / "audit"
+    audit = meta / "audit" / f"round-{a.round}"
     audit.mkdir(parents=True, exist_ok=True)
     ev = eval_dir(Path(a.specs))
-    eaudit = ev / "audit"  # judge sample and judge audit carry reference answers: eval dir only
+    eaudit = ev / "audit" / f"round-{a.round}"  # judge sample and audit carry reference answers: eval dir only
     eaudit.mkdir(parents=True, exist_ok=True)
     jdir, adir = ev / "judgments" / f"round-{a.round}", ev / "answers" / f"round-{a.round}"
 

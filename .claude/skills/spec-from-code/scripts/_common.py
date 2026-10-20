@@ -88,6 +88,26 @@ def reports_dirs(specs: Path) -> list[Path]:
     return [Path(specs).resolve() / "_meta" / "worker-reports", eval_dir(specs) / "worker-reports"]
 
 
+ALL_SCOPE_ROLES = {"surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control",
+                   "interfaces", "data", "config", "operations"}
+
+
+def expected_report(brief: Path) -> str:
+    """The worker-report stem a rendered brief implies (dispatch.py unfinished and verify_reports.py both
+    use this): <role>-<module>[-round-N], with module "all" for whole-spec roles."""
+    brief = Path(brief)
+    n = brief.stem
+    if n == "_brief":
+        parts = brief.parent.name.split("-", 1)
+        return f"rebuilder-{parts[1]}" if len(parts) == 2 and parts[0] == "rebuild" else "control-all"
+    n = n[len("audit-"):] if n.startswith("audit-") else n
+    m = re.match(r"^(.+?)-round-(\d+)$", n)
+    base, rnd = (m.group(1), m.group(2)) if m else (n, None)
+    if base in ALL_SCOPE_ROLES:
+        return f"{base}-all" + (f"-round-{rnd}" if rnd else "")
+    return n
+
+
 def read_jsonl(p: Path) -> list[dict]:
     rows = []
     with open(p, encoding="utf-8") as f:

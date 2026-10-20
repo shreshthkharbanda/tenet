@@ -51,12 +51,12 @@ def main() -> int:
             if pf.exists():
                 earlier |= {(r.get("source"), str(r.get("id"))) for r in read_jsonl(pf) if r.get("source") in ("rebuild", "note")}
         add = []
-        for ff in sorted((meta / "audit").glob(f"falsify-{mid}*.jsonl")) + sorted((meta / "audit").glob(f"universal-falsify-{mid}*.jsonl")):
+        for ff in sorted((meta / "audit" / f"round-{a.round}").glob(f"falsify-{mid}*.jsonl")) + sorted((meta / "audit" / f"round-{a.round}").glob(f"universal-falsify-{mid}*.jsonl")):
             for r in read_jsonl(ff):
                 if r.get("verdict") in ("false", "imprecise", "ref_wrong") and ("falsifier", r["id"]) not in seen:
                     add.append({"source": "falsifier", "id": r["id"], "verdict": r["verdict"], "severity": r.get("severity"),
                                 "judge_note": r.get("evidence", ""), "counterexample": r.get("counterexample", "")})
-        of = meta / "audit" / f"omission-{mid}.jsonl"
+        of = meta / "audit" / f"round-{a.round}" / f"omission-{mid}.jsonl"
         if of.exists():
             for r in read_jsonl(of):
                 if r.get("spec_status") in ("vague", "missing", "contradicted"):

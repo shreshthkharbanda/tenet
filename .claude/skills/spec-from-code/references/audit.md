@@ -3,7 +3,7 @@
 Phase 7 of the skill. The pipeline's own gates measure agreement between workers who share a method;
 these briefs attack the result from outside it. Each is rendered by `render_briefs.py --role <role>`
 like any other brief, with extra values passed as `--set KEY=VALUE`. Outputs go to
-`{{SPECS}}/_meta/audit/`, and `scripts/score_audit.py` turns them into `_meta/audit-report.md`.
+`{{SPECS}}/_meta/audit/round-<N>/`, and `scripts/score_audit.py` turns them into `_meta/audit-report.md`.
 
 Roles: falsifier (per module) · omission (per module) · control (all modules, no spec, no code) ·
 judge-auditor (one) · redteam (one) · reader (one) · lifecycle-checker (one).
@@ -37,7 +37,7 @@ For every claim:
    - ref_wrong: the behavior may be real, but the cited lines do not show it.
    Severity: high (a caller relying on it would get wrong results or miss a failure), medium, low.
 
-Write {{SPECS}}/_meta/audit/falsify-{{MODULE_ID}}.jsonl, one row per claim, appended as you go:
+Write {{SPECS}}/_meta/audit/round-{{ROUND}}/falsify-{{MODULE_ID}}.jsonl, one row per claim, appended as you go:
 {"id": "...", "verdict": "holds|false|imprecise|ref_wrong", "severity": "high|medium|low",
  "evidence": "path:Lx-Ly and what the code actually does", "counterexample": "input or state, if any",
  "executed": true|false}
@@ -46,7 +46,7 @@ If you find a wrong claim outside your sample while working, append it as a row 
 only in your notes; notes are not read by the revision step.
 Do not edit the spec or the code. Reply with verdict counts and the worst three findings.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role falsifier --module {{MODULE_ID}} \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role falsifier --module {{MODULE_ID}} --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
@@ -68,7 +68,7 @@ Step 1, before opening any spec file: read the code in scope and write the 15 be
 an operator most needs to know, ranked by consequence: failure modes and what the caller sees,
 retries and fallbacks, defaults that change outcomes, side effects on shared state, ordering and
 concurrency hazards, limits, silent swallowing. Write them to
-{{SPECS}}/_meta/audit/omission-{{MODULE_ID}}.jsonl immediately, one per line:
+{{SPECS}}/_meta/audit/round-{{ROUND}}/omission-{{MODULE_ID}}.jsonl immediately, one per line:
 {"rank": 1, "behavior": "precise statement with literals", "refs": ["path:Lx-Ly"], "why": "..."}
 Writing the list before reading the spec is the point: it keeps the spec from shaping what you look for.
 
@@ -80,7 +80,7 @@ could not act on it: missing literal, condition, or order) | "missing" | "contra
 Do not edit the spec or the code. Reply with counts by spec_status and the three most consequential
 omissions.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role omission --module {{MODULE_ID}} \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role omission --module {{MODULE_ID}} --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
@@ -129,10 +129,10 @@ reference_answer, refs, answer). For each row, decide:
 - probe_invalid: the reference answer is wrong or the question is not answerable from observable
   behavior. Open the refs to check before using this.
 
-Write {{EVAL}}/audit/judge-audit.jsonl: {"id": "...", "verdict": "...", "note": "..."},
+Write {{EVAL}}/audit/round-{{ROUND}}/judge-audit.jsonl: {"id": "...", "verdict": "...", "note": "..."},
 appended as you go. Do not read {{EVAL}}/judgments/ or any spec file. Reply with verdict counts.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role judge-auditor --module all \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role judge-auditor --module all --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
@@ -160,10 +160,10 @@ learn held-out answers; ways a worker could falsify its own report and pass veri
 For each exploit: demonstrate it on the copy (run the gate and show it passes), rate severity
 (how likely an honest-but-rushed worker produces this by accident, and how much it would mislead a
 reader), and propose the smallest mechanical check that closes it. Write
-{{SPECS}}/_meta/audit/redteam.md. Do not edit the skill or the real specs. Reply with the exploits
+{{SPECS}}/_meta/audit/round-{{ROUND}}/redteam.md. Do not edit the skill or the real specs. Reply with the exploits
 ranked by severity.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role redteam --module all \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role redteam --module all --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
@@ -177,7 +177,7 @@ You are an engineer new to this codebase, reading its specification to understan
 specification only: do not open source code. Read {{SPECS}}/INDEX.md and {{SPECS}}/00-overview.md
 first, then at most four module specs of your choice, following the reading order.
 
-Then, from the spec alone, write {{SPECS}}/_meta/audit/reader.md:
+Then, from the spec alone, write {{SPECS}}/_meta/audit/round-{{ROUND}}/reader.md:
 1. The lifecycle of this request, end to end, as numbered steps, each naming the spec claim IDs it
    relies on: {{READER_SCENARIO}}
 2. Three things you would get wrong if you changed this code tomorrow, based on what you read.
@@ -185,7 +185,7 @@ Then, from the spec alone, write {{SPECS}}/_meta/audit/reader.md:
    the file and claim ID.
 Keep it under 1200 words. Your lifecycle will be checked against the code by someone else.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role reader --module all \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role reader --module all --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.
@@ -196,16 +196,16 @@ This replaces any other instruction above about the report's file name or format
 <!-- brief:lifecycle-checker -->
 ```
 You are checking a newcomer's explanation of a code path against the code. Repo: {{REPO}} (commit
-{{COMMIT}}). Explanation: {{SPECS}}/_meta/audit/reader.md (section 1 is the lifecycle; the steps cite
+{{COMMIT}}). Explanation: {{SPECS}}/_meta/audit/round-{{ROUND}}/reader.md (section 1 is the lifecycle; the steps cite
 spec claim IDs, which you may ignore). Scenario: {{READER_SCENARIO}}
 
 Trace the scenario in the code yourself, executing it where reading is not decisive: {{RUN_ENV}} For each numbered step write a row to
-{{SPECS}}/_meta/audit/lifecycle-check.jsonl:
+{{SPECS}}/_meta/audit/round-{{ROUND}}/lifecycle-check.jsonl:
 {"step": 1, "verdict": "correct|incorrect|vague|missing_step_before", "evidence": "path:Lx-Ly", "note": "..."}
 Then add rows with "verdict": "missing" for important steps the explanation skipped entirely. A wrong
 explanation means the spec taught it wrong, so be exact. Reply with verdict counts.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
-  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role lifecycle-checker --module all \
+  python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role lifecycle-checker --module all --round {{ROUND}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
 This replaces any other instruction above about the report's file name or format.

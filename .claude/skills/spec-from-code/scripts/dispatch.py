@@ -61,24 +61,13 @@ def main() -> int:
     elif a.cmd == "unfinished":
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from _common import reports_dirs
+        from _common import expected_report, reports_dirs
         reports = {p.stem for d in reports_dirs(meta.parent) for p in d.glob("*.json")}
         briefs = list((meta / "briefs").glob("*.md"))
         for d in a.snapshot:
             briefs += list(Path(d).glob("_briefs/*.md")) + list(Path(d).glob("_brief.md"))
-        def expected(b: Path) -> str:
-            n = b.stem
-            if n == "_brief":
-                parts = b.parent.name.split("-", 1)
-                return f"{parts[0]}-{parts[1]}" if len(parts) == 2 and parts[0] == "rebuild" else "control-all"
-            n = n.replace("audit-", "")
-            if n in ("surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control"):
-                return f"{n}-all"
-            if n in ("interfaces", "data", "config", "operations"):
-                return f"{n}-all"
-            return n
         for b in sorted(briefs):
-            e = expected(b).replace("rebuild-", "rebuilder-")
+            e = expected_report(b)
             if e.startswith("pairjudge-") and (meta / "reconcile" / f"decisions-{e.split('-', 1)[1]}.jsonl").exists():
                 continue  # its output file is the proof of completion
             if e not in reports:

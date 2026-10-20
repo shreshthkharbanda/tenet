@@ -305,8 +305,8 @@ def main() -> int:
           and v1["status"] != "REGRESSION", json.dumps(v1))
 
     # L22: audit scorer thresholds
-    aud = meta / "audit"
-    aud.mkdir()
+    aud = meta / "audit" / "round-1"
+    aud.mkdir(parents=True)
     (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": v, "severity": "high"})
                                                       for i, v in enumerate(["holds"] * 9 + ["false"])) + "\n")
     (aud / "omission-big-a.jsonl").write_text("\n".join(json.dumps({"rank": i, "behavior": "b", "spec_status": s})
@@ -321,7 +321,7 @@ def main() -> int:
           and "big-a" not in a2["fails"], json.dumps(a2["modules"]["big-a"]))
     (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": "holds", "severity": "low"}) for i in range(10)) + "\n")
     rc, out = run("score_audit.py", str(specs), "--round", "1", "--make-judge-sample", "--n", "6")
-    js = [json.loads(l) for l in (ev / "audit" / "judge-sample.jsonl").read_text().splitlines()]
+    js = [json.loads(l) for l in (ev / "audit" / "round-1" / "judge-sample.jsonl").read_text().splitlines()]
     check("L22 judge sample is blind", js and all("verdict" not in r for r in js), str(js[:1]))
 
     # G5 + L03/L17: isolation checks with a specs dir not named "specs"; relative output paths resolve
@@ -432,6 +432,29 @@ def main() -> int:
           and "## Next" in idx, idx)
     (meta / "status.json").unlink(); (specs / "INDEX.md").unlink()
     (ev / "validation.json").write_text(json.dumps(v_before))
+
+    # L62: every brief whose worker may execute code gets the run environment; spec-only roles never do
+    import re as _re
+    btxt = "\n".join((HERE.parent / "references" / f).read_text() for f in ("briefs.md", "audit.md"))
+    bodies = dict(_re.findall(r"<!-- brief:([\w-]+) -->\s*\n```[^\n]*\n(.*?)\n```", btxt, _re.S))
+    need = {"surveyor", "extractor", "crosscut", "verifier", "pairjudge", "reconciler", "prober", "judge", "reviser",
+            "falsifier", "omission", "lifecycle-checker"}
+    never = {"answerer", "control", "rebuilder"}  # spec-only readers; a rebuilder's env would import the original
+    check("L62 executing roles get {{RUN_ENV}}", all("{{RUN_ENV}}" in bodies[r] for r in need),
+          str([r for r in need if "{{RUN_ENV}}" not in bodies[r]]))
+    check("L62 spec-only roles never get {{RUN_ENV}}", not any("{{RUN_ENV}}" in bodies[r] for r in never),
+          str([r for r in never if "{{RUN_ENV}}" in bodies[r]]))
+
+    # L63: one brief -> report mapping, round-scoped for audits (round-1 outputs were moved by hand and broke
+    # their reports' paths)
+    from _common import expected_report as _er
+    cases = {"audit-falsifier-big-a-round-2.md": "falsifier-big-a-round-2", "audit-redteam-round-2.md": "redteam-all-round-2",
+             "reviser-big-a-round-1.md": "reviser-big-a-round-1", "config.md": "config-all", "surveyor.md": "surveyor-all",
+             "verifier-big-a-03.md": "verifier-big-a-03", "prober-big-a.md": "prober-big-a"}
+    got = {k: _er(Path("/x/_meta/briefs") / k) for k in cases}
+    got["rebuild"] = _er(Path("/s/rebuild-big-a/_brief.md")); got["control"] = _er(Path("/s/control/_brief.md"))
+    check("L63 brief names map to report names", all(got[k] == v for k, v in cases.items()) and got["rebuild"] == "rebuilder-big-a"
+          and got["control"] == "control-all", json.dumps(got))
 
     # L61: G7 executable evidence: passing, failing, stale and orphan checks
     edir = meta / "evidence" / "big-a"

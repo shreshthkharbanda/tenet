@@ -30,6 +30,7 @@ write only the two files named below.
 Repo: {{REPO}} (commit {{COMMIT}}). Inventory: {{SPECS}}/_meta/inventory.json (files, LOC, languages,
 tests, entry hints, build hints). Read it first. Only records with in_scope=true are yours to shard.
 Scope: {{SCOPE_NOTE}}
+How to run this project's code here (to confirm an entry point or a test command): {{RUN_ENV}}
 
 Produce:
 1. {{SPECS}}/_meta/modules.json
@@ -184,6 +185,7 @@ place: the module that owns the code. Restating module facts here makes two copi
 Repo: {{REPO}} (commit {{COMMIT}}). Output: {{SPECS}}/{{XC_FILE}} (frontmatter kind: {{XC_KIND}},
 prefix: {{XC_PREFIX}}). Scope: {{SCOPE_NOTE}}
 Module map: {{SPECS}}/_meta/modules.json. System survey: {{SPECS}}/_meta/survey.md (read first).
+How to run this project's code here (execute rather than infer when a fact is cheap to check): {{RUN_ENV}}
 
 Focus:
 {{XC_FOCUS}}
@@ -371,6 +373,7 @@ You are reconciling independently written module specifications into one coheren
 and writing its top layer. Read everything under {{SPECS}} (probes, answers and judgments live
 elsewhere and are not yours to read). Repo: {{REPO}} (commit {{COMMIT}}). Survey: {{SPECS}}/_meta/survey.md.
 Scope of the specification: {{SCOPE_NOTE}}
+To settle a contradiction by running the code: {{RUN_ENV}}
 
 Tasks, in order:
 1. Contradictions and duplicates were decided by pair judges and applied by script. Finish what the

@@ -37,14 +37,13 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-from _common import eprint, eval_dir, parse_claims, parse_frontmatter, read_json, reports_dirs, write_json
+from _common import eprint, eval_dir, expected_report, parse_claims, parse_frontmatter, read_json, reports_dirs, write_json
 
 SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs", ".rb", ".php", ".cs", ".scala",
               ".swift", ".c", ".cc", ".cpp", ".h", ".hpp", ".ex", ".exs", ".sh", ".sql"}
 SPEC_KINDS = {"module", "overview", "interfaces", "data", "config", "operations"}
 WRITERS = {"surveyor", "extractor", "extractor-fix", "crosscut", "interfaces", "data", "config", "operations",
            "reconciler", "pairjudge", "reviser", "verifier"}
-ALL_ROLES = {"surveyor", "reconciler", "redteam", "reader", "lifecycle-checker", "judge-auditor", "control"}
 XC_KINDS = {"interfaces", "data", "config", "operations"}
 PATH_TOKEN = re.compile(r"(?<![\w$])(/[^\s'\"`;|&<>(){}]+)")
 ASSIGN = re.compile(r"(?:^|[\s;&|(])(?:export\s+)?([A-Za-z_]\w*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
@@ -88,18 +87,6 @@ def is_spec_text(p: Path) -> bool:
         except OSError:
             _spec_cache[p] = False
     return _spec_cache[p]
-
-
-def expected_report(brief: Path) -> str:
-    """The report stem a brief implies (same mapping as dispatch.py unfinished)."""
-    n = brief.stem
-    if n == "_brief":
-        parts = brief.parent.name.split("-", 1)
-        return f"rebuilder-{parts[1]}" if len(parts) == 2 and parts[0] == "rebuild" else "control-all"
-    n = n.replace("audit-", "")
-    if n in ALL_ROLES or n in XC_KINDS or n == "lifecycle-checker":
-        return f"{n}-all"
-    return n
 
 
 def transcript_for(agent: str, dirs: list[Path]) -> Path | None:

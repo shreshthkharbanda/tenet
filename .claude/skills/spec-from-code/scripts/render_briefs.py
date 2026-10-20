@@ -122,7 +122,7 @@ def main() -> int:
             rendered.append((role, f"slice-{k:02d}", out_dir / f"pairjudge-{k:02d}.md", fill(blocks[role], vals, must)))
         (meta / "reconcile").mkdir(parents=True, exist_ok=True)
     elif role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
-        name = f"audit-{role}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
+        name = f"audit-{role}-round-{args.round}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
         dest = out_dir / name
         if role == "control":  # the control may read only its own directory, so its brief lives there
             dest = Path(base["CONTROL_DIR"]).resolve() / "_brief.md" if "CONTROL_DIR" in base else dest
@@ -174,7 +174,7 @@ def main() -> int:
             elif role in ("judge", "reviser"):
                 path = out_dir / f"{role}-{mid}-round-{args.round}.md"
             elif role in ("falsifier", "omission"):
-                path = out_dir / f"audit-{role}-{mid}.md"
+                path = out_dir / f"audit-{role}-{mid}-round-{args.round}.md"
             elif role == "verifier":
                 # one brief per chunk of confirmed normative claims that have no evidence yet
                 size = int(next((kv.split("=", 1)[1] for kv in args.set if kv.startswith("CHUNK_SIZE=")), "25"))

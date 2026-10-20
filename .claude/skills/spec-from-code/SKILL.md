@@ -213,7 +213,7 @@ Full protocol in `references/validation.md` section 2. In short:
 ## Phase 5: revise (per failing module, up to 3 rounds)
 
 Before the first revision round, run the universal-claim falsification pass on every module:
-`scripts/sample_claims.py $SPECS --universal-only --per-module 8 --out $SPECS/_meta/audit/universal.jsonl`,
+`scripts/sample_claims.py $SPECS --universal-only --per-module 8 --out $SPECS/_meta/audit/round-N/universal.jsonl`,
 then one `--role falsifier --set SAMPLE_FILE=<that file>` per module. Universal claims (always, never,
 unless, only) are where writers overreach; false and imprecise verdicts join that module's failures
 file (category `falsifier`) so the Reviser fixes them with the probe failures.
@@ -246,7 +246,7 @@ is ever copied back.
 
 The gates measure agreement among workers who share one method. The audit attacks the result from
 outside it, with briefs in `references/audit.md` (rendered like any other) and one scorer.
-1. Sample: `scripts/sample_claims.py $SPECS --per-module 12 --out $SPECS/_meta/audit/claims.jsonl`
+1. Sample: `scripts/sample_claims.py $SPECS --per-module 12 --out $SPECS/_meta/audit/round-N/claims.jsonl`
    and `scripts/score_audit.py $SPECS --round <last> --make-judge-sample --n 40`.
 2. Control: `scripts/snapshot_for_answerers.py $SPECS --out $SCRATCH/control --questions-only`, then
    dispatch `--role control --set CONTROL_DIR=$SCRATCH/control` and one Judge per module with
@@ -257,7 +257,10 @@ outside it, with briefs in `references/audit.md` (rendered like any other) and o
    --set READER_SCENARIO="<the system's most important request path>"`, then `--role lifecycle-checker`
    with the same scenario after the reader finishes.
 4. `scripts/score_probes.py $SPECS --round <last>` (to pick up the control column), then
-   `scripts/score_audit.py $SPECS --round <last>`. `_meta/audit-report.md` gives PASS or the failing
+   `scripts/score_audit.py $SPECS --round <last>`. Every audit role is rendered with `--round N` and
+   writes under `_meta/audit/round-N/` (the judge sample and judge audit under `$EVAL/audit/round-N/`),
+   so a later round's audit never overwrites or moves an earlier one; never move a worker's outputs by
+   hand, since its report records their paths. `_meta/audit-report.md` gives PASS or the failing
    checks. Each failure is a class of defect: fix the class (brief, gate, or script), log it in
    `references/learnings.md` with a self-test case, re-run the affected phases, and audit again.
 
