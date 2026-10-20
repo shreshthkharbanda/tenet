@@ -323,6 +323,11 @@ def main() -> int:
         elif role in ("judge", "judge-auditor"):
             flag(f"{role} read spec text (judges compare answers with code, not with the spec)",
                  [(h, p) for h, p in accesses if (p.is_file() and is_spec_text(p)) or under(p, specs / "modules")])
+            if role == "judge":
+                rnd = r.get("round")
+                flag("judge read another round's judgments or answers (verdicts must be independent per round)",
+                     [(h, p) for h, p in accesses if any(under(p, ev / k) for k in ("judgments", "answers"))
+                      and rnd is not None and f"round-{rnd}" not in p.parts])
             if role == "judge-auditor":
                 flag("judge auditor read the original judgments (blindness broken)",
                      [(h, p) for h, p in accesses if under(p, ev / "judgments")])

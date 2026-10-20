@@ -560,8 +560,10 @@ Record spec_defect whenever the spec states something the code contradicts or le
 the answer still agrees (e.g. the right outcome attributed to the wrong cause). These are routed to
 revisers mechanically; do not bury them in the note.
 
-Do not read or edit any spec file; your job is comparison, not repair. Write your worker report
-(command below) listing every file you read. Reply with the verdict counts.
+Do not read or edit any spec file; your job is comparison, not repair. Do not read earlier rounds'
+judgments or answers: each round is measured fresh, and a verdict copied for consistency carries the
+earlier judge's mistakes forward (the gate checks). Write your worker report (command below) listing
+every file you read. Reply with the verdict counts.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.

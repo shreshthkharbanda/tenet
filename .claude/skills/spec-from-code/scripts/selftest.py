@@ -400,6 +400,17 @@ def main() -> int:
     transcript("rev1", [("Grep", {"pattern": "add", "path": str(tmp)}, f"{ev}/probes/big-a.jsonl:3:add\n{repo}/pkg/small.py:1:def add(")])
     rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
     check("L57 a recursive search whose results list held-out files is caught", "reviser touched the eval dir" in out, out)
+    # L64: a judge reading an earlier round's verdicts is flagged
+    (meta / "briefs" / "judge-big-a-round-2.md").write_text("brief")
+    run("write_report.py", "--specs", str(specs), "--role", "judge", "--module", "big-a", "--round", "2",
+        "--output", str(ev / "probes" / "big-a.jsonl"), "--read", str(repo / "pkg" / "big.py"))
+    run("dispatch.py", "add", "--specs", str(specs), "--role", "judge", "--module", "big-a", "--round", "2",
+        "--brief", str(meta / "briefs" / "judge-big-a-round-2.md"), "--agent", "jdg2")
+    run("dispatch.py", "done", "--specs", str(specs), "--agent", "jdg2")
+    transcript("jdg2", [("Read", {"file_path": str(ev / "judgments" / "round-1" / "big-a.jsonl")}, "...")])
+    rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
+    check("L64 a judge reading an earlier round's judgments is flagged", "verdicts must be independent per round" in out, out)
+    (ev / "worker-reports" / "judge-big-a-round-2.json").unlink()
     (meta / "dispatch.jsonl").unlink()
     for f in (meta / "worker-reports" / "reviser-big-a-round-1.json",):
         f.unlink()

@@ -503,3 +503,9 @@ reports overwrote round-1's because report names carried no round. Fix: every au
 and reported with `--round N` and writes under `_meta/audit/round-N/` (`$EVAL/audit/round-N/` for the
 judge audit); one shared brief-to-report mapping (`_common.expected_report`) serves dispatch and G5;
 never move a worker's outputs by hand.
+
+**L64. Judges anchored on the previous round's verdicts.** Found: LiteLLM round 2; a judge read the
+round-1 judgments "to keep verdicts consistent" and carried two lenient calls forward. Each round's
+fidelity is only a measurement if its verdicts are independent. Fix: the judge brief forbids reading
+other rounds' judgments and answers, and G5 flags a judge whose transcript touches them. The affected
+round-2 judgments are re-run rather than waived.
