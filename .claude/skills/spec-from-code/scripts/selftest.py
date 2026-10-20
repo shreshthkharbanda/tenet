@@ -188,6 +188,15 @@ def main() -> int:
     rc, out = run("apply_claim_edits.py", str(specs))
     check("L35 conflicting edits are not applied and fail", rc == 1 and "CONFLICT" in out
           and (specs / "modules" / "big-a.md").read_text() == before, out)
+    # a decision row's text may carry its own sub-bullets
+    (meta / "reconcile" / "decisions-02.jsonl").write_text(json.dumps({"row": -1, "verdict": "contradiction", "edits": [
+        {"file": "modules/big-a.md", "id": "BIGA-001", "text": "`Big` stores 1 in x.\n  - and nothing else"}]}) + "\n")
+    rc, out = run("apply_claim_edits.py", str(specs))
+    check("decision text keeps its sub-bullets", rc == 0 and "stores 1 in x.\n  - and nothing else" in (specs / "modules" / "big-a.md").read_text(), out)
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo), "--only", "modules/big-a.md")
+    check("a claim with sub-bullets from a decision row still lints", rc == 0, out)
+    (specs / "modules" / "big-a.md").write_text(before)
+    (meta / "reconcile" / "decisions-02.jsonl").unlink()
     # L58: applied decision files are ledgered and never replayed; a ledgered file that changed is an error
     rc, out = run("apply_claim_edits.py", str(specs))
     check("L58 ledgered decision files are not re-applied", rc == 0 and "none (all in ledger.json)" in out
