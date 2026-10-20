@@ -107,8 +107,10 @@ For unanswerable: "unanswerable": true, "answer": "".
 In your worker report (command below), list every file you read. Reply with answered vs unanswerable counts per module.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role control --module all --snapshot {{CONTROL_DIR}} \
-    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    --output <each file you wrote>[:<claim count>] --read-from {{CONTROL_DIR}}/_work/reads-all.txt \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+Keep every scratch file (the read list included) under {{CONTROL_DIR}}/_work/: anything you create
+elsewhere counts as a file you touched outside your snapshot.
 This replaces any other instruction above about the report's file name or format.
 ```
 

@@ -521,8 +521,10 @@ your output file early and save it after each section (append each probe, answer
 as it is final). If you are told you were resumed, check your output file first and continue from it.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role answerer --module {{MODULE_ID}} --round {{ROUND}} --snapshot {{SPEC_SNAPSHOT}} \
-    --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
+    --output <each file you wrote>[:<claim count>] --read-from {{SPEC_SNAPSHOT}}/_work/reads-{{MODULE_ID}}.txt \
     [--note "..."] [--bug "path:START-END|what looks unintended|how you know"]
+Keep every scratch file (the read list included) under {{SPEC_SNAPSHOT}}/_work/: anything you create
+elsewhere counts as a file you touched outside your snapshot.
 This replaces any other instruction above about the report's file name or format.
 ```
 
