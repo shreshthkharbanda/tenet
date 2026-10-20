@@ -48,9 +48,13 @@ def main() -> int:
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     meta = specs / "_meta"
     meta.mkdir(parents=True)
+    ev = tmp / "eval"  # probes, answers, judgments, validation: outside specs and repo (L57)
 
     # L01: --include scopes; out-of-scope files stay as context
-    rc, out = run("inventory.py", str(repo), "--out", str(meta / "inventory.json"), "--include", "pkg/big.py", "--include", "pkg/small.py")
+    rc, out = run("inventory.py", str(repo), "--out", str(meta / "inventory.json"), "--eval", str(repo / "ev"))
+    check("L57 eval dir inside the repo is refused", rc != 0 and "inside the repo" in out, out)
+    rc, out = run("inventory.py", str(repo), "--out", str(meta / "inventory.json"), "--include", "pkg/big.py", "--include", "pkg/small.py",
+                  "--eval", str(ev))
     inv = json.loads((meta / "inventory.json").read_text())
     other = next(f for f in inv["files"] if f["path"] == "pkg/other.py")
     check("L01 include marks out-of-scope files", rc == 0 and other["in_scope"] is False, out)
@@ -177,13 +181,25 @@ def main() -> int:
     check("L33 unresolvable pair becomes a question", "which is intended?" in (meta / "questions.md").read_text())
     rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
     check("L33 specs still lint after edits", rc == 0, out)
-    (meta / "reconcile" / "decisions-01.jsonl").write_text(json.dumps(
-        {"row": 0, "verdict": "duplicate", "edits": [{"file": "modules/big-a.md", "id": "BIGA-001", "text": "a different rewrite"}]}) + "\n")
+    for k, t in (("01a", "a different rewrite"), ("01b", "yet another rewrite")):
+        (meta / "reconcile" / f"decisions-{k}.jsonl").write_text(json.dumps(
+            {"row": 0, "verdict": "duplicate", "edits": [{"file": "modules/big-a.md", "id": "BIGA-001", "text": t}]}) + "\n")
     before = (specs / "modules" / "big-a.md").read_text()
     rc, out = run("apply_claim_edits.py", str(specs))
     check("L35 conflicting edits are not applied and fail", rc == 1 and "CONFLICT" in out
           and (specs / "modules" / "big-a.md").read_text() == before, out)
-    (meta / "reconcile" / "decisions-01.jsonl").unlink()
+    # L58: applied decision files are ledgered and never replayed; a ledgered file that changed is an error
+    rc, out = run("apply_claim_edits.py", str(specs))
+    check("L58 ledgered decision files are not re-applied", rc == 0 and "none (all in ledger.json)" in out
+          and (specs / "modules" / "big-a.md").read_text() == before, out)
+    (meta / "reconcile" / "decisions-01a.jsonl").write_text("")
+    rc, out = run("apply_claim_edits.py", str(specs), "--dry-run")
+    check("L58 a changed ledgered file is an error; dry run writes nothing", rc == 1 and "changed after it was applied" in out
+          and json.loads((meta / "reconcile" / "applied.json").read_text())["files"] == [], out)
+    for k in ("01a", "01b"):
+        (meta / "reconcile" / f"decisions-{k}.jsonl").unlink()
+    led = json.loads((meta / "reconcile" / "ledger.json").read_text())
+    (meta / "reconcile" / "ledger.json").write_text(json.dumps({k: v for k, v in led.items() if k == "decisions-00.jsonl"}))
 
     # L36: ownership gate: cross-cutting restatement fails, pointers pass
     xc = ("---\nkind: config\nprefix: CFG\ncommit: " + head + "\nstatus: draft\n---\n# Config\n\n## Settings\n"
@@ -226,10 +242,10 @@ def main() -> int:
                "question": f"What does m{i} return for v={i + 7}?", "reference_answer": f"It returns `{7}`.",
                "refs": ["pkg/big.py:5-8"]} for i in range(20)]
     probes[0]["reference_answer"] = "It raises `ZebraOverflowError` with message \"stripes exhausted\""
-    (meta / "probes").mkdir()
-    (meta / "probes" / "big-a.jsonl").write_text("\n".join(json.dumps(p) for p in probes) + "\n")
+    (ev / "probes").mkdir(parents=True)
+    (ev / "probes" / "big-a.jsonl").write_text("\n".join(json.dumps(p) for p in probes) + "\n")
     rc, out = run("score_probes.py", str(specs), "--assign-splits")
-    rows = [json.loads(l) for l in (meta / "probes" / "big-a.jsonl").read_text().splitlines()]
+    rows = [json.loads(l) for l in (ev / "probes" / "big-a.jsonl").read_text().splitlines()]
     check("L11 exact 40% held out", sum(r["split"] == "holdout" for r in rows) == 8, out)
     snap = tmp / "snap-r1"
     rc, out = run("snapshot_for_answerers.py", str(specs), "--out", str(snap))
@@ -244,7 +260,7 @@ def main() -> int:
     check("L43 snapshot is an allowlist (no _meta leaks)", leaked == [], str(leaked))
     (meta / "probe-corrections.jsonl").unlink(); (meta / "reconcile" / "decisions-zz.jsonl").unlink()
     for rnd, agree_n in ((1, 20), (2, 17)):
-        ad, jd = meta / "answers" / f"round-{rnd}", meta / "judgments" / f"round-{rnd}"
+        ad, jd = ev / "answers" / f"round-{rnd}", ev / "judgments" / f"round-{rnd}"
         ad.mkdir(parents=True); jd.mkdir(parents=True)
         ans, jud = [], []
         for i, p in enumerate(rows):
@@ -258,7 +274,7 @@ def main() -> int:
         (ad / "big-a.jsonl").write_text("\n".join(json.dumps(x) for x in ans) + "\n")
         (jd / "big-a.jsonl").write_text("\n".join(json.dumps(x) for x in jud) + "\n")
     rc, out = run("score_probes.py", str(specs), "--round", "1", "--failures-for-revision", "--snapshot", str(snap))
-    val = json.loads((meta / "validation.json").read_text())
+    val = json.loads((ev / "validation.json").read_text())
     leak_ids = [l["probe"] for l in val["leak_suspects"]]
     check("L12 planted leak detected", "BIGA-P00" in leak_ids, json.dumps(val["leak_suspects"]))
     check("L15 template answers not flagged", leak_ids == ["BIGA-P00"], json.dumps(val["leak_suspects"]))
@@ -269,7 +285,7 @@ def main() -> int:
     else:
         check("L16 held-out side note kept from revisers", any(n["probe"] == "BIGA-P03" for n in val["holdout_side_notes"]))
     rc, out = run("score_probes.py", str(specs), "--round", "2", "--snapshot", str(snap))
-    val2 = json.loads((meta / "validation.json").read_text())
+    val2 = json.loads((ev / "validation.json").read_text())
     lost = val2["rounds"]["1"]["big-a"]["holdout_agree"] - val2["modules"]["big-a"]["holdout_agree"]
     check("L11 regression by count", (val2["modules"]["big-a"]["status"] == "REGRESSION") == (lost >= 2), json.dumps(val2["modules"]))
 
@@ -278,13 +294,13 @@ def main() -> int:
     rc, out = run("snapshot_for_answerers.py", str(specs), "--out", str(ctl), "--questions-only")
     files = sorted(p.name for p in ctl.rglob("*") if p.is_file())
     check("L22 control snapshot holds questions only", files == ["big-a.questions.jsonl"], str(files))
-    (meta / "judgments" / "round-0").mkdir(parents=True)
-    (meta / "judgments" / "round-0" / "big-a.jsonl").write_text("\n".join(
+    (ev / "judgments" / "round-0").mkdir(parents=True)
+    (ev / "judgments" / "round-0" / "big-a.jsonl").write_text("\n".join(
         json.dumps({"id": r["id"], "verdict": "agree" if i < 5 else "gap"}) for i, r in enumerate(rows)) + "\n")
     rc, out = run("score_probes.py", str(specs), "--round", "0")
     check("L22 round 0 cannot be scored as a round", rc != 0, out)
     rc, out = run("score_probes.py", str(specs), "--round", "1", "--snapshot", str(snap))
-    v1 = json.loads((meta / "validation.json").read_text())["modules"]["big-a"]
+    v1 = json.loads((ev / "validation.json").read_text())["modules"]["big-a"]
     check("L22 control fidelity and lift reported", v1.get("control_fidelity") == 0.25 and v1.get("lift_over_control") is not None
           and v1["status"] != "REGRESSION", json.dumps(v1))
 
@@ -305,23 +321,23 @@ def main() -> int:
           and "big-a" not in a2["fails"], json.dumps(a2["modules"]["big-a"]))
     (aud / "falsify-big-a.jsonl").write_text("\n".join(json.dumps({"id": f"BIGA-{i:03d}", "verdict": "holds", "severity": "low"}) for i in range(10)) + "\n")
     rc, out = run("score_audit.py", str(specs), "--round", "1", "--make-judge-sample", "--n", "6")
-    js = [json.loads(l) for l in (aud / "judge-sample.jsonl").read_text().splitlines()]
+    js = [json.loads(l) for l in (ev / "audit" / "judge-sample.jsonl").read_text().splitlines()]
     check("L22 judge sample is blind", js and all("verdict" not in r for r in js), str(js[:1]))
 
     # G5 + L03/L17: isolation checks with a specs dir not named "specs"; relative output paths resolve
     wr = meta / "worker-reports"
     wr.mkdir()
-    (wr / "prober-big-a.json").write_text(json.dumps({"role": "prober", "module": "big-a", "outputs": [{"path": str(meta / "probes" / "big-a.jsonl")}],
+    (wr / "prober-big-a.json").write_text(json.dumps({"role": "prober", "module": "big-a", "outputs": [{"path": str(ev / "probes" / "big-a.jsonl")}],
                                                     "files_read": ["pkg/big.py", str(specs / "modules" / "big-a.md")]}))
     (wr / "answerer-big-a-round-1.json").write_text(json.dumps({"role": "answerer", "module": "big-a", "snapshot": str(snap),
-                                                              "outputs": [{"path": str(meta / "answers" / "round-1" / "big-a.jsonl")}],
+                                                              "outputs": [{"path": str(ev / "answers" / "round-1" / "big-a.jsonl")}],
                                                               "files_read": [str(snap / "modules" / "big-a.md"), "pkg/big.py"]}))
     (wr / "extractor-big-b.json").write_text(json.dumps({"role": "extractor", "module": "big-b",
                                                        "outputs": [{"path": f"{specs.name}/modules/big-b.md", "claims": 2}],
                                                        "files_read": ["pkg/small.py"]}))
     (tmp / "reads.txt").write_text(str(repo / "pkg" / "small.py") + "\n")
     rc, out = run("write_report.py", "--specs", str(specs), "--role", "judge", "--module", "big-a", "--round", "1",
-                  "--output", str(meta / "probes" / "big-a.jsonl"), "--read-from", str(tmp / "reads.txt"),
+                  "--output", str(ev / "probes" / "big-a.jsonl"), "--read-from", str(tmp / "reads.txt"),
                   "--bug", "pkg/small.py:1-2|adds without checks|read")
     wr_ok = json.loads(Path(out.strip().splitlines()[-1]).read_text())
     check("L41 write_report emits the verified schema", rc == 0 and wr_ok["role"] == "judge" and wr_ok["files_read"]
@@ -333,6 +349,89 @@ def main() -> int:
     check("L03 prober reading spec caught (dir not named specs)", "blindness broken" in out, out)
     check("L03 answerer reading source caught", "outside its snapshot" in out, out)
     check("L17 relative output path resolves", "extractor-big-b.json: reported output" not in out, out)
+
+    # L57: verdicts are checked, not trusted (red team: empty/hedged agrees, held-out shrinkage, copying)
+    v_before = json.loads((ev / "validation.json").read_text())
+    rows = [json.loads(l) for l in (ev / "probes" / "big-a.jsonl").read_text().splitlines()]
+    hold = [r for r in rows if r["split"] == "holdout"]
+    for r in rows:
+        r["reference_answer"] = f"It raises `QuuxLimitError` with message \"limit {r['id']} reached for tenant\"."
+    (ev / "probes" / "big-a.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    ad, jd = ev / "answers" / "round-3", ev / "judgments" / "round-3"
+    ad.mkdir(parents=True); jd.mkdir(parents=True)
+    (ad / "big-a.jsonl").write_text("".join(json.dumps({"id": r["id"], "answer": "" if i == 0 else "It may raise an error, as appropriate.",
+                                                        "unanswerable": i == 0}) + "\n" for i, r in enumerate(rows)))
+    (jd / "big-a.jsonl").write_text("".join(json.dumps({"id": r["id"], "verdict": "agree"}) + "\n" for r in rows))
+    rc, out = run("score_probes.py", str(specs), "--round", "3", "--snapshot", str(snap))
+    check("L57 agree on an empty answer is an error", rc == 1 and "empty or unanswerable" in out, out)
+    check("L57 hedged agrees flagged as lenient", "agree verdicts on answers sharing none" in out, out)
+    (ad / "big-a.jsonl").write_text("".join(json.dumps({"id": r["id"], "answer": r["reference_answer"] + " Nothing else is logged for the tenant here."}) + "\n" for r in rows))
+    (jd / "big-a.jsonl").write_text("".join(json.dumps({"id": r["id"], "verdict": "probe_invalid" if r in hold[:2] else "agree"}) + "\n" for r in rows))
+    rc, out = run("score_probes.py", str(specs), "--round", "3", "--snapshot", str(snap))
+    m3 = json.loads((ev / "validation.json").read_text())["modules"]["big-a"]
+    check("L57 held-out probe_invalid counts as a miss", m3["holdout_n"] == len(hold) and m3["holdout_agree"] == len(hold) - 2, json.dumps(m3))
+    check("L57 copied reference phrasing is an error", "copy reference phrasing" in out, out)
+    (ev / "validation.json").write_text(json.dumps(v_before))
+
+    # L57: G5 checks transcripts and the dispatch log, not only self-reports
+    tdir = tmp / "transcripts"
+    tdir.mkdir()
+    def transcript(agent: str, calls: list) -> None:
+        lines = []
+        for i, (name, inp, res) in enumerate(calls):
+            lines.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": f"t{i}", "name": name, "input": inp}]}})
+            lines.append({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": f"t{i}", "content": res}]}})
+        (tdir / f"agent-{agent}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    (meta / "briefs").mkdir(exist_ok=True)
+    for b in ("reviser-big-a-round-1.md", "prober-big-b.md"):
+        (meta / "briefs" / b).write_text("brief")
+    rc, out = run("write_report.py", "--specs", str(specs), "--role", "reviser", "--module", "big-a", "--round", "1",
+                  "--output", str(specs / "modules" / "big-a.md"), "--read", str(repo / "pkg" / "big.py"))
+    for args in (("--role", "reviser", "--module", "big-a", "--brief", str(meta / "briefs" / "reviser-big-a-round-1.md"), "--agent", "rev1"),
+                 ("--role", "prober", "--module", "big-b", "--brief", str(meta / "briefs" / "prober-big-b.md"), "--agent", "prb1")):
+        run("dispatch.py", "add", "--specs", str(specs), *args)
+    for a in ("rev1", "prb1"):
+        run("dispatch.py", "done", "--specs", str(specs), "--agent", a)
+    transcript("rev1", [("Bash", {"command": f"E={ev}; cat $E/probes/big-a.jsonl | head"}, "...")])
+    rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
+    check("L57 transcript shows a writer reading held-out probes (variable-expanded Bash)",
+          rc == 1 and "reviser-big-a-round-1.json: reviser touched the eval dir" in out, out)
+    check("L57 a dispatched worker with no report fails G5", "prober-big-b: dispatched as prober" in out, out)
+    transcript("rev1", [("Grep", {"pattern": "add", "path": str(tmp)}, f"{ev}/probes/big-a.jsonl:3:add\n{repo}/pkg/small.py:1:def add(")])
+    rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
+    check("L57 a recursive search whose results list held-out files is caught", "reviser touched the eval dir" in out, out)
+    (meta / "dispatch.jsonl").unlink()
+    for f in (meta / "worker-reports" / "reviser-big-a-round-1.json",):
+        f.unlink()
+
+    # L57: no silent gate skips; correct_probe guards held-out probes; apply_status trusts only passing gates
+    shutil.move(str(ev / "probes"), str(tmp / "probes-aside"))
+    rc, out = run("gate.py", str(specs), "--repo", str(repo), "--round", "1")
+    check("L57 --round with no probes is a FAIL, not a SKIP", "G4 probes" in out and "FAIL" in out.split("G4 probes", 1)[1].splitlines()[0], out)
+    shutil.move(str(tmp / "probes-aside"), str(ev / "probes"))
+    hid = hold[0]["id"]
+    rc, out = run("correct_probe.py", str(specs), "--id", hid, "--question-append", "(x)", "--reason", "r", "--evidence", "pkg/big.py:5-8")
+    check("L57 held-out correction needs --allow-holdout", rc != 0 and "held out" in out, out)
+    rc, out = run("correct_probe.py", str(specs), "--id", hid, "--question-append", "(x)", "--reason", "r", "--evidence", "trust me",
+                  "--allow-holdout")
+    check("L57 correction evidence must resolve to code", rc != 0 and "must cite code" in out, out)
+    rc, out = run("correct_probe.py", str(specs), "--id", hid, "--question-append", "(x)", "--reason", "r",
+                  "--evidence", "`pkg/big.py:5-8`", "--allow-holdout")
+    log = json.loads((ev / "probe-corrections.jsonl").read_text().splitlines()[-1])
+    check("L57 question edits are logged with old and new text", rc == 0 and log["new_question"].endswith("(x)")
+          and log["old_question"] != log["new_question"], out)
+    vfake = {"round": 1, "modules": {"big-a": {"status": "validated", "holdout_fidelity": 1.0, "holdout_contradictions": 0}}}
+    (ev / "validation.json").write_text(json.dumps(vfake))
+    (meta / "status.json").write_text(json.dumps({"G4 probes": {"rc": 1, "summary": "x"}}))
+    (specs / "INDEX.md").write_text("# Index\n\n## Status\n| old | table |\n\n## Next\nx\n")
+    rc, out = run("apply_status.py", str(specs))
+    fm = (specs / "modules" / "big-a.md").read_text()
+    check("L57 apply_status never stamps validated over a failed gate", "status: provisional" in fm, fm[:300])
+    idx = (specs / "INDEX.md").read_text()
+    check("L57 a hand-written Status section is replaced, not duplicated", idx.count("## Status") == 1 and "| old | table |" not in idx
+          and "## Next" in idx, idx)
+    (meta / "status.json").unlink(); (specs / "INDEX.md").unlink()
+    (ev / "validation.json").write_text(json.dumps(v_before))
 
     # L09/L10: rebuild scoring is baseline-relative
     def junit(path: Path, cases: dict) -> None:

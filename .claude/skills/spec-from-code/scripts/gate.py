@@ -2,7 +2,9 @@
 """Run every mechanical gate that has inputs available and print one status table.
 Writes specs/_meta/status.json. Exit 1 if any gate that ran failed.
 
-Usage: gate.py <specs_dir> --repo <root> [--round N]
+Usage: gate.py <specs_dir> --repo <root> [--round N] [--transcripts DIR ...]
+A gate whose inputs should exist never SKIPs silently (L57): --round with no probes is a FAIL, and G5
+runs whenever anything was dispatched (zero reports for a dispatched run is a FAIL).
 """
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ def main() -> int:
     ap.add_argument("specs")
     ap.add_argument("--repo", required=True)
     ap.add_argument("--round", type=int, default=None)
+    ap.add_argument("--transcripts", action="append", default=[],
+                    help="subagent transcript dirs; G5 then checks what workers actually opened")
     args = ap.parse_args()
     specs = Path(args.specs).resolve()
     meta = specs / "_meta"
@@ -42,14 +46,20 @@ def main() -> int:
             results.append(run("G6 ownership", [str(HERE / "check_ownership.py"), str(specs), "--repo", args.repo]))
     else:
         results.append(("G2 lint", -1, "skipped: no specs yet"))
-    if args.round is not None and (meta / "probes").exists():
-        results.append(run("G4 probes", [str(HERE / "score_probes.py"), str(specs), "--round", str(args.round), "--failures-for-revision"]))
+    sys.path.insert(0, str(HERE))
+    from _common import eval_dir, reports_dirs
+    if args.round is not None:
+        if (eval_dir(specs) / "probes").exists():
+            results.append(run("G4 probes", [str(HERE / "score_probes.py"), str(specs), "--round", str(args.round), "--failures-for-revision"]))
+        else:
+            results.append(("G4 probes", 1, f"FAIL: --round {args.round} asked for but {eval_dir(specs) / 'probes'} does not exist"))
     else:
         results.append(("G4 probes", -1, "skipped: pass --round N after answers and judgments exist"))
-    if (meta / "worker-reports").exists():
-        results.append(run("G5 reports", [str(HERE / "verify_reports.py"), str(specs), "--repo", args.repo]))
+    if (meta / "dispatch.jsonl").exists() or any(d.exists() for d in reports_dirs(specs)):
+        results.append(run("G5 reports", [str(HERE / "verify_reports.py"), str(specs), "--repo", args.repo,
+                                          *[x for t in args.transcripts for x in ("--transcripts", t)]]))
     else:
-        results.append(("G5 reports", -1, "skipped: no worker reports"))
+        results.append(("G5 reports", -1, "skipped: nothing dispatched yet"))
     failed = 0
     print(f"{'gate':<14}{'result':<10}summary")
     for name, rc, tail in results:

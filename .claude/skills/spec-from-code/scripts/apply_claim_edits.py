@@ -4,11 +4,16 @@ ID, keeping the ID. Parallel judges never touch spec files, so there are no edit
 is the only writer. Unresolvable pairs are appended to _meta/questions.md.
 
 Usage: apply_claim_edits.py <specs_dir> [--dry-run]
-Reads every _meta/reconcile/decisions-*.jsonl. Exit 1 if any edit names a claim that does not exist.
+Reads the _meta/reconcile/decisions-*.jsonl files not yet applied. Exit 1 if any edit names a claim that
+does not exist. A ledger (reconcile/ledger.json, file -> sha256) records what was applied: replaying an
+old pair-judge decision after a reviser rewrote the same claim would silently revert the revision, and
+an old edit and a new one to the same claim would read as a conflict (L58). A ledgered file that changed
+since it was applied is an error. --dry-run writes nothing.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -31,7 +36,16 @@ def main() -> int:
     edited_ids: set[str] = set()
     edits_by_file: dict[str, list[dict]] = {}
     tail_counts: dict[str, int] = {}
+    ledger_path = rdir / "ledger.json"
+    ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else {}
+    new_files = []
     for df in sorted(rdir.glob("decisions-*.jsonl")):
+        h = hashlib.sha256(df.read_bytes()).hexdigest()
+        if df.name in ledger:
+            if ledger[df.name] != h:
+                errors.append(f"{df.name} changed after it was applied; write new decisions to a new file")
+            continue
+        new_files.append((df.name, h))
         for d in read_jsonl(df):
             counts[d.get("verdict")] = counts.get(d.get("verdict"), 0) + 1
             row = overlaps[d["row"]] if 0 <= d.get("row", -1) < len(overlaps) else {}
@@ -123,12 +137,18 @@ def main() -> int:
                 hit = sorted(set(re.findall(r"[A-Z][A-Z0-9]{1,11}-\d{3,4}", ln)) & edited_ids)
                 if hit:
                     tables_to_review.append(f"{fp.relative_to(specs).as_posix()}:{n} ({', '.join(hit)})")
-    if conflicts:
-        write_json(rdir / "conflicts.json", conflicts)
-    write_json(rdir / "applied.json", {"verdicts": counts, "edits_applied": applied, "errors": errors,
-                                       "questions": len(questions), "conflicts": len(conflicts),
-                                       "tail_sample_verdicts": tail_counts, "tables_to_review": tables_to_review,
-                                       "pointer_chains": chains})
+    summary = {"verdicts": counts, "edits_applied": applied, "errors": errors, "questions": len(questions),
+               "conflicts": len(conflicts), "tail_sample_verdicts": tail_counts,
+               "tables_to_review": tables_to_review, "pointer_chains": chains, "files": [n for n, _ in new_files]}
+    if not a.dry_run:
+        # Every processed file is ledgered, errors and conflicts included: its other edits were applied, and
+        # a fix for what was skipped goes in a new decision file.
+        if conflicts:
+            write_json(rdir / "conflicts.json", conflicts)
+        ledger.update(dict(new_files))
+        write_json(ledger_path, ledger)
+        write_json(rdir / "applied.json", summary)
+    eprint(f"decision files {'to apply' if a.dry_run else 'applied'}: {summary['files'] or 'none (all in ledger.json)'}")
     if tail_counts:
         n = sum(tail_counts.values())
         bad = tail_counts.get("contradiction", 0) + tail_counts.get("unresolvable", 0)

@@ -96,13 +96,12 @@ a real basis, and mark the rest unanswerable.
 You may read only the files in {{CONTROL_DIR}} (question files named <module>.questions.jsonl and
 this brief). Do not read any other file. Do not search the web. Do not run code.
 
-For each questions file, write {{SPECS}}/_meta/answers/round-0/<module>.jsonl with one row per
+For each questions file, write {{EVAL}}/answers/round-0/<module>.jsonl with one row per
 question, same order, appended as you go:
 {"id": "...", "answer": "...", "unanswerable": false, "basis": "prior knowledge of what, in a phrase"}
 For unanswerable: "unanswerable": true, "answer": "".
 
-Write {{SPECS}}/_meta/worker-reports/control-all.json with role "answerer", "snapshot":
-"{{CONTROL_DIR}}", and every file you read. Reply with answered vs unanswerable counts per module.
+In your worker report (command below), list every file you read. Reply with answered vs unanswerable counts per module.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role control --module all --snapshot {{CONTROL_DIR}} \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \
@@ -127,8 +126,8 @@ reference_answer, refs, answer). For each row, decide:
 - probe_invalid: the reference answer is wrong or the question is not answerable from observable
   behavior. Open the refs to check before using this.
 
-Write {{SPECS}}/_meta/audit/judge-audit.jsonl: {"id": "...", "verdict": "...", "note": "..."},
-appended as you go. Do not read {{SPECS}}/_meta/judgments/. Reply with verdict counts.
+Write {{EVAL}}/audit/judge-audit.jsonl: {"id": "...", "verdict": "...", "note": "..."},
+appended as you go. Do not read {{EVAL}}/judgments/ or any spec file. Reply with verdict counts.
 Report: write your worker report with the CLI, not by hand (the gate verifies its schema):
   python3 {{SKILL_DIR}}/scripts/write_report.py --specs {{SPECS}} --role judge-auditor --module all \
     --output <each file you wrote>[:<claim count>] --read-from <a file listing every path you read> \

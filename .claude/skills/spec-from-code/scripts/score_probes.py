@@ -8,10 +8,18 @@ Modes:
   --failures-for-revision  with --round: write revision-split failures per module to
                            _meta/revise/round-N/<module>.jsonl (never includes holdout probes).
 
-Layout (under specs/_meta):
+Layout (under the eval dir, outside specs and repo; see _common.eval_dir):
   probes/<module>.jsonl              {id, module, category, question, reference_answer, refs[]}
   answers/round-N/<module>.jsonl     {id, answer, unanswerable, claims_used[]}
   judgments/round-N/<module>.jsonl   {id, verdict: agree|contradict|gap|probe_invalid, note}
+  validation.json, validation-report.md   full report (held-out details); specs/_meta/validation-summary.md
+                                          gets the table only, safe for writers to read.
+
+Verdicts are checked, not trusted (L57): agree on an empty or unanswerable answer is an error; agrees whose
+answer shares none of the reference's literals are "lenient suspects" (3+ per module is an error); a
+held-out probe_invalid counts as a miss unless correct_probe.py logged a correction; "validated" needs at
+least --min-holdout valid held-out probes; answers that copy reference phrasing absent from the spec
+(3+ novel 6-grams) are counted, and 70%+ of a module's answers doing so is an error.
 """
 from __future__ import annotations
 
@@ -20,7 +28,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from _common import eprint, read_json, read_jsonl, resolve_ref, write_json, write_jsonl
+from _common import eprint, eval_dir, read_json, read_jsonl, resolve_ref, write_json, write_jsonl
 
 CATEGORIES = {"validation", "error", "branch", "side_effect", "config", "interface", "data", "concurrency", "default"}
 VERDICTS = {"agree", "contradict", "gap", "probe_invalid"}
@@ -82,8 +90,16 @@ def wilson_lower(k: int, n: int, z: float = 1.96) -> float:
     return max(0.0, (c - m) / d)
 
 
-def status_for(holdout_fidelity: float, holdout_contradictions: int) -> str:
-    if holdout_fidelity >= 0.90 and holdout_contradictions == 0:
+WORD_RE = re.compile(r"[a-z0-9_]+")
+
+
+def ngrams(text: str, n: int = 6) -> set[tuple]:
+    w = WORD_RE.findall((text or "").lower())
+    return {tuple(w[i:i + n]) for i in range(len(w) - n + 1)}
+
+
+def status_for(holdout_fidelity: float, holdout_contradictions: int, holdout_n: int = 99, min_holdout: int = 0) -> str:
+    if holdout_fidelity >= 0.90 and holdout_contradictions == 0 and holdout_n >= min_holdout:
         return "validated"
     if holdout_fidelity >= 0.75:
         return "provisional"
@@ -97,14 +113,16 @@ def main() -> int:
     ap.add_argument("--round", type=int, default=None)
     ap.add_argument("--failures-for-revision", action="store_true")
     ap.add_argument("--min-probes", type=int, default=12)
+    ap.add_argument("--min-holdout", type=int, default=8, help="valid held-out probes needed for 'validated'")
     ap.add_argument("--repo", default=None, help="repo root, to verify probe refs (default: inventory.json repo_root)")
     ap.add_argument("--snapshot", default=None,
                     help="the spec snapshot answerers read this round; used for leak detection (default: specs dir)")
     args = ap.parse_args()
     meta = Path(args.specs).resolve() / "_meta"
-    probes_dir = meta / "probes"
+    ev = eval_dir(Path(args.specs))
+    probes_dir = ev / "probes"
     if not probes_dir.exists():
-        raise SystemExit("no _meta/probes directory; run probers first")
+        raise SystemExit(f"no {probes_dir}; run probers first")
     errors: list[str] = []
 
     if args.assign_splits:
@@ -112,7 +130,7 @@ def main() -> int:
         inv_path = meta / "inventory.json"
         repo_root = Path(args.repo).resolve() if args.repo else (
             Path(read_json(inv_path)["summary"]["repo_root"]) if inv_path.exists() else Path("."))
-        for pf in sorted(probes_dir.glob("*.jsonl")):
+        for pf in sorted(p for p in probes_dir.glob("*.jsonl") if not p.name.endswith(".questions.jsonl")):
             rows = read_jsonl(pf)
             seen = set()
             for r in rows:
@@ -157,8 +175,9 @@ def main() -> int:
     if args.round == 0:
         raise SystemExit("round 0 is the no-spec control; it is scored as a column of every round >= 1")
     rnd = args.round
-    ans_dir, jud_dir = meta / "answers" / f"round-{rnd}", meta / "judgments" / f"round-{rnd}"
-    prev = meta / "validation.json"
+    ans_dir, jud_dir = ev / "answers" / f"round-{rnd}", ev / "judgments" / f"round-{rnd}"
+    corrected = {r.get("id") for r in read_jsonl(ev / "probe-corrections.jsonl")} if (ev / "probe-corrections.jsonl").exists() else set()
+    prev = ev / "validation.json"
     prev_report = read_json(prev) if prev.exists() else {}
     prev_rounds = prev_report.get("rounds", {})
     report = {"round": rnd, "modules": {}, "rounds": prev_rounds, "leak_suspects": []}
@@ -167,6 +186,7 @@ def main() -> int:
     spec_corpus = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in snap_root.rglob("*.md")
                             if not ({"_briefs", "_meta"} & set(f.relative_to(snap_root).parts)))
     spec_tokens = tokens(spec_corpus)
+    spec_grams = ngrams(spec_corpus)
     side_notes: list[dict] = []
     lines = [f"# Validation report (round {rnd})", "",
              "Fidelity = share of probes whose spec-only answer agrees with the code-derived reference answer.",
@@ -176,7 +196,7 @@ def main() -> int:
              "Status: validated >= 0.90 held-out fidelity with zero held-out contradictions; provisional >= 0.75; weak otherwise.", "",
              "| Module | Probes | Revision fidelity | Held-out fidelity | Held-out contradictions | Gaps | Invalid probes | Status | Delta vs prev | No-spec control | Lift |",
              "|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|"]
-    for pf in sorted(probes_dir.glob("*.jsonl")):
+    for pf in sorted(p for p in probes_dir.glob("*.jsonl") if not p.name.endswith(".questions.jsonl")):
         mid = pf.stem
         probes = {r["id"]: r for r in read_jsonl(pf)}
         af, jf = ans_dir / f"{mid}.jsonl", jud_dir / f"{mid}.jsonl"
@@ -186,7 +206,8 @@ def main() -> int:
         answers = {r["id"]: r for r in read_jsonl(af)}
         judg = {r["id"]: r for r in read_jsonl(jf)}
         stats = {s: {"n": 0, "agree": 0, "contradict": 0, "gap": 0} for s in ("revision", "holdout")}
-        invalid, failures = 0, []
+        invalid, failures = {"revision": 0, "holdout": 0}, []
+        lenient, copied, answered = [], 0, 0
         for pid, p in probes.items():
             j = judg.get(pid)
             if pid not in answers:
@@ -199,18 +220,34 @@ def main() -> int:
             if v not in VERDICTS:
                 errors.append(f"{mid}: probe {pid} verdict {v!r} invalid")
                 continue
-            if v == "probe_invalid":
-                invalid += 1
-                continue
             s = p.get("split") or split_for(pid)
+            if v == "probe_invalid":
+                invalid[s] += 1
+                if s == "holdout" and pid not in corrected:
+                    # Dropping a held-out probe from the denominator shrinks the set the score rests on; it
+                    # counts as a miss until the probe is corrected (correct_probe.py) and re-judged.
+                    stats[s]["n"] += 1
+                    stats[s]["gap"] += 1
+                continue
             stats[s]["n"] += 1
             stats[s][v] += 1
+            ans = answers[pid]
+            ans_text = str(ans.get("answer") or "")
+            if v == "agree" and (not ans_text.strip() or ans.get("unanswerable") is True):
+                errors.append(f"{mid}: probe {pid} judged agree on an empty or unanswerable answer")
+            ref_lits = distinctive_literals(p.get("reference_answer", ""))
+            if v == "agree" and ref_lits and not any(l.lower() in ans_text.lower() for l in ref_lits):
+                lenient.append(pid)
+            if ans_text.strip():
+                answered += 1
+                novel_grams = (ngrams(ans_text) & ngrams(p.get("reference_answer", ""))) - spec_grams - ngrams(p.get("question", ""))
+                if len(novel_grams) >= 3:
+                    copied += 1
             # Leak check: a literal the answer shares with the code-derived reference, that the spec never
             # contains, could only have come from the code (or a lucky guess). Isolation is instruction-
             # based; this makes a breach visible.
             # Token-level: a literal is suspicious only if it carries a distinctive token found in neither
             # the spec nor the question (answers legitimately fill spec templates with the question's values).
-            ans_text = str(answers[pid].get("answer", ""))
             allowed = spec_tokens | tokens(p.get("question", ""))
             leaked = []
             for lit in distinctive_literals(p.get("reference_answer", "")):
@@ -243,7 +280,7 @@ def main() -> int:
         hf = stats["holdout"]["agree"] / stats["holdout"]["n"] if stats["holdout"]["n"] else 0.0
         hc = stats["holdout"]["contradict"]
         gaps = stats["revision"]["gap"] + stats["holdout"]["gap"]
-        st = status_for(hf, hc)
+        st = status_for(hf, hc, stats["holdout"]["n"], args.min_holdout)
         prev = prev_rounds.get(str(rnd - 1), {}).get(mid, {}) if rnd >= 2 else {}  # round 0 is the no-spec control
         prev_hf = prev.get("holdout_fidelity")
         delta = (hf - prev_hf) if isinstance(prev_hf, (int, float)) else None
@@ -256,41 +293,52 @@ def main() -> int:
             st = "REGRESSION"
         lb = wilson_lower(stats["holdout"]["agree"], stats["holdout"]["n"])
         control = None
-        cj = meta / "judgments" / "round-0" / f"{mid}.jsonl"
+        cj = ev / "judgments" / "round-0" / f"{mid}.jsonl"
         if rnd >= 1 and cj.exists():
             cv = {r["id"]: r.get("verdict") for r in read_jsonl(cj)}
             valid = [pid for pid in probes if cv.get(pid) in ("agree", "contradict", "gap")]
             control = (sum(1 for pid in valid if cv[pid] == "agree") / len(valid)) if valid else None
         report["modules"][mid] = {"probes": len(probes), "revision_fidelity": round(rf, 3), "holdout_fidelity": round(hf, 3),
-                                  "holdout_contradictions": hc, "gaps": gaps, "invalid_probes": invalid,
+                                  "holdout_contradictions": hc, "gaps": gaps, "invalid_probes": sum(invalid.values()),
+                                  "lenient_suspects": lenient, "copied_answers": copied,
                                   "status": st, "delta_holdout": None if delta is None else round(delta, 3),
                                   "holdout_n": stats["holdout"]["n"], "holdout_agree": stats["holdout"]["agree"],
                                   "holdout_wilson_lower": round(lb, 3),
                                   "control_fidelity": None if control is None else round(control, 3),
                                   "lift_over_control": None if control is None else round((rf * stats["revision"]["n"] + hf * stats["holdout"]["n"]) / max(1, stats["revision"]["n"] + stats["holdout"]["n"]) - control, 3),
                                   "revision_failures": len(failures)}
-        lines.append(f"| {mid} | {len(probes)} | {rf:.0%} | {hf:.0%} ({stats['holdout']['agree']}/{stats['holdout']['n']}, 95% lower {lb:.0%}) | {hc} | {gaps} | {invalid} | {st} | "
+        lines.append(f"| {mid} | {len(probes)} | {rf:.0%} | {hf:.0%} ({stats['holdout']['agree']}/{stats['holdout']['n']}, 95% lower {lb:.0%}) | {hc} | {gaps} | {sum(invalid.values())} | {st} | "
                      f"{'' if delta is None else f'{delta:+.0%}'} | "
                      f"{'' if control is None else f'{control:.0%}'} | "
                      f"{'' if control is None else f'{report_lift(rf, hf, stats, control):+.0%}'} |")
         if args.failures_for_revision and failures:
             write_jsonl(meta / "revise" / f"round-{rnd}" / f"{mid}.jsonl", failures)
-        if invalid and invalid > 0.25 * len(probes):
-            errors.append(f"{mid}: {invalid} of {len(probes)} probes judged invalid; re-run the prober")
+        for sp in ("revision", "holdout"):
+            n_sp = sum(1 for q in probes.values() if (q.get("split") or split_for(q["id"])) == sp)
+            if invalid[sp] and invalid[sp] > 0.25 * max(1, n_sp):
+                errors.append(f"{mid}: {invalid[sp]} of {n_sp} {sp} probes judged invalid; re-run the prober")
+        if len(lenient) >= 3:
+            errors.append(f"{mid}: {len(lenient)} agree verdicts on answers sharing none of the reference's literals "
+                          f"({', '.join(lenient[:6])}); re-judge them strictly")
+        if answered and copied >= 0.7 * answered:
+            errors.append(f"{mid}: {copied}/{answered} answers copy reference phrasing that is not in the spec "
+                          f"(isolation breach suspected); discard and re-run the answerer")
     report["rounds"][str(rnd)] = {m: {"holdout_fidelity": v["holdout_fidelity"], "holdout_agree": v["holdout_agree"],
                                       "status": v["status"]} for m, v in report["modules"].items()}
-    write_json(meta / "validation.json", report)
+    write_json(ev / "validation.json", report)
+    # writer-safe summary: the table only (no held-out notes, no leak literals)
+    (meta / "validation-summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     lines += ["", "REGRESSION means two or more held-out probes that agreed last round no longer agree: restore that module's "
               "spec from `_meta/rounds/round-<N-1>/` and inspect the revision before trying again. Held-out sets are small "
               "(about 10 probes), so read fidelity with its 95% lower bound, not as a precise number.", ""]
-    (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (ev / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     report["holdout_side_notes"] = side_notes
     if side_notes:
         lines += ["## Held-out side notes (for the human review; never given to revisers)", ""]
         lines += [f"- {n['module']} {n['probe']}: {n['spec_defect']}" for n in side_notes]
         lines.append("")
-        (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-        write_json(meta / "validation.json", report)
+        (ev / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        write_json(ev / "validation.json", report)
     if report["leak_suspects"]:
         lines += ["## Leak suspects", "",
                   "Answers containing a distinctive literal from the code-derived reference that appears nowhere in the "
@@ -298,8 +346,8 @@ def main() -> int:
                   "module means the answerer read code: discard that module's answers and re-run its answerer.", ""]
         for ls in report["leak_suspects"]:
             lines.append(f"- {ls['module']} {ls['probe']} ({ls['verdict']}): {'; '.join(ls['literals'])}")
-        (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
-        write_json(meta / "validation.json", report)
+        (ev / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        write_json(ev / "validation.json", report)
         by_mod: dict[str, int] = {}
         for ls in report["leak_suspects"]:
             by_mod[ls["module"]] = by_mod.get(ls["module"], 0) + 1
@@ -311,7 +359,7 @@ def main() -> int:
     for mid, v in report["modules"].items():
         eprint(f"{mid}: holdout {v['holdout_fidelity']:.0%} ({v['status']}), revision {v['revision_fidelity']:.0%}, "
                f"{v['revision_failures']} revision failures")
-    eprint(f"wrote _meta/validation-report.md and _meta/validation.json; "
+    eprint(f"wrote {ev}/validation-report.md and validation.json, _meta/validation-summary.md; "
            f"{'failures written to _meta/revise/round-' + str(rnd) if args.failures_for_revision else ''}")
     return 1 if errors else 0
 

@@ -32,13 +32,20 @@ what makes validation meaningful), and you do not trust a worker's summary over 
   cheap and useful on their own), then run Phases 2-7 subsystem by subsystem in the reading order the
   Surveyor proposes, reporting after each, unless the user said to run everything.
 - Set `SKILL_DIR` to this skill's absolute directory, `REPO` to the repo root, `SPECS` to the output
-  dir, `SCRATCH` to your scratchpad. Every command below uses those.
+  dir, `SCRATCH` to your scratchpad, and `EVAL=$SCRATCH/eval`. Every command below uses those.
+- `TRANSCRIPTS` is where the harness keeps subagent transcripts (Claude Code:
+  `~/.claude/projects/<project>/<session>/subagents/`; it is the directory the Agent tool's
+  `output_file` links into). G5 reads them to check what workers actually opened.
 
 ## Phase 0: preflight (you, no workers)
 
 ```
-python3 $SKILL_DIR/scripts/inventory.py $REPO --out $SPECS/_meta/inventory.json [--include GLOB ...] [--exclude GLOB ...]
+python3 $SKILL_DIR/scripts/inventory.py $REPO --out $SPECS/_meta/inventory.json --eval $EVAL [--include GLOB ...] [--exclude GLOB ...]
 ```
+`$EVAL` holds everything that defines or reveals the score: probes with reference answers, answers,
+judgments, validation reports, probe corrections, the judge-audit sample, and the reports of the roles
+that touch them. It must sit outside the repo and the specs dir (inventory refuses otherwise), so a
+writer's recursive search of either never reaches a held-out answer. Never give `$EVAL` to a writer.
 Read the summary: tier, languages, test count, entry hints, build hints, and `largest_in_scope_files`.
 Any file over ~4000 LOC must be split into line ranges before sharding:
 `python3 $SKILL_DIR/scripts/split_file.py $REPO <path> --max-loc 3500` prints ready-to-use
@@ -111,9 +118,10 @@ next batch as results arrive. Workers are independent by design: none reads anot
 
 When all return:
 ```
-python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO
+python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --transcripts $TRANSCRIPTS
 ```
-Before sending a G3 failure anywhere, open two of the flagged items in the spec and confirm they are
+Always pass `--transcripts` to `gate.py` when the harness keeps them: without it, isolation rests on
+what workers say they read. Before sending a G3 failure anywhere, open two of the flagged items in the spec and confirm they are
 really absent; a gate false positive that a worker "fixes" bends correct specs toward the checker.
 Send every gate failure back to the worker that wrote the file: SendMessage to its agent id (from
 `dispatch.py`), with the failing lines or the uncited list. It still holds the module in context, so
@@ -121,8 +129,12 @@ the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if t
 - G2 lint errors: send the owning extractor the error lines. Lint is strict on
   purpose; an unresolvable ref or a duplicate ID is how specs rot.
 - G3 coverage below threshold: send that extractor the uncited files and unmentioned symbols. "Trivial" files must be named as such in Scope and boundaries, not ignored.
-- G5 discrepancies: a worker reported outputs that do not exist or counts that do not match. Send it
-  the discrepancy; its output is untrusted until the report verifies.
+- G5 discrepancies: a missing report for a dispatched worker, outputs that do not exist or predate
+  the launch, counts that do not match, or an access the role forbids (seen in the transcript). Send
+  the worker the discrepancy; its output is untrusted until the report verifies. A writer that
+  touched `$EVAL` contaminates its module's held-out score: discard its output and re-dispatch. A
+  finding that is harmless on evidence (an `ls` of a file that did not exist yet) may be waived by a
+  row in `_meta/g5-waivers.jsonl` with the reason and the evidence; waivers print in every G5 run.
 
 Spot check (`references/validation.md` section 4): per module, open two random `{confirmed}` claims at
 their refs. A miss sends the module back with the miss named. This is cheap and it changes how
@@ -148,8 +160,11 @@ the Reconciler finds contradictions; reading thousands of claims for them does n
 2. `python3 $SKILL_DIR/scripts/apply_claim_edits.py $SPECS` applies every edit by claim ID (the only
    writer, so parallel judges cannot race) and appends unresolvable pairs to `_meta/questions.md`.
    A claim edited differently by two judges is left untouched and listed in
-   `_meta/reconcile/conflicts.json`; resolve each by choosing the variant that points straight at the
-   owning claim, then re-run. Fix any reported pointer chains the same way. Re-run lint.
+   `_meta/reconcile/conflicts.json`; resolve each by writing the chosen variant (the one that points
+   straight at the owning claim) to a new decisions file, then re-run. Applied files are recorded in
+   `_meta/reconcile/ledger.json` and never replayed, so a later reviser's rewrite of a claim is not
+   reverted by an old decision; never edit an applied file. Fix any reported pointer chains the same
+   way. Re-run lint.
 3. Dispatch the Reconciler: it turns questions into gaps, adds claim-ID cross-links,
 writes `00-overview.md`, `_meta/gaps.md`, `_meta/questions.md`, and a first `INDEX.md`. Re-run `gate.py`.
 Read `00-overview.md` yourself as the intended reader (new engineer, 15 minutes). If the first
@@ -175,12 +190,17 @@ Full protocol in `references/validation.md` section 2. In short:
    only to validate a reference).
 5. Score:
    ```
-   python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round 1
+   python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round 1 --transcripts $TRANSCRIPTS
    ```
    Probes judged `probe_invalid` with evidence get their reference corrected once with
-   `scripts/correct_probe.py` (logged) before the next round.
-   `_meta/validation-report.md` has the table; `_meta/revise/round-1/<module>.jsonl` has revision-split
-   failures only. The held-out failures exist in the judgments but are never handed to a writer.
+   `scripts/correct_probe.py` (logged, evidence must cite code; a held-out probe needs
+   `--allow-holdout`) before the next round. Until then a held-out `probe_invalid` counts as a miss.
+   The scorer checks verdicts: agree on an empty answer is an error, 3+ agrees whose answer shares
+   none of the reference's literals send that module's judgments back for strict re-judging, and
+   answers copying reference phrasing that is not in the spec mean the answerer read code.
+   `$EVAL/validation-report.md` has the full report; `_meta/validation-summary.md` has the table only
+   (safe for writers); `_meta/revise/round-1/<module>.jsonl` has revision-split failures only. The
+   held-out failures exist only in `$EVAL` and are never handed to a writer.
 
 ## Phase 5: revise (per failing module, up to 3 rounds)
 
@@ -238,8 +258,11 @@ outside it, with briefs in `references/audit.md` (rendered like any other) and o
 ```
 python3 $SKILL_DIR/scripts/apply_status.py $SPECS      # stamps status/fidelity in frontmatter, refreshes INDEX table
 python3 $SKILL_DIR/scripts/collect_defects.py $SPECS   # _meta/suspected-defects.md for the human review
-python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round <last>
+python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round <last> --transcripts $TRANSCRIPTS
+cp $EVAL/validation-report.md $SPECS/_meta/   # only now: no writer runs after this point
 ```
+`apply_status.py` reads `_meta/status.json`, so run `gate.py` before it: a module is never stamped
+`validated` over a failed G4 or G5.
 Dispatch the Reconciler once more only if revisions touched cross-module facts (it re-checks
 contradictions and refreshes `gaps.md`); otherwise regenerate `gaps.md` and `confidence-report.md`
 yourself from the lint, coverage, and validation JSON, since those are mechanical. Then report to the
@@ -257,6 +280,8 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   the number can be believed.
 - **Honest status.** `status:` is set by `apply_status.py` from measured numbers, never typed. A
   module with zero gaps on a critical path is more likely overconfident than transparent; say so.
+- **The eval dir is the answer key.** Only probers, answerers, the control, judges and the judge
+  auditor are ever given `$EVAL`; nothing a writer reads mentions it.
 - **Never modify source.** Workers write under `$SPECS` and `$SCRATCH` only. Secrets found in code are
   redacted to `[REDACTED]` plus a gap; lint fails any spec containing a credential-shaped literal.
 - **Agent-neutral output.** No model or tool names in any spec; lint fails claims that mention them.

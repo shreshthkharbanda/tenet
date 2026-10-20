@@ -124,8 +124,19 @@ def main() -> int:
                     help="glob to keep in scope (repeatable). Files outside every --include stay in the inventory "
                          "(callers and tests are context) but are marked in_scope=false and never sharded.")
     ap.add_argument("--max-bytes", type=int, default=2_000_000)
+    ap.add_argument("--eval", default=None,
+                    help="directory for probes, answers, judgments and validation reports; must be outside the "
+                         "repo and the specs dir (default: <specs>-eval beside the specs dir)")
     args = ap.parse_args()
     root = Path(args.repo).resolve()
+    specs_dir = Path(args.out).resolve().parent.parent
+    ev = Path(args.eval).resolve() if args.eval else specs_dir.parent / (specs_dir.name + "-eval")
+    for inside, name in ((root, "the repo"), (specs_dir, "the specs dir")):
+        if ev == inside or inside in ev.parents:
+            raise SystemExit(f"eval dir {ev} is inside {name}: a recursive search there would reach held-out "
+                             f"reference answers; pass --eval with a path outside both")
+    ev.mkdir(parents=True, exist_ok=True)
+    write_json(specs_dir / "_meta" / "run.json", {"eval_dir": str(ev), "repo": str(root)})
     excludes = list(args.exclude) + ["specs/**", "**/.claude/**"]
     include_rx = [glob_to_regex(g) for g in args.include]
 

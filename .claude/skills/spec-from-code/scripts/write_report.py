@@ -8,13 +8,18 @@ Usage:
                   [--output PATH[:CLAIMS]] ... [--read PATH] ... [--read-from FILE]
                   [--note TEXT] [--bug "WHERE|WHAT|EVIDENCE"] ...
 --read-from takes a file with one path per line (handy for long read lists).
-Writes <specs>/_meta/worker-reports/<role>-<module>[-round-N].json and prints its path.
+Writes <role>-<module>[-round-N].json under <specs>/_meta/worker-reports/ (eval roles: under the eval
+dir's worker-reports/) and prints its path. Claim counts and sha256 of each output are computed here,
+not taken from the worker (L57): a count the worker states is kept as claims_reported for comparison.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
+
+from _common import EVAL_ROLES, eval_dir, parse_claims, parse_frontmatter
 
 ROLES = {"surveyor", "extractor", "interfaces", "data", "config", "operations", "crosscut", "reconciler", "pairjudge",
          "prober", "answerer", "judge", "reviser", "rebuilder", "falsifier", "omission", "control", "judge-auditor",
@@ -37,8 +42,17 @@ def main() -> int:
     outputs = []
     for o in a.output:
         path, _, n = o.rpartition(":") if o.rsplit(":", 1)[-1].isdigit() else (o, "", "")
-        p = str(Path(path).resolve())
-        outputs.append({"path": p, "claims": int(n)} if n else {"path": p})
+        fp = Path(path).resolve()
+        rec = {"path": str(fp)}
+        if n:
+            rec["claims_reported"] = int(n)
+        if fp.is_file():
+            data = fp.read_bytes()
+            rec["sha256"] = hashlib.sha256(data).hexdigest()
+            rec["mtime"] = fp.stat().st_mtime
+            if fp.suffix == ".md":
+                rec["claims"] = len(parse_claims(parse_frontmatter(data.decode("utf-8", "replace"))[1]))
+        outputs.append(rec)
     reads = [str(Path(r).resolve()) for r in a.read]
     if a.read_from:
         reads += [str(Path(l.strip()).resolve()) for l in Path(a.read_from).read_text().splitlines() if l.strip()]
@@ -55,7 +69,8 @@ def main() -> int:
     if a.snapshot:
         rep["snapshot"] = str(Path(a.snapshot).resolve())
     name = f"{a.role}-{a.module}" + (f"-round-{a.round}" if a.round is not None else "") + ".json"
-    out = Path(a.specs).resolve() / "_meta" / "worker-reports" / name
+    base = eval_dir(Path(a.specs)) if a.role in EVAL_ROLES else Path(a.specs).resolve() / "_meta"
+    out = base / "worker-reports" / name
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(rep, indent=2) + "\n")
     print(out)

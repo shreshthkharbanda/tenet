@@ -65,6 +65,29 @@ def write_json(p: Path, obj: object) -> None:
         f.write("\n")
 
 
+EVAL_ROLES = {"prober", "answerer", "judge", "control", "judge-auditor"}
+
+
+def eval_dir(specs: Path) -> Path:
+    """Where everything that defines or reveals the fidelity score lives: probes with reference answers,
+    answers, judgments, validation reports, probe corrections, the judge-audit sample, and the reports of
+    the roles that touch them. It sits OUTSIDE the specs dir and the repo, so a writer's recursive grep
+    over either never reaches a held-out answer (L57). Set at Phase 0 by inventory.py (--eval) in
+    _meta/run.json; the default is a sibling `<specs>-eval`."""
+    specs = Path(specs).resolve()
+    run = specs / "_meta" / "run.json"
+    if run.exists():
+        d = read_json(run).get("eval_dir")
+        if d:
+            return Path(d)
+    return specs.parent / (specs.name + "-eval")
+
+
+def reports_dirs(specs: Path) -> list[Path]:
+    """Worker-report directories: writers report under the specs dir, eval roles under the eval dir."""
+    return [Path(specs).resolve() / "_meta" / "worker-reports", eval_dir(specs) / "worker-reports"]
+
+
 def read_jsonl(p: Path) -> list[dict]:
     rows = []
     with open(p, encoding="utf-8") as f:

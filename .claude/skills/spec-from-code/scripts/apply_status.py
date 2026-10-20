@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Stamp each module spec's frontmatter `status:` and `fidelity:` from measured results
 (validation.json, coverage.json, rebuild/*.json) and regenerate the status table in INDEX.md
-between <!-- status:begin --> and <!-- status:end --> markers. Writers never set status; this does.
+between <!-- status:begin --> and <!-- status:end --> markers (or in place of a hand-written "## Status"
+section). Writers never set status; this does, and only from gates that passed (L57): a module is not
+"validated" when status.json shows G4 or G5 failed, or when its probe round has 3+ lenient or leak
+suspects. Cross-cutting files (00-04) are indexes, not independently validated: their status is reset
+to draft.
 
 Usage: apply_status.py <specs_dir>
 """
@@ -12,7 +16,7 @@ import json
 import re
 from pathlib import Path
 
-from _common import eprint, parse_claims, parse_frontmatter, read_json
+from _common import eprint, eval_dir, parse_claims, parse_frontmatter, read_json
 
 
 def main() -> int:
@@ -21,7 +25,15 @@ def main() -> int:
     args = ap.parse_args()
     specs = Path(args.specs).resolve()
     meta = specs / "_meta"
-    val = read_json(meta / "validation.json") if (meta / "validation.json").exists() else {"modules": {}}
+    vpath = eval_dir(specs) / "validation.json"
+    val = read_json(vpath) if vpath.exists() else {"modules": {}}
+    gates = read_json(meta / "status.json") if (meta / "status.json").exists() else {}
+    gate_fail = [g for g in ("G4 probes", "G5 reports") if gates.get(g, {}).get("rc", 0) > 0]
+    if gate_fail:
+        eprint(f"gates failed ({', '.join(gate_fail)}): no module is stamped validated")
+    leaks: dict[str, int] = {}
+    for ls in val.get("leak_suspects", []):
+        leaks[ls["module"]] = leaks.get(ls["module"], 0) + 1
     cov = read_json(meta / "coverage.json") if (meta / "coverage.json").exists() else {"modules": {}}
     rows = []
     for fp in sorted((specs / "modules").glob("*.md")):
@@ -43,6 +55,8 @@ def main() -> int:
             status = v["status"].lower() if v["status"] != "REGRESSION" else "provisional"
             if status == "validated" and (cv.get("file_rate", 1) < 0.95 or cv.get("symbol_rate", 1) < 0.85):
                 status = "provisional"
+            if status == "validated" and (gate_fail or len(v.get("lenient_suspects", [])) >= 3 or leaks.get(mid, 0) >= 3):
+                status = "provisional"
         else:
             status = "draft"
         fid = f"{v['holdout_fidelity']:.0%}" if v else "pending"
@@ -60,12 +74,21 @@ def main() -> int:
                     f"{v.get('holdout_contradictions', '') if v else ''} | {rbs} | {status} |")
     table = ["| Spec | Claims (confirmed / inferred / gap) | Files cited | Symbols | Held-out fidelity | Held-out contradictions | Rebuild | Status |",
              "|---|---|---:|---:|---:|---:|---|---|", *rows]
+    for fp in sorted(specs.glob("0*.md")):
+        t = fp.read_text(encoding="utf-8")
+        t2 = re.sub(r"^(---\n(?:.*\n)*?)status:.*$", r"\1status: draft", t, count=1, flags=re.M)
+        if t2 != t:
+            fp.write_text(t2, encoding="utf-8")
     idx = specs / "INDEX.md"
     if idx.exists():
         t = idx.read_text(encoding="utf-8")
         block = "<!-- status:begin -->\n" + "\n".join(table) + "\n<!-- status:end -->"
         if "<!-- status:begin -->" in t:
-            t = re.sub(r"<!-- status:begin -->.*?<!-- status:end -->", block, t, flags=re.S)
+            t = re.sub(r"<!-- status:begin -->.*?<!-- status:end -->", lambda _m: block, t, flags=re.S)
+        elif re.search(r"^## Status\s*$", t, flags=re.M):
+            # a hand-written Status section: replace its body, never add a second table beside it
+            t = re.sub(r"(^## Status\s*\n)(?:.*\n)*?(?=^## |\Z)", lambda m: m.group(1) + "\n" + block + "\n\n", t,
+                       count=1, flags=re.M)
         else:
             t = t.rstrip("\n") + "\n\n## Status\n" + block + "\n"
         idx.write_text(t, encoding="utf-8")

@@ -420,3 +420,37 @@ renumbers an ID (a superseded claim becomes a pointer that keeps its ID and refs
 audit in the same round (37/40 reproduced, no leniency) added one checklist item: a validation
 library's exact error text and coercions (pydantic turning `12` into `12.0` in a timeout message) are
 caller-visible behavior; run the validator once and copy the text.
+
+**L57. The score trusted its inputs, and the answer key sat beside the writers.** Found: LiteLLM red
+team, round 1: a gutted spec set with empty answers judged "agree" passed every gate and was stamped
+validated. The integrity holes, by class:
+(a) Held-out reference answers, judgments and leak literals lived under `$SPECS/_meta`, one recursive
+grep from every writer. Fix: they live in `$EVAL`, outside the specs dir and the repo (inventory
+refuses otherwise); writers are never told its path; the specs dir gets a table-only summary.
+(b) G4 scored verdicts as given. Fix: agree on an empty or unanswerable answer is an error; 3+ agrees
+sharing none of the reference's literals is an error (real runs: at most 2 per module); a held-out
+`probe_invalid` counts as a miss until corrected; validated needs at least 8 valid held-out probes;
+70%+ answers copying reference 6-grams absent from the spec is an error.
+(c) G5 checked what workers said they read. Fix: with `--transcripts`, G5 parses each worker's tool
+calls (Read/Grep/Glob paths, Bash paths after expanding variables set in the command, file paths
+printed by searches) and applies role rules to those; reports are reconciled with the dispatch log by
+brief (a relabelled or missing report fails); outputs must postdate the launch; claim counts and
+hashes are computed by write_report, not stated. Spec text is recognized by frontmatter wherever it
+lives. On the LiteLLM run this confirmed that no round-1 reviser touched held-out material; it also
+caught the reconciler brief sending the reconciler to `validation.json` (fixed in the brief; waived
+on evidence: the file did not exist then). Waivers need a reason and evidence and print every run.
+(d) Gates skipped silently (`--round` with no probes; zero reports) and `apply_status` stamped
+validated over a failed gate. Fix: both fail; apply_status reads status.json and lenient/leak counts.
+(e) `correct_probe.py --question-append` rewrote held-out questions untraced. Fix: old and new
+question are logged, evidence must cite code that resolves, held-out edits need `--allow-holdout`.
+
+**L58. Mechanical appliers replayed history.** Found: LiteLLM round-1 revision. `apply_claim_edits.py`
+re-applied every decision file on each run, so applying the revisers' shared-file rows would have
+re-applied the pair judges' old edits over claims revisers had since rewritten, and an old and a new
+edit to one claim read as a conflict; one reviser left a wrong shared claim alone to avoid that
+"conflict". `--dry-run` also wrote its summary files. `build_revise.py` appended rebuild rows again on
+each run, so one reviser worked 68 rows of which 27 were repeats. Fix: a ledger (file -> sha256)
+records applied decision files, which are never replayed, and a changed ledgered file is an error;
+dry runs write nothing; build_revise dedupes on (source, id). Same round: rendering message templates
+by running the code exposed wrong claims in 4 modules (the precision ladder is a falsification tool,
+not just formatting).

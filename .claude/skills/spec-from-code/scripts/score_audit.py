@@ -2,7 +2,7 @@
 """Phase 8: aggregate adversarial audit outputs into _meta/audit-report.md and _meta/audit.json,
 and build the blind sample the judge auditor re-judges.
 
-  score_audit.py <specs> --make-judge-sample --round N [--n 40] [--seed 7]   -> _meta/audit/judge-sample.jsonl
+  score_audit.py <specs> --make-judge-sample --round N [--n 40] [--seed 7]   -> <eval>/audit/judge-sample.jsonl
   score_audit.py <specs> --round N                                          -> report
 
 Pass thresholds (the audit's definition of "good enough to review specs instead of code"):
@@ -20,7 +20,7 @@ import json
 import random
 from pathlib import Path
 
-from _common import eprint, read_json, read_jsonl, write_json, write_jsonl
+from _common import eval_dir, eprint, read_json, read_jsonl, write_json, write_jsonl
 
 TH = {"falsify_false": 0.05, "falsify_medium_plus": 0.10, "falsify_high": 0.0, "omission_stated": 0.80,
       "judge_agree": 0.90, "judge_lenient": 0.05, "lift": 0.30}
@@ -38,11 +38,14 @@ def main() -> int:
     meta = Path(a.specs).resolve() / "_meta"
     audit = meta / "audit"
     audit.mkdir(parents=True, exist_ok=True)
-    jdir, adir = meta / "judgments" / f"round-{a.round}", meta / "answers" / f"round-{a.round}"
+    ev = eval_dir(Path(a.specs))
+    eaudit = ev / "audit"  # judge sample and judge audit carry reference answers: eval dir only
+    eaudit.mkdir(parents=True, exist_ok=True)
+    jdir, adir = ev / "judgments" / f"round-{a.round}", ev / "answers" / f"round-{a.round}"
 
     if a.make_judge_sample:
         pool = []
-        for pf in sorted((meta / "probes").glob("*.jsonl")):
+        for pf in sorted(p for p in (ev / "probes").glob("*.jsonl") if not p.name.endswith(".questions.jsonl")):
             mid = pf.stem
             if not (adir / f"{mid}.jsonl").exists() or not (jdir / f"{mid}.jsonl").exists():
                 continue
@@ -59,8 +62,8 @@ def main() -> int:
         k_agree = min(len(agrees), int(a.n * 0.75))  # leniency hides in "agree": oversample it
         sample = rng.sample(agrees, k_agree) + rng.sample(others, min(len(others), a.n - k_agree))
         rng.shuffle(sample)
-        write_jsonl(audit / "judge-sample.jsonl", sample)
-        eprint(f"judge sample: {len(sample)} rows ({k_agree} originally agree) -> {audit / 'judge-sample.jsonl'}")
+        write_jsonl(eaudit / "judge-sample.jsonl", sample)
+        eprint(f"judge sample: {len(sample)} rows ({k_agree} originally agree) -> {eaudit / 'judge-sample.jsonl'}")
         return 0
 
     rep = {"round": a.round, "thresholds": TH, "modules": {}, "checks": {}}
@@ -115,7 +118,7 @@ def main() -> int:
         lines += ["", f"Falsification over {agg['n']} sampled claims: {agg['false']} false ({fr:.0%}), {agg['med']} false or "
                   f"imprecise at medium+ severity ({mr:.0%}), {agg['high']} high. {'Pass' if ok else 'FAIL'}."]
     # judge audit
-    ja = audit / "judge-audit.jsonl"
+    ja = eaudit / "judge-audit.jsonl"
     if ja.exists():
         aud = {r["id"]: r["verdict"] for r in read_jsonl(ja)}
         orig = {}
@@ -145,7 +148,7 @@ def main() -> int:
         lines += ["", f"Reader lifecycle check: {c['correct']} correct, {c['incorrect']} incorrect, {c['vague']} vague, "
                   f"{c['missing'] + c['missing_step_before']} missing steps. {'Pass' if ok else 'FAIL'}."]
     # control lift
-    vj = meta / "validation.json"
+    vj = ev / "validation.json"
     if vj.exists():
         v = read_json(vj)
         lifts = {m: x.get("lift_over_control") for m, x in v.get("modules", {}).items() if x.get("lift_over_control") is not None}

@@ -307,8 +307,8 @@ This replaces any other instruction above about the report's file name or format
 <!-- brief:reconciler -->
 ```
 You are reconciling independently written module specifications into one coherent specification set
-and writing its top layer. Read everything under {{SPECS}} except _meta/probes, _meta/answers,
-_meta/judgments. Repo: {{REPO}} (commit {{COMMIT}}). Survey: {{SPECS}}/_meta/survey.md.
+and writing its top layer. Read everything under {{SPECS}} (probes, answers and judgments live
+elsewhere and are not yours to read). Repo: {{REPO}} (commit {{COMMIT}}). Survey: {{SPECS}}/_meta/survey.md.
 Scope of the specification: {{SCOPE_NOTE}}
 
 Tasks, in order:
@@ -337,8 +337,9 @@ Tasks, in order:
    section if missing; the claim states what happens, why it looks unintended, and the impact). When
    two modules flag the same code, keep one claim in the owning module and cross-reference it from the
    other. Then run `python3 {{SKILL_DIR}}/scripts/collect_defects.py {{SPECS}}`.
-5. Write {{SPECS}}/INDEX.md per the template (under 100 lines). Leave fidelity and rebuild columns
-   as "pending" if _meta/validation.json does not exist yet; the orchestrator refreshes the table later.
+5. Write {{SPECS}}/INDEX.md per the template (under 100 lines). Put the status table between
+   <!-- status:begin --> and <!-- status:end --> with fidelity and rebuild "pending"; apply_status.py
+   fills it from measured results later.
 
 Rules: edits to module specs are limited to fixing contradicted values, adding cross-references, and
 fixing lint errors. Never renumber or reuse claim IDs. Never remove a {gap} because it is
@@ -374,7 +375,7 @@ Files in scope:
 Tests:
 {{TEST_FILES}}
 
-Write {{N_PROBES}} probes to {{SPECS}}/_meta/probes/{{MODULE_ID}}.jsonl, one JSON object per line:
+Write {{N_PROBES}} probes to {{EVAL}}/probes/{{MODULE_ID}}.jsonl, one JSON object per line:
 {"id": "{{PREFIX}}-P01", "module": "{{MODULE_ID}}", "category": "validation|error|branch|side_effect|config|interface|data|concurrency|default",
  "edge": true, "question": "...", "reference_answer": "...", "refs": ["path:START-END"],
  "difficulty": "easy|medium|hard", "verified_by": "reading|execution|test"}
@@ -407,8 +408,8 @@ step: ordering bugs live between steps. A test counts as verification only if it
 point; a unit test of a helper does not (LiteLLM: a test of the key-stripping helper "verified" that
 forged reservations cannot be refunded, while the real call path refunds before stripping).
 
-Do not read other modules' probes. Do not modify any file outside _meta/probes/. Write
-{{SPECS}}/_meta/worker-reports/prober-{{MODULE_ID}}.json listing every file you read. Reply with the
+Do not read other modules' probes or anything under {{SPECS}}. Do not modify any file except your
+probe file. Write your worker report (command below) listing every file you read. Reply with the
 probe count by category and difficulty.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
@@ -441,7 +442,7 @@ then follow cross-references into whichever of 00-overview.md, 01-interfaces.md,
 03-config.md and other module specs exist in the snapshot. List the directory first; a partial run may
 not have all of them, and a missing file is not an error.
 
-Write {{SPECS}}/_meta/answers/round-{{ROUND}}/{{MODULE_ID}}.jsonl, one object per question, same
+Write {{EVAL}}/answers/round-{{ROUND}}/{{MODULE_ID}}.jsonl, one object per question, same
 order:
 {"id": "...", "answer": "exact answer, quoting literals from the spec", "unanswerable": false,
  "claims_used": ["{{PREFIX}}-012", "CFG-004"], "note": "optional: where the spec was ambiguous"}
@@ -449,9 +450,8 @@ order:
 For an unanswerable probe set "unanswerable": true, answer "", and say in note what the spec would
 need to say. For a partially answerable probe, answer what the spec supports and say what is missing.
 
-Write {{SPECS}}/_meta/worker-reports/answerer-{{MODULE_ID}}-round-{{ROUND}}.json with
-"snapshot": "{{SPEC_SNAPSHOT}}" and every file you read in files_read (all must be under
-{{SPEC_SNAPSHOT}}; this brief itself is there too). Reply with: answered, partial, unanswerable counts.
+In your worker report (command below), list every file you read (all must be under {{SPEC_SNAPSHOT}};
+this brief itself is there too). The gate checks your session's actual file accesses, not only the list. Reply with: answered, partial, unanswerable counts.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.
@@ -470,8 +470,8 @@ You are judging whether answers derived from a specification agree with referenc
 from the code. Repo: {{REPO}} (commit {{COMMIT}}). Module: {{MODULE_ID}}.
 
 Inputs:
-- probes with reference answers and refs: {{SPECS}}/_meta/probes/{{MODULE_ID}}.jsonl
-- spec-only answers: {{SPECS}}/_meta/answers/round-{{ROUND}}/{{MODULE_ID}}.jsonl
+- probes with reference answers and refs: {{EVAL}}/probes/{{MODULE_ID}}.jsonl
+- spec-only answers: {{EVAL}}/answers/round-{{ROUND}}/{{MODULE_ID}}.jsonl
 
 For each probe, decide one verdict:
 - agree: the answer states the same observable behavior as the reference (wording may differ;
@@ -487,15 +487,15 @@ A spec that is more precise than the reference (gives the exact message where th
 code) still agrees. A spec that hedges ("usually", "may") where the code is deterministic does not
 agree; mark gap and say the hedge is the defect.
 
-Write {{SPECS}}/_meta/judgments/round-{{ROUND}}/{{MODULE_ID}}.jsonl:
+Write {{EVAL}}/judgments/round-{{ROUND}}/{{MODULE_ID}}.jsonl:
 {"id": "...", "verdict": "agree|contradict|gap|probe_invalid", "note": "one line: the distinguishing fact",
  "spec_defect": "optional: a spec inaccuracy you noticed that did not change the verdict"}
 Record spec_defect whenever the spec states something the code contradicts or leaves out, even when
 the answer still agrees (e.g. the right outcome attributed to the wrong cause). These are routed to
 revisers mechanically; do not bury them in the note.
 
-Do not read or edit any spec file; your job is comparison, not repair. Write
-{{SPECS}}/_meta/worker-reports/judge-{{MODULE_ID}}-round-{{ROUND}}.json. Reply with the verdict counts.
+Do not read or edit any spec file; your job is comparison, not repair. Write your worker report
+(command below) listing every file you read. Reply with the verdict counts.
 Durability: the container running you can restart mid-task, and anything not on disk is lost. Write
 your output file early and save it after each section (append each probe, answer, or verdict as soon
 as it is final). If you are told you were resumed, check your output file first and continue from it.

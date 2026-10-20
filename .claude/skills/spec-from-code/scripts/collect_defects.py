@@ -11,7 +11,7 @@ import json
 import re
 from pathlib import Path
 
-from _common import eprint, parse_claims, parse_frontmatter
+from _common import reports_dirs, eprint, parse_claims, parse_frontmatter
 
 
 def spans(where: str) -> list[tuple[str, int, int]]:
@@ -38,7 +38,7 @@ def main() -> int:
         for c in parse_claims(body):
             if c["section"] == "Suspected defects":
                 rows.append((fm.get("module") or fm.get("kind"), c["id"], ", ".join(c["refs"]), c["text"]))
-    for rf in sorted((specs / "_meta" / "worker-reports").glob("*.json")):
+    for rf in sorted(f for d in reports_dirs(specs) for f in d.glob("*.json")):
         try:
             r = json.loads(rf.read_text())
         except Exception:

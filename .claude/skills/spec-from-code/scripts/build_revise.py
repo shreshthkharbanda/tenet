@@ -71,9 +71,17 @@ def main() -> int:
         for r in rows:
             if "source" not in r:
                 r["source"] = r["verdict"] if r.get("verdict") in ("answer_note", "defect_note") else "probe"
-        write_jsonl(f, rows + add)
-        totals[mid] = {}
+        # idempotent: re-running after a brief or skill fix must not duplicate rows (L58: rebuild rows were
+        # appended twice and a reviser worked 68 rows of which 27 were repeats)
+        merged, keys = [], set()
         for r in rows + add:
+            k = (r.get("source"), str(r.get("id")))
+            if k not in keys:
+                keys.add(k)
+                merged.append(r)
+        write_jsonl(f, merged)
+        totals[mid] = {}
+        for r in merged:
             totals[mid][r["source"]] = totals[mid].get(r["source"], 0) + 1
     for mid, t in totals.items():
         eprint(f"{mid}: " + ", ".join(f"{k} {v}" for k, v in sorted(t.items())))

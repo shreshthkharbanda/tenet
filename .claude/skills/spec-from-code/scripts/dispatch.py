@@ -59,7 +59,10 @@ def main() -> int:
                 print(f"{r['agent']}\t{r['role']}\t{r['module']}\tround {r['round']}\t{r['brief']}")
         return 0
     elif a.cmd == "unfinished":
-        reports = {p.stem for p in (meta / "worker-reports").glob("*.json")}
+        import sys
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from _common import reports_dirs
+        reports = {p.stem for d in reports_dirs(meta.parent) for p in d.glob("*.json")}
         briefs = list((meta / "briefs").glob("*.md"))
         for d in a.snapshot:
             briefs += list(Path(d).glob("_briefs/*.md")) + list(Path(d).glob("_brief.md"))

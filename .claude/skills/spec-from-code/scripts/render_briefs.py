@@ -25,7 +25,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from _common import build_ownership, eprint, git_head, glob_to_regex, read_json, scope_label
+from _common import build_ownership, eprint, eval_dir, git_head, glob_to_regex, read_json, scope_label
 
 HERE = Path(__file__).resolve().parent
 SKILL_DIR = HERE.parent
@@ -82,7 +82,7 @@ def main() -> int:
     mods = read_json(meta / "modules.json") if (meta / "modules.json").exists() else {"modules": []}
     inv = read_json(meta / "inventory.json")
     commit = mods.get("commit") or git_head(repo) or "unknown"
-    base = {"REPO": repo, "SPECS": specs, "SKILL_DIR": SKILL_DIR, "COMMIT": commit, "SCRATCH": scratch,
+    base = {"REPO": repo, "SPECS": specs, "SKILL_DIR": SKILL_DIR, "COMMIT": commit, "SCRATCH": scratch, "EVAL": eval_dir(specs),
             "ROUND": args.round, "N_PROBES": args.n_probes, "TEST_CMD": args.test_cmd}
     # Freeze the references workers read, once per run: editing the skill mid-run must not change the
     # rules under workers already running. --refresh-refs re-copies deliberately.

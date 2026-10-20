@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Build the spec-only snapshot answerers read: a copy of specs/ with reference answers stripped
-from probes (questions only) and all answers/judgments/revise material removed.
+"""Build the spec-only snapshot answerers read: spec text (allowlist), the module map, and the probe
+questions from the eval dir with reference answers stripped.
 
 Usage: snapshot_for_answerers.py <specs_dir> --out <scratch>/spec-snapshot-round-N
 """
@@ -10,7 +10,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-from _common import eprint, read_jsonl, write_jsonl
+from _common import eprint, eval_dir, read_jsonl, write_jsonl
 
 
 def main() -> int:
@@ -46,7 +46,7 @@ def main() -> int:
         if (specs / "_meta" / "modules.json").exists():
             shutil.copy2(specs / "_meta" / "modules.json", out / "_meta" / "modules.json")
     (out / "_meta" / "probes").mkdir(parents=True, exist_ok=True)
-    for pf in sorted((specs / "_meta" / "probes").glob("*.jsonl")):
+    for pf in sorted((eval_dir(specs) / "probes").glob("*.jsonl")):
         if not pf.name.endswith(".questions.jsonl"):
             shutil.copy2(pf, out / "_meta" / "probes" / pf.name)
     pdir = out / "_meta" / "probes"

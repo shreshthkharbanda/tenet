@@ -14,11 +14,13 @@ Contents: 1 Gates · 2 Probe loop · 3 Rebuild loop · 4 Orchestrator spot check
 | G1 shards | `check_shards.py` | every in-scope source file is in exactly one module; no module > 6000 LOC error-level | re-run Surveyor with the unassigned/multiply-assigned list |
 | G2 lint | `lint_specs.py` | zero errors: grammar, unique IDs, refs resolve, sections present, no secrets, no tool mentions, cross-refs resolve | re-run the owning Extractor/Reviser with the error lines |
 | G3 coverage | `coverage.py` | per module: >= 95% in-scope files cited, >= 85% public symbols mentioned | re-run Extractor in revise mode with the uncited list |
-| G4 probes | `score_probes.py --round N` | per module held-out fidelity >= 0.90 and zero held-out contradictions (validated); >= 0.75 provisional | Reviser round, see section 2 |
-| G5 reports | `verify_reports.py` | every worker report matches the filesystem; answerers read only specs; probers read no specs | re-run that worker; treat its output as untrusted until it does |
+| G4 probes | `score_probes.py --round N` | per module held-out fidelity >= 0.90, zero held-out contradictions and >= 8 valid held-out probes (validated); >= 0.75 provisional. Errors: agree on an empty answer; 3+ agrees sharing none of the reference's literals; 70%+ answers copying reference phrasing absent from the spec; > 25% invalid in either split | Reviser round, see section 2; re-judge or re-answer per the error |
+| G5 reports | `verify_reports.py --transcripts DIR` | every finished dispatch has its report; outputs exist and postdate the launch; role rules hold on the transcript (writers never touch `$EVAL` or snapshots; probers and judges read no spec text; answerers and the control stay in their snapshot; rebuilders stay in their copy and read no tests) | re-run that worker; a writer that touched `$EVAL` contaminates its module's held-out score |
 
-`gate.py specs --repo . [--round N]` runs whatever has inputs and prints one table; `_meta/status.json`
-holds the result. Run it after every phase. Trust the table over any worker's summary.
+`gate.py specs --repo . [--round N] [--transcripts DIR]` runs whatever has inputs and prints one
+table; `_meta/status.json` holds the result. A gate whose inputs should exist never skips silently:
+`--round` without probes is a FAIL, and G5 runs whenever anything was dispatched. Run it after every
+phase. Trust the table over any worker's summary.
 
 Freshness: every spec file carries `commit:`. Lint warns when it differs from HEAD; `--strict-fresh`
 makes it an error. A spec for moved code is not a spec.
@@ -31,8 +33,9 @@ spec carries the information the code carries, including behavior no test pins.
 1. **Probers** (code-only, per module) write N probes each with a reference answer and refs.
    N = 25 for tier S/M modules, 20 for tier L, never below 12. Run `score_probes.py --assign-splits`
    once: it validates the files and assigns `revision` / `holdout` deterministically by id hash
-   (60/40). The held-out set is fixed for the life of the spec. Writers never see it.
-2. **Snapshot** the specs for answerers: copy `specs/` to `{{SCRATCH}}/spec-snapshot-round-N/` and
+   (60/40). The held-out set is fixed for the life of the spec. Writers never see it: probes,
+   answers, judgments and validation reports live in `$EVAL`, outside the specs dir and the repo.
+2. **Snapshot** the specs for answerers: copy the spec text to `{{SCRATCH}}/spec-snapshot-round-N/` and
    write `_meta/probes/<module>.questions.jsonl` inside it containing only `id` and `question`.
    Answerers point at the snapshot; it contains no code and no reference answers.
 3. **Answerers** (spec-only, per module) answer every probe or mark it unanswerable.
@@ -133,9 +136,10 @@ limitations below in one short paragraph. Point at `specs/INDEX.md` as the entry
 
 ## 7. Known limitations
 
-- Answerer isolation is instruction-based plus report verification, not a sandbox. A worker that
-  disobeys and reads code inflates fidelity; `verify_reports.py` catches the honest-but-disobedient
-  case (they list the file), not a dishonest one. Say this.
+- Isolation is instruction-based plus verification, not a sandbox. With transcripts, G5 sees every
+  path a worker's tools touched, including paths inside shell commands and files listed by searches;
+  it cannot see code reached indirectly (importing an installed package, a script that opens files
+  it does not name). Without transcripts, isolation rests on self-reported read lists. Say which.
 - Probes sample behavior; a validated module can still have unprobed gaps. The implicit-decisions
   checklist and symbol coverage reduce this; they do not eliminate it.
 - Reference answers can be wrong; judges can mark `probe_invalid`, and invalid rates are reported.
