@@ -251,7 +251,10 @@ timeline row and every path step; every Watch-out bullet. For each, find the cla
 [X-010]-[X-014] cites all of them) and label it:
 - supported: the cited claims say this, with the same conditions and scope;
 - overstated: the claims say less (a condition dropped, "always" or "every" where they say "when",
-  a default stated as the only behavior);
+  a default stated as the only behavior), or another claim of the spec qualifies what the cited one
+  says: search the spec for the sentence's key terms before you label it supported (L85: "the
+  reduced path skips routing plugins" matched its claim, while another claim says a router with
+  plugins fails every reduced-path call, and a reader believed the first);
 - distorted: the claims say something different (wrong order, wrong actor, wrong value, wrong cause);
 - unsupported: no cited claim says it (it may be true; the story still may not say it uncited).
 Write one row per sentence to {{SPECS}}/_meta/audit/story/{{MODULE_ID}}.jsonl:

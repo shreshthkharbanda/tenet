@@ -792,3 +792,16 @@ specific. Fix: a `story-fixer` role. It is a fresh worker that reads the story, 
 the claims those rows name, and changes only those sentences plus what they make inconsistent; it
 adds no material. A narrator rewrite is kept for what needs new material: a persona reader who got
 lost, or explained something wrongly.
+
+**L85. A sentence faithful to its cited claim still misled, because another claim qualified it.**
+Found: LiteLLM Phase 9 teach-back round 4 on router-selection. The story judge had labelled 172 of
+176 units supported, with none distorted. Yet the plain-language reader made 3 wrong statements.
+One came from "the reduced path skips ... routing plugins [RSELECT-128]". That matches RSELECT-128,
+but RSELECT-120 says a router with routing plugins configured fails every reduced-path call before
+any lookup. The judge checked each sentence against the claims it cites, as its brief said. Another
+came from a figure that jumped from "tags match" to "router picks a tier" and skipped the step where
+a strategy router is chosen: figure node and edge rows are not judged as units. Class: a check
+scoped to the evidence the writer chose. Fix: the story-judge brief now asks it to search the spec
+for each sentence's key terms before labelling it supported, and to label it overstated when an
+uncited claim qualifies it. Teach-back judging stays in the loop, because it is what catches a
+reader misled by a figure's shape.
