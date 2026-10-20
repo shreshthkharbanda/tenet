@@ -168,7 +168,9 @@ def flows(sections: list[dict]) -> list[dict]:
             steps = [it for b in s["blocks"] if b["t"] == "ol" for it in b["items"]]
             if steps:
                 title = re.sub(r"^\d+\.\s*", "", s["title"])
-                out.append({"id": "flow-" + slug(title)[:40], "title": title, "steps": [{"h": it["h"], "x": it["x"]} for it in steps]})
+                sl = slug(title)
+                sl = sl if len(sl) <= 48 else sl[:48].rsplit("-", 1)[0]  # cut at a word boundary
+                out.append({"id": "flow-" + sl, "title": title, "steps": [{"h": it["h"], "x": it["x"]} for it in steps]})
     return out
 
 
@@ -245,6 +247,8 @@ def main() -> int:
             "evidence": evidence.get(mid, {}).get("evidence_rate") if mid else None,
             "scope": fm.get("scope") or (mods.get(mid, {}).get("files") if mid else None),
             "sections": [{"id": s["id"], "title": s["title"], "level": s["level"]} for s in sections[1:]],
+            "words": len(re.sub(r"<[^>]+>", " ", " ".join(b.get("h", "") for s in sections for b in s["blocks"])
+                                + " ".join(c["plain"] for c in claims.values())).split()),
         })
         if fm.get("kind") == "overview":
             book["title"] = title
@@ -272,6 +276,24 @@ def main() -> int:
         for st in fl["steps"]:
             st["who"] = sorted({book["owner"][x] for x in st["x"] if x in book["owner"]},
                                key=lambda s: -sum(book["owner"].get(x) == s for x in st["x"]))
+    # reading order: the overview's "Reading order" list names spec files; the rest follow in file order
+    order: list[str] = []
+    ov = next((f for f in files if parse_frontmatter(f.read_text(encoding="utf-8", errors="replace"))[0].get("kind") == "overview"), None)
+    if ov:
+        _, osecs, _ = parse_file(ov.read_text(encoding="utf-8", errors="replace"))
+        for s_ in osecs:
+            if s_["title"].lower().startswith("reading order"):
+                for b in s_["blocks"]:
+                    for it in b.get("items", []):
+                        for m in re.finditer(r"<code>([\w./-]+\.md)</code>", it["h"]):
+                            sl = slug(m.group(1))
+                            if any(f["slug"] == sl for f in book["files"]) and sl not in order:
+                                order.append(sl)
+        # defects the overview singles out lead the home page's worklist
+        otext = ov.read_text(encoding="utf-8", errors="replace")
+        dids = {d["id"] for d in book["defects"]}
+        book["headline_defects"] = [x for x in dict.fromkeys(XREF_RE.findall(otext)) if x in dids]
+    book["order"] = order + [f["slug"] for f in book["files"] if f["slug"] not in order]
     book["stats"] = {"files": len(files), "claims": len(book["owner"]), "defects": len(book["defects"]), "snippets": total_snips}
     write_json(out / "book.json", book)
     size = sum(f.stat().st_size for f in out.glob("*.json"))
