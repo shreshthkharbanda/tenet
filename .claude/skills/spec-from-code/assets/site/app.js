@@ -590,13 +590,17 @@
     const edges = fg.edges.map((e, k) => ({ id: `${e.a}>${e.b}#${k}`, sources: [e.a], targets: [e.b], e,
       labels: e.label ? [{ id: `l${k}`, text: e.label, width: textW(e.label.replace(/`/g, ""), 11.5), height: 14 }] : [] }));
     let g = null;
+    // lay out left to right; a long chain that comes out much wider than tall is laid out top to bottom
+    // instead, so its labels stay legible in a reading column
+    const layout = async (dir) => new (await loadELK())().layout({ id: "f", layoutOptions: {
+      "elk.algorithm": "layered", "elk.direction": dir, "elk.edgeRouting": "ORTHOGONAL",
+      "elk.layered.spacing.nodeNodeBetweenLayers": dir === "DOWN" ? "34" : "56", "elk.spacing.nodeNode": "26", "elk.spacing.edgeLabel": "4",
+      "elk.edgeLabels.placement": "CENTER", "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.padding": "[top=16,left=16,bottom=16,right=16]",
+      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+    }, children: nodes.map(({ id, width, height }) => ({ id, width, height })), edges: edges.map(({ id, sources, targets, labels }) => ({ id, sources, targets, labels: labels.map((l) => ({ ...l })) })) });
     try {
-      const ELK = await loadELK();
-      g = await new ELK().layout({ id: "f", layoutOptions: {
-        "elk.algorithm": "layered", "elk.direction": "RIGHT", "elk.edgeRouting": "ORTHOGONAL",
-        "elk.layered.spacing.nodeNodeBetweenLayers": "56", "elk.spacing.nodeNode": "26", "elk.spacing.edgeLabel": "4",
-        "elk.edgeLabels.placement": "CENTER", "elk.layered.edgeLabels.sideSelection": "ALWAYS_UP", "elk.padding": "[top=16,left=16,bottom=16,right=16]",
-      }, children: nodes.map(({ id, width, height }) => ({ id, width, height })), edges: edges.map(({ id, sources, targets, labels }) => ({ id, sources, targets, labels })) });
+      g = await layout("RIGHT");
+      if (g.width / g.height > 2.0) g = await layout("DOWN");
     } catch (e) { g = null; }
     if (!g) {  // fallback: one row, straight edges
       let x = 16;
@@ -629,7 +633,7 @@
     svg.setAttribute("class", "sfig-svg");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", fg.title.replace(/<[^>]+>/g, ""));
-    svg.style.maxWidth = Math.ceil(g.width * 1.15) + "px";
+    svg.style.maxWidth = Math.ceil(g.width * 1.1) + "px";
     svg.innerHTML = out;
     return { svg, geo: g };
   }

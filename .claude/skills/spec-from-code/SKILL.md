@@ -335,6 +335,9 @@ compiled from the specs and never edited by hand.
   module with zero gaps on a critical path is more likely overconfident than transparent; say so.
 - **The eval dir is the answer key.** Only probers, answerers, the control, judges and the judge
   auditor are ever given `$EVAL`; nothing a writer reads mentions it.
+- **Workers only write files.** Every brief ends with a boundaries footer, and G5 fails a worker whose
+  transcript shows a publish, a connector call, a message, a schedule or a push (L74). If one happened,
+  tell the user what was published or sent; deleting it is their call.
 - **Never modify source.** Workers write under `$SPECS` and `$SCRATCH` only. Secrets found in code are
   redacted to `[REDACTED]` plus a gap; lint fails any spec containing a credential-shaped literal.
 - **Agent-neutral output.** No model or tool names in any spec; lint fails claims that mention them.

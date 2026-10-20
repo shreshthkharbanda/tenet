@@ -201,9 +201,14 @@ def main() -> int:
             if role == "rebuilder":
                 vals["SCRATCH"] = scratch / f"rebuild-{mid}"
             rendered.append((role, mid, path, fill(blocks[role], vals, must)))
+    # every worker writes files and nothing else (L74: a narrator published its story as a web page)
+    footer = ("Boundaries: you only read and write files on this machine, in the paths above. Never publish a "
+              "page or artifact, push or commit, call a connector or web service that changes anything, message "
+              "anyone, or schedule anything; edit files with the file tools. If a step seems to need one of "
+              "these, stop and say so in your report.")
     for r, mid, path, text in rendered:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text + "\n", encoding="utf-8")
+        path.write_text(text + "\n" + footer + "\n", encoding="utf-8")
         print(f"{r}\t{mid}\t{path}")
     eprint(f"rendered {len(rendered)} brief(s)")
     return 0

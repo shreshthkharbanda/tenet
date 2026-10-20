@@ -155,6 +155,37 @@ def touched_paths(tfile: Path) -> list[tuple[str, str]]:
     return [(h, re.sub(r":\d+(?:-\d+)?$", "", p)) for h, p in out if p.startswith("/")]
 
 
+OUTWARD_TOOLS = {"Artifact", "ArtifactComments", "ArtifactData", "SendMessage", "PushNotification", "SendUserFile",
+                 "RemoteTrigger", "CronCreate", "ScheduleWakeup"}
+OUTWARD_BASH = re.compile(r"(?:^|[\s;&|(])(git\s+(?:push|commit|tag)\b|gh\s+\w|curl\b[^|;&]*-X\s*(?:POST|PUT|PATCH|DELETE))")
+
+
+def outward_actions(tfile: Path) -> list[str]:
+    """Tool calls that act outside this machine or this run: publishing a page, an MCP connector call,
+    messaging, scheduling, pushing or committing (L74: a narrator published its story as a page)."""
+    out = []
+    for line in tfile.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        msg = d.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
+        for b in content if isinstance(content, list) else []:
+            if not isinstance(b, dict) or b.get("type") != "tool_use":
+                continue
+            name, inp = str(b.get("name")), b.get("input") or {}
+            if name == "Artifact" and inp.get("action") in ("read", "list", "quickstart"):
+                continue  # reading a page changes nothing
+            if name in OUTWARD_TOOLS or name.startswith("mcp__"):
+                out.append(f"{name}({str(inp.get('action') or inp.get('file_path') or '')[:60]})")
+            elif name == "Bash":
+                m = OUTWARD_BASH.search(str(inp.get("command", "")))
+                if m:
+                    out.append(f"Bash({m.group(1)[:40]})")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("specs")
@@ -261,6 +292,10 @@ def main() -> int:
         tfile = transcript_for(drow["agent"], tdirs) if drow and drow.get("agent") and tdirs else None
         if tfile:
             accesses += [(how, Path(os.path.normpath(p))) for how, p in touched_paths(tfile)]
+            acts = outward_actions(tfile)
+            if acts:
+                errors.append(f"{rf.name}: worker acted outside this run (published, messaged, pushed or called a "
+                              f"connector); workers only write files: {sorted(set(acts))[:5]}")
         elif tdirs:
             unchecked += 1
 

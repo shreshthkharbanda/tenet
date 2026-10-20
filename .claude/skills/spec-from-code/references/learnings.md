@@ -628,3 +628,14 @@ believed coverage was installed). Patching each call with `-P` fixes instances, 
 the G3 script is `check_coverage.py`; every interpreter call that loads a module by name runs with
 `-P` from a neutral directory; a selftest fails if any script shares a name with a module the skill
 or its checks import.
+
+**L74. A worker published its output to the web.** Found: LiteLLM Phase 9 pilot; the router-selection
+narrator applied its last edit with the page-publishing tool, which published its story file as a
+private web page nobody asked for. Workers inherit every tool the orchestrator has, including ones that
+act outside the machine (publishing, connectors, messaging, scheduling, git push), and nothing in a
+brief or a gate said they may not use them. Fix: every rendered brief ends with a boundaries footer
+(files only; never publish, push, call a changing connector, message or schedule; stop and report
+instead); G5 reads each transcript for such tool calls (page publishing other than read and list, any
+connector tool, messaging and scheduling tools, `git push|commit|tag`, `gh`, mutating `curl`) and
+fails the worker's report. On the real transcripts it flags exactly the one publish. Anything a worker
+published is the user's to keep or delete; tell them, never delete it unasked.

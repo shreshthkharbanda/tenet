@@ -425,6 +425,15 @@ def main() -> int:
     transcript("rev1", [("Grep", {"pattern": "add", "path": str(tmp)}, f"{ev}/probes/big-a.jsonl:3:add\n{repo}/pkg/small.py:1:def add(")])
     rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
     check("L57 a recursive search whose results list held-out files is caught", "reviser touched the eval dir" in out, out)
+    # L74: a worker that publishes, pushes or calls a connector acted outside the run
+    transcript("rev1", [("Read", {"file_path": str(specs / "modules" / "big-a.md")}, "..."),
+                        ("Artifact", {"action": "publish", "file_path": str(specs / "modules" / "big-a.md")}, "Published"),
+                        ("Bash", {"command": "cd /x && git push -u origin main"}, "")])
+    rc, out = run("verify_reports.py", str(specs), "--repo", str(repo), "--transcripts", str(tdir))
+    check("L74 a worker that published a page or pushed is flagged", "acted outside this run" in out and "Artifact(publish)" in out
+          and "git push" in out, out)
+    brief_txt = (meta / "briefs" / "extractor-big-a.md").read_text()
+    check("L74 every rendered brief tells the worker it only writes files", "Never publish a page or artifact" in brief_txt, brief_txt[-400:])
     # L64: a judge reading an earlier round's verdicts is flagged
     (meta / "briefs" / "judge-big-a-round-2.md").write_text("brief")
     run("write_report.py", "--specs", str(specs), "--role", "judge", "--module", "big-a", "--round", "2",

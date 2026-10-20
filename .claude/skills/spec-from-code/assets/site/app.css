@@ -376,8 +376,9 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .watch li { margin: 0 0 8px; }
 .to-ledger { margin: 22px 0 0; font: 600 0.84rem/1.4 var(--display); color: var(--muted); }
 .sfig { margin: 16px 0 18px; border: 1px solid var(--rule); border-radius: 12px; background: var(--paper); padding: 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
-.sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
-@media (max-width: 900px) { .sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1fr); } }
+.sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+.sfig:has(.sfig-steps) .sfig-art { position: sticky; top: calc(78px + env(safe-area-inset-top, 0px)); }
+@media (max-width: 900px) { .sfig:has(.sfig-steps) { grid-template-columns: minmax(0, 1fr); } .sfig:has(.sfig-steps) .sfig-art { position: static; } }
 .sfig-art { overflow-x: auto; min-width: 0; }
 .sfig-svg { display: block; width: 100%; height: auto; margin: 0 auto; }
 .sfig figcaption { grid-column: 1 / -1; font: 600 0.8rem/1.4 var(--display); color: var(--muted); }
@@ -398,3 +399,9 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .sfig-steps li { display: grid; gap: 2px; padding: 8px 10px; border-radius: 8px; border-left: 3px solid var(--rule); cursor: pointer; font: 400 0.86rem/1.5 var(--body); }
 .sfig-steps li b { font: 700 0.84rem/1.3 var(--display); }
 .sfig-steps li.on { background: var(--accent-soft); border-left-color: var(--accent); }
+
+/* inside running prose, a claim chip is a quiet marker, not a button: it reads like a footnote and
+   lights up on hover or focus */
+.story .xr, .sfig-steps .xr, .stepi .xr { background: none; color: var(--muted); font: 600 0.66em/1 var(--mono); padding: 0 0.1em; border-bottom: 1px dotted color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 0; vertical-align: 0.12em; }
+.story .xr:hover, .story .xr:focus-visible, .sfig-steps .xr:hover, .stepi .xr:hover { color: var(--accent); border-bottom-color: var(--accent); text-decoration: none; }
+.story .glance td.ids .xr { font-size: 0.72rem; vertical-align: 0; }
