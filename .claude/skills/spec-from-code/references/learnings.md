@@ -246,3 +246,12 @@ brief had no worker report and no defect field. L24 gave extractors a channel, b
 code and any of them can trip over a bug. Fix: `suspected_bugs` is part of the worker report format
 for every role, the pair-judge brief now writes a worker report, and the template says a reply does
 not survive and a report does.
+
+**L35. Parallel judges editing the same claim.** Found: LiteLLM pair judge 01 noticed that claims in
+its slice were also edited by pair judge 00 (a claim appears in several overlap pairs), so the applier's
+file order would decide which text survived; it copied 00's text where it could, and three claims
+still had divergent edits. Fix: `apply_claim_edits.py` groups edits by claim, applies only claims with
+one agreed edit, leaves conflicting claims untouched, writes `reconcile/conflicts.json`, and exits
+non-zero; the orchestrator resolves each conflict by picking the variant whose pointer reaches the
+owning claim directly (or sends both to one judge). It also flags pointer chains (a pointer to a
+pointer), which make a reader hop twice.

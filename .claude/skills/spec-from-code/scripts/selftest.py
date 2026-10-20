@@ -151,6 +151,13 @@ def main() -> int:
     check("L33 unresolvable pair becomes a question", "which is intended?" in (meta / "questions.md").read_text())
     rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
     check("L33 specs still lint after edits", rc == 0, out)
+    (meta / "reconcile" / "decisions-01.jsonl").write_text(json.dumps(
+        {"row": 0, "verdict": "duplicate", "edits": [{"file": "modules/big-a.md", "id": "BIGA-001", "text": "a different rewrite"}]}) + "\n")
+    before = (specs / "modules" / "big-a.md").read_text()
+    rc, out = run("apply_claim_edits.py", str(specs))
+    check("L35 conflicting edits are not applied and fail", rc == 1 and "CONFLICT" in out
+          and (specs / "modules" / "big-a.md").read_text() == before, out)
+    (meta / "reconcile" / "decisions-01.jsonl").unlink()
 
     # L08: freshness is per cited file
     (repo / "README.md").write_text("unrelated\n")

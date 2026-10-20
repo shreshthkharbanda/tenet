@@ -38,6 +38,21 @@ def main() -> int:
                 row = overlaps[d["row"]] if 0 <= d.get("row", -1) < len(overlaps) else {}
                 questions.append(f"- [{row.get('a', {}).get('id', '?')}] vs [{row.get('b', {}).get('id', '?')}]: "
                                   f"{d.get('question', '')} Evidence: {d.get('evidence', '')}")
+    # Conflicts: parallel judges may edit the same claim with different text. Applying in file order would
+    # silently let the last one win, so conflicting claims are left untouched and listed for resolution.
+    conflicts = []
+    for rel in list(edits_by_file):
+        groups: dict[str, list[dict]] = {}
+        for e in edits_by_file[rel]:
+            groups.setdefault(e["id"], []).append(e)
+        keep = []
+        for cid, es in groups.items():
+            variants = {(e["text"].strip(), e.get("confidence"), tuple(e.get("refs") or ())) for e in es}
+            if len(variants) > 1:
+                conflicts.append({"file": rel, "id": cid, "variants": [e["text"] for e in es]})
+            else:
+                keep.append(es[0])
+        edits_by_file[rel] = keep
     for rel, edits in edits_by_file.items():
         fp = specs / rel
         if not fp.exists():
@@ -67,12 +82,33 @@ def main() -> int:
         qf = specs / "_meta" / "questions.md"
         prev = qf.read_text() if qf.exists() else "# Open questions\n\nPairs of claims about the same code that the code itself does not settle.\n\n"
         qf.write_text(prev + "\n".join(questions) + "\n")
+    # Pointer chains: a pointer whose target is itself a pointer makes the reader hop twice; flag them.
+    POINTER = re.compile(r"\b(?:is|are) in \[([A-Z][A-Z0-9]{1,11}-\d{3,4})\]|see \[([A-Z][A-Z0-9]{1,11}-\d{3,4})\]|in \[([A-Z][A-Z0-9]{1,11}-\d{3,4})\]\.?$")
+    texts = {}
+    for fp in list(specs.glob("modules/*.md")) + list(specs.glob("0*.md")):
+        for ln in fp.read_text(encoding="utf-8").splitlines():
+            m = LINE.match(ln)
+            if m:
+                texts[m.group("id")] = m.group("rest")
+    chains = []
+    for cid, rest in texts.items():
+        pm = POINTER.search(rest)
+        tgt = next((g for g in pm.groups() if g), None) if pm else None
+        if tgt and tgt in texts and POINTER.search(texts[tgt]):
+            chains.append(f"{cid} -> {tgt} -> ...")
+    if conflicts:
+        write_json(rdir / "conflicts.json", conflicts)
     write_json(rdir / "applied.json", {"verdicts": counts, "edits_applied": applied, "errors": errors,
-                                       "questions": len(questions)})
+                                       "questions": len(questions), "conflicts": len(conflicts),
+                                       "pointer_chains": chains})
+    for c in conflicts:
+        eprint(f"CONFLICT: {c['file']} {c['id']}: {len(c['variants'])} different edits; left unchanged, see reconcile/conflicts.json")
+    for ch in chains[:20]:
+        eprint("POINTER CHAIN:", ch)
     for e in errors:
         eprint("ERROR:", e)
     eprint(f"reconcile: verdicts {counts}; {applied} claim edits applied; {len(questions)} questions; {len(errors)} errors")
-    return 1 if errors else 0
+    return 1 if errors or conflicts else 0
 
 
 if __name__ == "__main__":

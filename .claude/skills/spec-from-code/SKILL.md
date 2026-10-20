@@ -135,7 +135,9 @@ the Reconciler finds contradictions; reading thousands of claims for them does n
    dispatch them in parallel. They only write decisions; they never edit specs.
 2. `python3 $SKILL_DIR/scripts/apply_claim_edits.py $SPECS` applies every edit by claim ID (the only
    writer, so parallel judges cannot race) and appends unresolvable pairs to `_meta/questions.md`.
-   Re-run lint.
+   A claim edited differently by two judges is left untouched and listed in
+   `_meta/reconcile/conflicts.json`; resolve each by choosing the variant that points straight at the
+   owning claim, then re-run. Fix any reported pointer chains the same way. Re-run lint.
 3. Dispatch the Reconciler: it turns questions into gaps, adds claim-ID cross-links,
 writes `00-overview.md`, `_meta/gaps.md`, `_meta/questions.md`, and a first `INDEX.md`. Re-run `gate.py`.
 Read `00-overview.md` yourself as the intended reader (new engineer, 15 minutes). If the first
