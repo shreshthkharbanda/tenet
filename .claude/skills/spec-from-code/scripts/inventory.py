@@ -120,10 +120,14 @@ def main() -> int:
     ap.add_argument("repo")
     ap.add_argument("--out", required=True)
     ap.add_argument("--exclude", action="append", default=[], help="glob to exclude (repeatable)")
+    ap.add_argument("--include", action="append", default=[],
+                    help="glob to keep in scope (repeatable). Files outside every --include stay in the inventory "
+                         "(callers and tests are context) but are marked in_scope=false and never sharded.")
     ap.add_argument("--max-bytes", type=int, default=2_000_000)
     args = ap.parse_args()
     root = Path(args.repo).resolve()
     excludes = list(args.exclude) + ["specs/**", "**/.claude/**"]
+    include_rx = [glob_to_regex(g) for g in args.include]
 
     records = []
     by_lang: dict[str, dict] = {}
@@ -149,8 +153,8 @@ def main() -> int:
         if name in BUILD_HINTS:
             build_hints.setdefault(p, BUILD_HINTS[name])
         if not lang or size > args.max_bytes or is_binary(fp):
-            records.append({"path": p, "lang": lang or "binary/unknown", "kind": "other", "loc": 0,
-                            "bytes": size, "is_test": False, "is_generated": False})
+            records.append({"path": p, "lang": lang or "binary/unknown", "kind": "other", "loc": 0, "lines": 0,
+                            "bytes": size, "is_test": False, "is_generated": False, "in_scope": False})
             continue
         try:
             text = fp.read_text(encoding="utf-8", errors="replace")
@@ -171,16 +175,17 @@ def main() -> int:
                    or any(part.lower() in TEST_DIR_PARTS for part in parts[:-1]))
         head = "\n".join(lines[:5])
         is_generated = bool(GENERATED_PATH_RE.search(p)) or bool(GENERATED_HEAD_RE.search(head))
-        if kind == "source" and not is_test and not is_generated:
+        if kind == "source" and not is_test and not is_generated and ((not include_rx) or any(rx.match(p) for rx in include_rx)):
             for rx, label in ENTRY_HINTS:
                 if rx.search(text):
                     entry_hints.append({"path": p, "hint": label})
                     break
-        rec = {"path": p, "lang": lang, "kind": kind, "loc": loc, "bytes": size,
-               "is_test": is_test, "is_generated": is_generated}
+        scoped = (not include_rx) or any(rx.match(p) for rx in include_rx)
+        rec = {"path": p, "lang": lang, "kind": kind, "loc": loc, "lines": len(lines), "bytes": size,
+               "is_test": is_test, "is_generated": is_generated, "in_scope": scoped}
         records.append(rec)
         total_loc += loc
-        if kind == "source" and not is_test and not is_generated:
+        if kind == "source" and not is_test and not is_generated and scoped:
             source_loc += loc
         bl = by_lang.setdefault(lang, {"files": 0, "loc": 0})
         bl["files"] += 1
@@ -189,7 +194,7 @@ def main() -> int:
         bt = by_top.setdefault(top, {"files": 0, "loc": 0, "source_loc": 0})
         bt["files"] += 1
         bt["loc"] += loc
-        if kind == "source" and not is_test and not is_generated:
+        if kind == "source" and not is_test and not is_generated and scoped:
             bt["source_loc"] += loc
 
     tier = "S" if source_loc < 15_000 else "M" if source_loc < 150_000 else "L"
@@ -205,6 +210,11 @@ def main() -> int:
         "test_files": sum(1 for r in records if r["is_test"]),
         "generated_files": sum(1 for r in records if r["is_generated"]),
         "excludes": excludes,
+        "includes": args.include,
+        "largest_in_scope_files": sorted(
+            [{"path": r["path"], "lines": r["lines"], "loc": r["loc"]} for r in records
+             if r["kind"] == "source" and not r["is_test"] and not r["is_generated"] and r.get("in_scope")],
+            key=lambda r: -r["loc"])[:15],
     }
     out = {"summary": summary, "build_hints": build_hints, "entry_hints": entry_hints, "files": records}
     write_json(Path(args.out), out)

@@ -21,23 +21,28 @@ what makes validation meaningful), and you do not trust a worker's summary over 
 
 ## Inputs and defaults
 
-- Target: the current repo, or a path/subsystem the user names (`--scope`). Specs go to `<repo>/specs/`
-  unless the user names another directory. Never commit; never modify source.
+- Target: the current repo, or a subsystem the user names. Scope is set by `inventory.py --include GLOB`
+  (repeatable); files outside it remain in the inventory as context but are never sharded or specified.
+  Specs go to `<repo>/specs/` unless the user names another directory. Never commit; never modify source.
 - Modes: full (default), `--update` (re-extract only modules whose files changed since the recorded
   commit), `--validate-only` (probe existing specs without re-extracting), `--no-rebuild`.
 - Budget tier comes from in-scope source LOC (`inventory.py`): S < 15k, M < 150k, L above. Tell the user
-  the tier and the rough agent count before fan-out (formula in Phase 0). Proceed without waiting
-  unless the tier is L and the user gave no scope; then say the estimate and proceed with the plan the
-  Surveyor produces, since the user asked for the whole repo.
+  the tier and the rough agent count before fan-out (formula in Phase 0). Tier L without a scope means
+  hundreds of agents: say the estimate, run Phases 0-1 on the whole repo (the survey and shard plan are
+  cheap and useful on their own), then run Phases 2-7 subsystem by subsystem in the reading order the
+  Surveyor proposes, reporting after each, unless the user said to run everything.
 - Set `SKILL_DIR` to this skill's absolute directory, `REPO` to the repo root, `SPECS` to the output
   dir, `SCRATCH` to your scratchpad. Every command below uses those.
 
 ## Phase 0: preflight (you, no workers)
 
 ```
-python3 $SKILL_DIR/scripts/inventory.py $REPO --out $SPECS/_meta/inventory.json [--exclude GLOB ...]
+python3 $SKILL_DIR/scripts/inventory.py $REPO --out $SPECS/_meta/inventory.json [--include GLOB ...] [--exclude GLOB ...]
 ```
-Read the summary: tier, languages, test count, entry hints, build hints. Record `COMMIT=$(git -C $REPO
+Read the summary: tier, languages, test count, entry hints, build hints, and `largest_in_scope_files`.
+Any file over ~4000 LOC must be split into line ranges before sharding:
+`python3 $SKILL_DIR/scripts/split_file.py $REPO <path> --max-loc 3500` prints ready-to-use
+`"path:START-END"` entries cut at definition boundaries; give them to the Surveyor. Record `COMMIT=$(git -C $REPO
 rev-parse HEAD)`. If the tree is dirty, say so; specs are stamped with a commit and a dirty tree makes
 freshness meaningless. Confirm the test command from build hints actually runs (try it once, with a
 timeout); rebuilds need it and `04-operations.md` cites it.
@@ -53,7 +58,17 @@ those modules (their probes are re-generated too, because the code changed).
 
 ## Phase 1: survey and shard (1 worker, then gate G1)
 
-Dispatch the Surveyor brief. When it returns, run:
+Workers are dispatched the same way in every phase: render the brief, then launch the agent with a
+one-line prompt.
+```
+python3 $SKILL_DIR/scripts/render_briefs.py --role <role> [--module ID | --all-modules | --kind K] [--round N] [--snapshot DIR] \
+    --specs $SPECS --repo $REPO --scratch $SCRATCH
+```
+It prints `<role> <module> <path>` per brief. Agent prompt: "Your complete instructions are in <path>.
+Read that file first and follow it exactly." Never paste or hand-edit brief text: the renderer fills
+the file lists, test lists, scope notes, and rounds, and refuses to write a brief with a gap.
+
+Dispatch the Surveyor (`--role surveyor`). When it returns, run:
 ```
 python3 $SKILL_DIR/scripts/check_shards.py --inventory $SPECS/_meta/inventory.json --modules $SPECS/_meta/modules.json --out $SPECS/_meta/shards-report.json
 ```
@@ -68,8 +83,9 @@ in briefs rather than globs, so no worker has to re-derive scope.
 
 ## Phase 2: extract (M + 4 workers in parallel, then gates G2, G3, G5)
 
-Dispatch, in one message, one Extractor per module plus the four cross-cutting extractors
-(Interfaces, Data, Config, Operations). Launch at most ~12 at once; queue the rest and dispatch the
+Dispatch, in one message, one Extractor per module (`--role extractor --all-modules`) plus the
+cross-cutting extractors (`--role crosscut --kind interfaces --kind data --kind config --kind
+operations`; drop data or operations when the Surveyor says the scope has none). Launch at most ~12 at once; queue the rest and dispatch the
 next batch as results arrive. Workers are independent by design: none reads another's output.
 
 When all return:
@@ -170,9 +186,12 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   The specs must work for a human reader and for any future agent fed only the files.
 - **Stable IDs.** Claim IDs are never renumbered or reused. Revisions rewrite text in place or append.
 - **Freshness.** Every file is stamped with the commit. Lint warns on drift; `--update` is the fix.
-- **Concurrency.** Up to ~12 workers per batch, all `run_in_background: true`, dispatched in one
-  message, results handled as notifications arrive. Do not poll. Do not run the same worker twice in
-  parallel for one module.
+- **Concurrency.** The harness caps concurrent subagents (20 by default; a launch over the cap fails
+  with "Concurrent subagent limit reached" and must not be retried blindly). Keep the briefs that are
+  rendered but not yet launched in `_meta/queue.txt` (one brief path per line), launch up to the cap
+  minus two in one message, and launch the next queued brief each time a completion notification
+  frees a slot. Probers depend only on code, so queue them right behind the extractors instead of
+  waiting for reconciliation. Do not poll. Never run two workers for the same module and role at once.
 - **Cost honesty.** Report agents launched and rounds run. If you stopped early (budget, repeated
   regression, a module that cannot be sharded), say which phase and why.
 
@@ -185,6 +204,9 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
 - `references/validation.md`: gates, thresholds, probe loop, rebuild loop, spot checks, final report,
   limitations.
 - `references/research-basis.md`: which paper each rule comes from and what it found.
-- `scripts/`: `inventory.py`, `check_shards.py`, `lint_specs.py`, `coverage.py`, `score_probes.py`,
-  `verify_reports.py`, `snapshot_for_answerers.py`, `changed_modules.py`, `apply_status.py`,
-  `gate.py`. Stdlib Python 3.9+, deterministic, each prints a one-line summary to stderr.
+- `references/learnings.md`: every failure class found in real runs and grading, and the fix that
+  removed it. Read before changing this skill.
+- `scripts/`: `inventory.py`, `split_file.py`, `check_shards.py`, `render_briefs.py`, `lint_specs.py`,
+  `coverage.py`, `score_probes.py`, `verify_reports.py`, `snapshot_for_answerers.py`,
+  `changed_modules.py`, `apply_status.py`, `gate.py`. Stdlib Python 3.9+, deterministic, each prints a
+  one-line summary to stderr.

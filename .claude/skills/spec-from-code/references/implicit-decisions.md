@@ -62,6 +62,8 @@ The rule that makes this work: **absence of a safeguard is a behavior.** "No tim
 - Input that reaches a shell, a query, a path, a template, or a deserializer.
 
 ## Interfaces and compatibility
+- Public names that are bound at runtime (factory assignments, setattr loops, registries, decorators,
+  generated tables): every one, with where it is bound.
 - Wire formats, field order where it matters, versioning, deprecations still honored.
 - Library behaviors that leak through (hash algorithms and costs, serialization quirks, default headers).
 - Exit codes, signals handled, stdout vs stderr.

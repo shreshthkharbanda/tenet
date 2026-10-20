@@ -12,7 +12,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from _common import eprint, git_head, glob_to_regex, read_json
+from _common import eprint, git_head, glob_to_regex, parse_scope_entry, read_json
 
 
 def main() -> int:
@@ -37,7 +37,18 @@ def main() -> int:
         parts = line.split("\t")
         status, path = parts[0][0], parts[-1]
         (deleted if status == "D" else new if status == "A" else changed).append(path)
-    mod_rx = [(m["id"], [glob_to_regex(g) for g in m.get("globs", [])]) for m in mods.get("modules", [])]
+    mod_rx = []
+    ranged_paths: dict[str, list[str]] = {}
+    for m in mods.get("modules", []):
+        rxs = []
+        for g in m.get("globs", []):
+            path, a, _ = parse_scope_entry(g)
+            if a is None:
+                rxs.append(glob_to_regex(path))
+            else:
+                ranged_paths.setdefault(path, []).append(m["id"])
+                rxs.append(glob_to_regex(path))
+        mod_rx.append((m["id"], rxs))
     ex_rx = [glob_to_regex(e["glob"]) for e in mods.get("excluded", []) if e.get("glob")]
     touched, unassigned = set(), []
     for p in changed + new + deleted:
@@ -47,7 +58,13 @@ def main() -> int:
         touched.update(owners)
         if not owners and p in new and p.rsplit(".", 1)[-1] in {"py", "js", "ts", "tsx", "jsx", "java", "kt", "go", "rs", "rb", "php", "cs", "scala", "swift", "ex"}:
             unassigned.append(p)
-    result = {"from": base, "to": head, "changed_modules": sorted(touched), "new_unassigned": unassigned, "deleted": deleted}
+    resplit = sorted(p for p in changed + new if p in ranged_paths)
+    for p in resplit:
+        touched.update(ranged_paths[p])  # line numbers moved: every module holding a range of it is affected
+    result = {"from": base, "to": head, "changed_modules": sorted(touched), "new_unassigned": unassigned,
+              "deleted": deleted, "resplit_files": resplit,
+              "note": "files in resplit_files are split into line ranges; re-run split_file.py and update modules.json "
+                      "before re-extracting, because the old ranges no longer line up"}
     print(json.dumps(result, indent=2))
     eprint(f"update: {len(touched)} modules touched, {len(unassigned)} new unassigned files")
     return 0

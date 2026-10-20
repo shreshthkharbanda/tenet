@@ -2,11 +2,16 @@
 """Gate G5: three-level verification of worker self-reports against the filesystem.
 
 Workers misreport (Rebuild Dossier, 2026): an agent's summary is a claim, the log is
-evidence, the files are truth. Each worker writes _meta/worker-reports/<role>-<module>[-roundN].json:
-  {"role": "...", "module": "...", "outputs": [{"path": "...", "claims": N}], "files_read": [...], "notes": "..."}
+evidence, the files are truth. Each worker writes _meta/worker-reports/<role>-<module>[-round-N].json:
+  {"role": "...", "module": "...", "outputs": [{"path": "...", "claims": N}],
+   "files_read": [...], "snapshot": "<answerers only: the snapshot dir>", "notes": "..."}
 
-Checks: every reported output exists and is non-empty; reported claim counts match parsed
-counts within 10%; answerers read only the specs directory; probers read no spec files.
+Isolation rules are checked against the real specs directory (whatever it is named) and the
+answerer's declared snapshot, never against a literal directory name:
+  - answerer: every read resolves inside its snapshot; the snapshot contains no source files
+  - prober: no read of any spec text (modules/, 0*.md, INDEX.md) or of answers/judgments
+  - extractor / reviser: no read of another module's spec
+  - every role: reported outputs exist, are non-empty, and claim counts match what parses
 Usage: verify_reports.py <specs_dir> --repo <root>
 """
 from __future__ import annotations
@@ -15,6 +20,23 @@ import argparse
 from pathlib import Path
 
 from _common import eprint, parse_claims, parse_frontmatter, read_json, write_json
+
+SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs", ".rb", ".php", ".cs", ".scala",
+              ".swift", ".c", ".cc", ".cpp", ".h", ".hpp", ".ex", ".exs", ".sh", ".sql"}
+PROBER_ALLOWED_META = {"modules.json", "survey.md", "shards-report.json", "inventory.json"}
+
+
+def resolve(p: str, repo: Path) -> Path:
+    q = Path(p)
+    return (q if q.is_absolute() else repo / q).resolve()
+
+
+def under(p: Path, root: Path) -> bool:
+    try:
+        p.relative_to(root)
+        return True
+    except ValueError:
+        return False
 
 
 def main() -> int:
@@ -38,32 +60,50 @@ def main() -> int:
             continue
         checked += 1
         role = r.get("role", "?")
+        module = r.get("module", "?")
         for o in r.get("outputs", []):
-            p = o.get("path", "")
-            fp = (repo / p) if not Path(p).is_absolute() else Path(p)
-            if not fp.exists() or fp.stat().st_size == 0:
-                errors.append(f"{rf.name}: reported output {p} missing or empty")
+            fp = resolve(o.get("path", ""), repo)
+            if not fp.exists() or (fp.is_file() and fp.stat().st_size == 0):
+                errors.append(f"{rf.name}: reported output {o.get('path')} missing or empty")
                 continue
             if "claims" in o and fp.suffix == ".md":
                 _, body = parse_frontmatter(fp.read_text(encoding="utf-8", errors="replace"))
                 actual = len(parse_claims(body))
                 rep = int(o["claims"])
                 if abs(actual - rep) > max(2, 0.10 * max(actual, rep)):
-                    errors.append(f"{rf.name}: reported {rep} claims in {p} but {actual} parse")
-        reads = [str(x) for x in r.get("files_read", [])]
+                    errors.append(f"{rf.name}: reported {rep} claims in {o.get('path')} but {actual} parse")
+        reads = [resolve(str(x), repo) for x in r.get("files_read", [])]
+        if not reads and role not in ("judge",):
+            errors.append(f"{rf.name}: no files_read listed; every worker must list what it read")
         if role == "answerer":
-            bad = [x for x in reads if "/specs/" not in ("/" + x.replace("\\", "/")) and not x.replace("\\", "/").startswith("specs/")
-                   and "spec-snapshot" not in x]
-            if bad:
-                errors.append(f"{rf.name}: answerer read non-spec files (isolation broken): {bad[:5]}")
-            if not reads:
-                errors.append(f"{rf.name}: answerer did not list files_read")
+            snap = r.get("snapshot")
+            if not snap:
+                errors.append(f"{rf.name}: answerer report lacks 'snapshot'")
+            else:
+                sroot = resolve(snap, repo)
+                bad = [str(x) for x in reads if not under(x, sroot)]
+                if bad:
+                    errors.append(f"{rf.name}: answerer read outside its snapshot (isolation broken): {bad[:5]}")
+                if under(sroot, repo):
+                    errors.append(f"{rf.name}: snapshot {sroot} is inside the repo; answerers must not be able to reach source by relative path")
+                leaked = [str(x) for x in sroot.rglob("*") if x.suffix in SOURCE_EXT] if sroot.exists() else []
+                if leaked:
+                    errors.append(f"{rf.name}: snapshot contains source files: {leaked[:5]}")
         if role == "prober":
-            bad = [x for x in reads if x.replace("\\", "/").startswith("specs/") or "/specs/modules/" in x]
-            if bad:
-                errors.append(f"{rf.name}: prober read spec files (blindness broken): {bad[:5]}")
-        if role in ("extractor", "reviser") and not reads:
-            errors.append(f"{rf.name}: extractor did not list files_read")
+            for x in reads:
+                if not under(x, specs):
+                    continue
+                rel = x.relative_to(specs)
+                ok = (rel.parts[:1] == ("_meta",) and (
+                    (len(rel.parts) == 2 and rel.parts[1] in PROBER_ALLOWED_META)
+                    or rel.parts[1:2] == ("briefs",)
+                    or (rel.parts[1:2] == ("probes",) and rel.stem == module)))
+                if not ok:
+                    errors.append(f"{rf.name}: prober read {rel} (blindness broken: probers may not read spec text)")
+        if role in ("extractor", "reviser"):
+            for x in reads:
+                if under(x, specs / "modules") and x.stem != module:
+                    errors.append(f"{rf.name}: {role} for {module} read another module's spec {x.name} (independence broken)")
     write_json(specs / "_meta" / "verify-report.json", {"checked": checked, "errors": errors})
     for e in errors:
         eprint("ERROR:", e)

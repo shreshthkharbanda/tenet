@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 from pathlib import Path
 
 from _common import eprint, read_json, read_jsonl, write_json, write_jsonl
@@ -25,9 +26,39 @@ CATEGORIES = {"validation", "error", "branch", "side_effect", "config", "interfa
 VERDICTS = {"agree", "contradict", "gap", "probe_invalid"}
 
 
+LITERAL_RES = [
+    re.compile(r"`([^`\n]{4,80})`"),                 # backticked literals
+    re.compile(r"\"([^\"\n]{5,80})\""),             # double-quoted strings
+    re.compile(r"'([^'\n]{5,80})'"),                 # single-quoted strings
+    re.compile(r"\b(\d{3,}(?:\.\d+)?)\b"),            # numbers with 3+ digits
+    re.compile(r"\b([a-z]+_[a-z0-9_]{3,})\b"),         # snake_case identifiers
+    re.compile(r"\b([a-z]+[A-Z][A-Za-z0-9]{3,})\b"),   # camelCase identifiers
+]
+
+
+def distinctive_literals(text: str) -> set[str]:
+    out = set()
+    for rx in LITERAL_RES:
+        for m in rx.findall(text or ""):
+            lit = m.strip()
+            if len(lit) >= 4 and not lit.isspace():
+                out.add(lit)
+    return out
+
+
 def split_for(pid: str) -> str:
     h = int(hashlib.sha1(pid.encode()).hexdigest(), 16) % 10
     return "revision" if h < 6 else "holdout"
+
+
+def wilson_lower(k: int, n: int, z: float = 1.96) -> float:
+    if n == 0:
+        return 0.0
+    p = k / n
+    d = 1 + z * z / n
+    c = p + z * z / (2 * n)
+    m = z * ((p * (1 - p) + z * z / (4 * n)) / n) ** 0.5
+    return max(0.0, (c - m) / d)
 
 
 def status_for(holdout_fidelity: float, holdout_contradictions: int) -> str:
@@ -45,6 +76,8 @@ def main() -> int:
     ap.add_argument("--round", type=int, default=None)
     ap.add_argument("--failures-for-revision", action="store_true")
     ap.add_argument("--min-probes", type=int, default=12)
+    ap.add_argument("--snapshot", default=None,
+                    help="the spec snapshot answerers read this round; used for leak detection (default: specs dir)")
     args = ap.parse_args()
     meta = Path(args.specs).resolve() / "_meta"
     probes_dir = meta / "probes"
@@ -69,10 +102,21 @@ def main() -> int:
                 if not r.get("refs"):
                     errors.append(f"{pf.name}: probe {r.get('id')} has no refs (reference answers must cite code)")
                 if "split" not in r:
-                    r["split"] = split_for(r["id"])
+                    r["split"] = None
                     n += 1
+            # exact split: sort this module's probe ids by hash, hold out the first 40% (rounded up)
+            unsplit = [r for r in rows if r.get("split") in (None, "")]
+            if unsplit and len(unsplit) == len(rows):
+                order = sorted(rows, key=lambda r: hashlib.sha1(r["id"].encode()).hexdigest())
+                k = -(-len(rows) * 4 // 10)
+                hold = {r["id"] for r in order[:k]}
+                for r in rows:
+                    r["split"] = "holdout" if r["id"] in hold else "revision"
             if len(rows) < args.min_probes:
                 errors.append(f"{pf.name}: only {len(rows)} probes; need at least {args.min_probes}")
+            for r in rows:
+                if not r.get("split"):
+                    r["split"] = split_for(r["id"])  # late additions to an already-split module
             write_jsonl(pf, rows)
         eprint(f"assigned splits to {n} probes")
         for e in errors:
@@ -86,7 +130,10 @@ def main() -> int:
     prev = meta / "validation.json"
     prev_report = read_json(prev) if prev.exists() else {}
     prev_rounds = prev_report.get("rounds", {})
-    report = {"round": rnd, "modules": {}, "rounds": prev_rounds}
+    report = {"round": rnd, "modules": {}, "rounds": prev_rounds, "leak_suspects": []}
+    snap_root = Path(args.snapshot).resolve() if args.snapshot else Path(args.specs).resolve()
+    spec_corpus = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in snap_root.rglob("*.md")
+                            if "_briefs" not in f.parts)
     lines = [f"# Validation report (round {rnd})", "",
              "Fidelity = share of probes whose spec-only answer agrees with the code-derived reference answer.",
              "Held-out probes are never shown to spec writers; revision probes drive fixes. "
@@ -122,6 +169,14 @@ def main() -> int:
             s = p.get("split") or split_for(pid)
             stats[s]["n"] += 1
             stats[s][v] += 1
+            # Leak check: a literal the answer shares with the code-derived reference, that the spec never
+            # contains, could only have come from the code (or a lucky guess). Isolation is instruction-
+            # based; this makes a breach visible.
+            ans_text = str(answers[pid].get("answer", ""))
+            leaked = sorted(l for l in distinctive_literals(p.get("reference_answer", ""))
+                            if l in ans_text and l not in spec_corpus)
+            if leaked:
+                report["leak_suspects"].append({"module": mid, "probe": pid, "literals": leaked[:5], "verdict": v})
             if v != "agree" and s == "revision":
                 failures.append({**p, "answer": answers[pid].get("answer"), "verdict": v, "judge_note": j.get("note", "")})
         rf = stats["revision"]["agree"] / stats["revision"]["n"] if stats["revision"]["n"] else 0.0
@@ -129,27 +184,51 @@ def main() -> int:
         hc = stats["holdout"]["contradict"]
         gaps = stats["revision"]["gap"] + stats["holdout"]["gap"]
         st = status_for(hf, hc)
-        prev_hf = prev_rounds.get(str(rnd - 1), {}).get(mid, {}).get("holdout_fidelity")
+        prev = prev_rounds.get(str(rnd - 1), {}).get(mid, {})
+        prev_hf = prev.get("holdout_fidelity")
         delta = (hf - prev_hf) if isinstance(prev_hf, (int, float)) else None
-        regression = delta is not None and delta < -0.02
+        # Regression is counted in probes, not points: with ~10 held-out probes one probe is 10 points,
+        # so a percentage threshold is noise. Two or more held-out probes lost = regression.
+        prev_agree = prev.get("holdout_agree")
+        lost = (prev_agree - stats["holdout"]["agree"]) if isinstance(prev_agree, int) else 0
+        regression = lost >= 2
         if regression:
             st = "REGRESSION"
+        lb = wilson_lower(stats["holdout"]["agree"], stats["holdout"]["n"])
         report["modules"][mid] = {"probes": len(probes), "revision_fidelity": round(rf, 3), "holdout_fidelity": round(hf, 3),
                                   "holdout_contradictions": hc, "gaps": gaps, "invalid_probes": invalid,
                                   "status": st, "delta_holdout": None if delta is None else round(delta, 3),
+                                  "holdout_n": stats["holdout"]["n"], "holdout_agree": stats["holdout"]["agree"],
+                                  "holdout_wilson_lower": round(lb, 3),
                                   "revision_failures": len(failures)}
-        lines.append(f"| {mid} | {len(probes)} | {rf:.0%} | {hf:.0%} | {hc} | {gaps} | {invalid} | {st} | "
+        lines.append(f"| {mid} | {len(probes)} | {rf:.0%} | {hf:.0%} ({stats['holdout']['agree']}/{stats['holdout']['n']}, 95% lower {lb:.0%}) | {hc} | {gaps} | {invalid} | {st} | "
                      f"{'' if delta is None else f'{delta:+.0%}'} |")
         if args.failures_for_revision and failures:
             write_jsonl(meta / "revise" / f"round-{rnd}" / f"{mid}.jsonl", failures)
         if invalid and invalid > 0.25 * len(probes):
             errors.append(f"{mid}: {invalid} of {len(probes)} probes judged invalid; re-run the prober")
-    report["rounds"][str(rnd)] = {m: {"holdout_fidelity": v["holdout_fidelity"], "status": v["status"]}
-                                  for m, v in report["modules"].items()}
+    report["rounds"][str(rnd)] = {m: {"holdout_fidelity": v["holdout_fidelity"], "holdout_agree": v["holdout_agree"],
+                                      "status": v["status"]} for m, v in report["modules"].items()}
     write_json(meta / "validation.json", report)
-    lines += ["", "REGRESSION means held-out fidelity fell by more than 2 points since the previous round: restore that module's "
-              "spec from `_meta/rounds/round-<N-1>/` and inspect the revision before trying again.", ""]
+    lines += ["", "REGRESSION means two or more held-out probes that agreed last round no longer agree: restore that module's "
+              "spec from `_meta/rounds/round-<N-1>/` and inspect the revision before trying again. Held-out sets are small "
+              "(about 10 probes), so read fidelity with its 95% lower bound, not as a precise number.", ""]
     (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if report["leak_suspects"]:
+        lines += ["## Leak suspects", "",
+                  "Answers containing a distinctive literal from the code-derived reference that appears nowhere in the "
+                  "spec the answerer was given. One or two can be coincidence (a guessable constant); a cluster in one "
+                  "module means the answerer read code: discard that module's answers and re-run its answerer.", ""]
+        for ls in report["leak_suspects"]:
+            lines.append(f"- {ls['module']} {ls['probe']} ({ls['verdict']}): {', '.join(ls['literals'])}")
+        (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        write_json(meta / "validation.json", report)
+        by_mod: dict[str, int] = {}
+        for ls in report["leak_suspects"]:
+            by_mod[ls["module"]] = by_mod.get(ls["module"], 0) + 1
+        for mid, n in by_mod.items():
+            if n >= 3:
+                errors.append(f"{mid}: {n} answers contain code literals absent from the spec (isolation breach suspected)")
     for e in errors:
         eprint("ERROR:", e)
     for mid, v in report["modules"].items():

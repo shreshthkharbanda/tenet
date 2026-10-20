@@ -15,7 +15,9 @@ import argparse
 import re
 from pathlib import Path
 
-from _common import XREF_RE, eprint, git_head, parse_claims, parse_frontmatter, read_json, resolve_ref, write_json
+import subprocess
+
+from _common import XREF_RE, eprint, git_head, parse_claims, parse_frontmatter, read_json, ref_path, resolve_ref, write_json
 
 REQUIRED_SECTIONS = {
     "module": ["Purpose", "Scope and boundaries", "Public surface", "Behaviors", "Validation rules",
@@ -39,6 +41,20 @@ SECRET_PATTERNS = [
 TOOL_MENTION = re.compile(r"\b(Claude|ChatGPT|GPT-?\d|Copilot|Cursor|Gemini|Codex|subagent|as an AI)\b")
 
 
+def changed_since(repo: Path, commit: str, cache: dict):
+    if commit in cache:
+        return cache[commit]
+    try:
+        out = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", f"{commit}..HEAD"],
+                             capture_output=True, text=True, check=True).stdout.split()
+        dirty = subprocess.run(["git", "-C", str(repo), "diff", "--name-only", "HEAD"],
+                               capture_output=True, text=True, check=True).stdout.split()
+        cache[commit] = set(out) | set(dirty)
+    except Exception:
+        cache[commit] = None
+    return cache[commit]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("specs")
@@ -55,6 +71,7 @@ def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
     all_ids: dict[str, str] = {}
+    changed_cache: dict = {}
     per_file: dict[str, dict] = {}
     modules_json = specs / "_meta" / "modules.json"
     mod_prefix = {}
@@ -98,8 +115,22 @@ def main() -> int:
         if not commit:
             errors.append(f"{relp}: frontmatter missing 'commit'")
         elif head and str(commit) != head:
-            msg = f"{relp}: written at commit {str(commit)[:10]} but HEAD is {head[:10]} (stale; re-run extraction with --update)"
-            (errors if args.strict_fresh else warnings).append(msg)
+            # Freshness is per cited file, not per commit: a commit that touches nothing this spec cites
+            # (or cites as scope) does not make it stale.
+            changed = changed_since(repo, str(commit), changed_cache)
+            cited = {ref_path(r) for c in parse_claims(body) for r in c["refs"]}
+            scope_globs = fm.get("scope") or []
+            if changed is None:
+                msg = f"{relp}: written at commit {str(commit)[:10]}, HEAD is {head[:10]}, and git cannot diff them"
+                (errors if args.strict_fresh else warnings).append(msg)
+            else:
+                from _common import glob_to_regex, parse_scope_entry
+                rx = [glob_to_regex(parse_scope_entry(g)[0]) for g in scope_globs if isinstance(g, str)]
+                hit = sorted(p for p in changed if p in cited or any(r.match(p) for r in rx))
+                if hit:
+                    msg = (f"{relp}: stale: {len(hit)} cited or in-scope file(s) changed since {str(commit)[:10]} "
+                           f"(e.g. {hit[0]}); re-run extraction with --update")
+                    (errors if args.strict_fresh else warnings).append(msg)
         if fm.get("status") not in ("draft", "provisional", "validated", "weak"):
             errors.append(f"{relp}: status must be draft|provisional|validated|weak (got {fm.get('status')!r})")
 

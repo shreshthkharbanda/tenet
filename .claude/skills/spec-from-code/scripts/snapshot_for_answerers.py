@@ -20,10 +20,17 @@ def main() -> int:
     args = ap.parse_args()
     specs = Path(args.specs).resolve()
     out = Path(args.out).resolve()
+    repo_guess = specs.parent
+    try:
+        out.relative_to(repo_guess)
+        if (repo_guess / ".git").exists():
+            raise SystemExit(f"snapshot {out} is inside the repository {repo_guess}; put it in the scratch dir")
+    except ValueError:
+        pass
     if out.exists():
         shutil.rmtree(out)
     shutil.copytree(specs, out, ignore=shutil.ignore_patterns(
-        "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "survey.md",
+        "answers", "judgments", "revise", "rounds", "rebuild", "worker-reports", "briefs", "survey.md",
         "inventory.json", "shards-report.json", "coverage.json", "lint-report.json", "validation.json",
         "verify-report.json", "status.json", "traceability.md", "validation-report.md"))
     pdir = out / "_meta" / "probes"

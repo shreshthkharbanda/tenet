@@ -60,14 +60,23 @@ Eligibility: modules with `rebuild_candidate: true` and a test command that can 
 module's files. Tier S: all eligible modules. Tier M: all `critical` eligible modules plus a random 20%
 of the rest, capped at 10. Tier L: at most 5, chosen by criticality.
 
-Protocol per module:
-1. `rsync -a --exclude .git {{REPO}}/ {{SCRATCH}}/rebuild-<module>/` (or `cp -r` then remove `.git`).
-   Copy the current `specs/` in. Delete the module's in-scope source files in the copy. Keep tests.
-2. Run the **Rebuilder** brief. It cannot see the original (no files, no git history).
-3. Read `_meta/rebuild/<module>.json`. Score = tests_passed / tests_total; compile failure = 0.
-4. The `guesses` and `spec_bugs` lists are spec defects. Feed them to a Reviser as an extra failures
-   file (same shape as revise jsonl, category `rebuild`), then re-score probes for that module as a new
-   round so repair regression is still watched.
+Protocol per module (all mechanical except step 2):
+1. `prepare_rebuild.py setup --specs $SPECS --repo $REPO --scratch $SCRATCH --module ID --test-cmd
+   "<cmd with {junit}>" [--python-pkg PKG --python-exe <venv python>]`. It copies the repo without
+   `.git` and the spec text without probes or answers, verifies the package under test resolves inside
+   the copy (editable installs otherwise make the copy test the original), runs the baseline, removes
+   the module (files deleted; line ranges replaced by a marker), and runs the tests again. It fails if
+   removal breaks no baseline-passing test: such a rebuild cannot tell a good spec from a bad one.
+   Choose the narrowest test command that covers the module; full suites waste minutes per run.
+2. Render and dispatch the **Rebuilder** (`render_briefs.py --role rebuilder --module ID --test-cmd
+   "<cmd>"`). It cannot see the original: no git, no files outside the copy.
+3. `prepare_rebuild.py score --specs $SPECS --scratch $SCRATCH --module ID --test-cmd "<cmd>"`.
+   The headline number is the recovery rate: of the baseline-passing tests that removal broke, the
+   share the rebuild restored. Overall pass rate is reported too. The Rebuilder's own numbers are not
+   used.
+4. The `guesses`, `spec_bugs`, and `learned_from_test_failures` lists are spec defects: feed them to a
+   Reviser as an extra failures file (same shape as revise jsonl, category `rebuild`), then re-score
+   probes for that module as a new round so repair regression is still watched.
 
 Interpretation: a rebuild that passes all tests proves the spec plus the tests are sufficient; the
 Rebuild Dossier result (a rule-breaking agent passed every test) means it does not prove the spec alone
@@ -92,7 +101,7 @@ Scripts verify structure; you verify substance, cheaply:
 | Held-out fidelity | >= 0.90 and 0 contradictions | >= 0.75 | < 0.75 |
 | File coverage | >= 0.95 | >= 0.85 | below |
 | Public symbol coverage | >= 0.85 | >= 0.70 | below |
-| Rebuild (informational) | all tests pass | >= 0.70 | below |
+| Rebuild recovery (informational) | >= 0.95 of removal-broken tests restored | >= 0.70 | below |
 
 A module's `status:` in its frontmatter is set by the orchestrator from these, never by the writer.
 

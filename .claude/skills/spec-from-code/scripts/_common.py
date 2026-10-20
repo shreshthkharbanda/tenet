@@ -234,3 +234,106 @@ def ref_path(ref: str) -> str:
 
 def rel(p: Path, root: Path) -> str:
     return os.path.relpath(p, root).replace(os.sep, "/")
+
+
+# ---------------------------------------------------------------------------
+# Scope entries and module ownership (shared by check_shards, coverage,
+# changed_modules, render_briefs). A module "glob" entry is either a glob
+# ("src/auth/**") or a line range of one exact file ("litellm/router.py:1-1450").
+# Ranges exist because some files are larger than one extractor can hold
+# (LiteLLM's router.py is 14.6k lines); split_file.py proposes the cut points.
+RANGE_ENTRY_RE = re.compile(r"^(?P<path>[^*?\[]+?):(?P<a>\d+)-(?P<b>\d+)$")
+
+
+def parse_scope_entry(entry: str):
+    m = RANGE_ENTRY_RE.match(entry.strip())
+    if m:
+        return m.group("path"), int(m.group("a")), int(m.group("b"))
+    return entry.strip(), None, None
+
+
+def in_scope(rec: dict) -> bool:
+    return (rec.get("kind") == "source" and not rec.get("is_test") and not rec.get("is_generated")
+            and rec.get("in_scope", True))
+
+
+def count_nonblank(repo: Path, path: str, a: int, b: int) -> int:
+    try:
+        lines = (repo / path).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return 0
+    return sum(1 for ln in lines[a - 1:b] if ln.strip())
+
+
+def build_ownership(mods_json: dict, files: list[dict], repo: Path) -> dict:
+    """Assign every in-scope inventory record to modules.
+
+    Returns {"assign": {mid: [{"path", "start", "end", "loc"}]}, "excluded": [paths],
+             "unassigned": [paths], "multi": [{"path", "modules"}],
+             "range_errors": [str]}
+    A whole-file assignment has start=1, end=<lines>.
+    """
+    modules = mods_json.get("modules", [])
+    ex_rx = [glob_to_regex(e["glob"]) for e in mods_json.get("excluded", []) if e.get("glob")]
+    whole: list[tuple[str, list]] = []
+    ranges: dict[str, list[tuple[str, int, int]]] = {}
+    for m in modules:
+        rxs = []
+        for g in m.get("globs", []):
+            path, a, b = parse_scope_entry(g)
+            if a is None:
+                rxs.append(glob_to_regex(path))
+            else:
+                ranges.setdefault(path, []).append((m["id"], a, b))
+        whole.append((m["id"], rxs))
+    out = {"assign": {m["id"]: [] for m in modules if "id" in m}, "excluded": [], "unassigned": [],
+           "multi": [], "range_errors": []}
+    seen_range_paths = set()
+    for f in files:
+        if not in_scope(f):
+            continue
+        p = f["path"]
+        if any(rx.match(p) for rx in ex_rx):
+            out["excluded"].append(p)
+            continue
+        n = f.get("lines") or f.get("loc", 0)
+        owners = [mid for mid, rxs in whole if any(rx.match(p) for rx in rxs)]
+        rs = sorted(ranges.get(p, []), key=lambda t: t[1])
+        if rs:
+            seen_range_paths.add(p)
+        if owners and rs:
+            out["multi"].append({"path": p, "modules": owners + [r[0] for r in rs]})
+            continue
+        if len(owners) > 1:
+            out["multi"].append({"path": p, "modules": owners})
+            continue
+        if len(owners) == 1:
+            out["assign"][owners[0]].append({"path": p, "start": 1, "end": n, "loc": f.get("loc", 0), "whole": True})
+            continue
+        if not rs:
+            out["unassigned"].append(p)
+            continue
+        expect = 1
+        for mid, a, b in rs:
+            if a > expect:
+                out["range_errors"].append(f"{p}: lines {expect}-{a - 1} not assigned to any module")
+            elif a < expect:
+                out["range_errors"].append(f"{p}: range {a}-{b} ({mid}) overlaps the previous range ending at {expect - 1}")
+            if b > n:
+                out["range_errors"].append(f"{p}: range {a}-{b} ({mid}) ends past end of file ({n} lines); re-run split_file.py")
+            expect = max(expect, b + 1)
+            out["assign"].setdefault(mid, []).append({"path": p, "start": a, "end": min(b, n), "whole": False,
+                                                       "loc": count_nonblank(repo, p, a, min(b, n))})
+        if expect <= n:
+            out["range_errors"].append(f"{p}: lines {expect}-{n} not assigned to any module")
+    for p in ranges:
+        if p not in seen_range_paths:
+            out["range_errors"].append(f"range entries name {p}, which is not an in-scope source file")
+    return out
+
+
+def scope_label(item: dict) -> str:
+    """'path' for whole files, 'path:a-b' for ranges."""
+    if item.get("whole"):
+        return item["path"]
+    return f"{item['path']}:{item['start']}-{item['end']}"
