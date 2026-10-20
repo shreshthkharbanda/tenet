@@ -673,6 +673,26 @@ def main() -> int:
     (sdir / "big-a.md").write_text(good_story)
     rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
     check("L72 a story that cites real claims and their literals passes G8", rc == 0 and ": 0 errors" in out, out)
+    # L78: an uncited sentence, a programming word with no plain definition, a term defined and never used,
+    # and a message quoted in part as if whole each fail G8
+    l78 = (good_story.replace("Nothing in the class changes that number afterwards [BIGA-001].",
+                              "Nothing in the class changes that number afterwards [BIGA-001]. Nothing else happens here.")
+           .replace("Every new object starts with the same number [BIGA-001].", "Every new object starts with the same number through a callback [BIGA-001].")
+           .replace("| the result | what the method gives back |", "| spare term | a word nobody uses | `self` | BIGA-002 |\n| the result | what the method gives back |"))
+    (sdir / "big-a.md").write_text(l78)
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L78 G8 catches an uncited sentence, undefined jargon in the Everyone layer and an unused term",
+          rc == 1 and "sentence cites no claim (end every sentence with the chips it rests on): Nothing else happens here." in out
+          and "uses 'callback' with no row in Words you'll see" in out and "defines 'spare term' but the story never uses it" in out, out)
+    sys.path.insert(0, str(HERE))
+    from check_story import Checker as _Checker
+    ck = _Checker(specs, repo)
+    ck.claims["BIGA-001"] = dict(ck.claims["BIGA-001"], text='Raises "Deployment is invalid at tiers: Input should be a dictionary. The write is rejected."')
+    check("L78 a message quoted in part reads as the whole one and is caught; the whole message passes",
+          ck.partial_quote('It raises "Deployment is invalid at tiers: Input should be a dictionary."', ["BIGA-001"]).startswith("The write")
+          and not ck.partial_quote('It raises "Deployment is invalid at tiers: Input should be a dictionary. The write is rejected."', ["BIGA-001"]),
+          "partial quote")
+    (sdir / "big-a.md").write_text(good_story)
     bad_story = (good_story.replace("[BIGA-010].\n\n## Words", "[BIGA-010]. The cache holds `9999` entries [BIGA-001].\n\n## Words")
                  .replace("| in > test | compare | BIGA-002 |", "| in > test | compare | |")
                  .replace("| test>out | Return the difference |", "| test>gone | Return the difference |")

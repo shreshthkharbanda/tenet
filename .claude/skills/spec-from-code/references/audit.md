@@ -243,8 +243,10 @@ misleads every reader. Repo: {{REPO}} (commit {{COMMIT}}). Story: {{SPECS}}/_met
 Claims: {{SPECS}}/modules/{{MODULE_ID}}.md and, for IDs of other prefixes, the spec file that holds
 them under {{SPECS}}. You may read the code a claim cites. Never read anything under the eval dir.
 
-For every sentence of the story (the minute, every paragraph, every At-a-glance row read as one
-sentence, every Watch-out bullet, every figure step), find the claims it cites (a range
+Judge exactly these units, one row each, so every module is judged on the same ground (L78): every
+sentence of In plain words, In one minute and every paragraph; every row of Words you'll see (term and
+meaning read as one sentence); every At-a-glance row read as one sentence; every figure step, every
+timeline row and every path step; every Watch-out bullet. For each, find the claims it cites (a range
 [X-010]-[X-014] cites all of them) and label it:
 - supported: the cited claims say this, with the same conditions and scope;
 - overstated: the claims say less (a condition dropped, "always" or "every" where they say "when",

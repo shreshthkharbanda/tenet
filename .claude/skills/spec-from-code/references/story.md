@@ -83,9 +83,13 @@ Prose: what happens, in the order it happens, each sentence ending with its chip
 | `## Watch out` | Everyone | none | 2 to 8 bullets: what surprises a caller, in plain words, including the most consequential suspected defects |
 
 ### Writing rules (G8 checks the ones marked *)
-- *Evidence: every paragraph, bullet, table row and figure element cites claims that exist; every
-  sentence with a value cites the claim it comes from; every value and name is in a cited claim or
-  the code that claim cites. Never invent a value, a name or an example; use the claims' examples.
+- *Evidence: every sentence, table row and figure element cites claims that exist (a story judge
+  labels an uncited sentence unsupported, framing sentences included); every value and name is in a
+  cited claim or the code that claim cites. Never invent a value, a name or an example; use the
+  claims' examples. *Quote a message whole or describe it: a quoted message cut short reads as the
+  whole one.
+- *Every programming word the Everyone layer uses ("asynchronous", "hook", "callback", "wildcard")
+  has a plain row in Words you'll see; *every row there is used in the story.
 - *Layers: the Everyone layer has no code formatting and no code names (no `snake_case`, no
   `dotted.names`, no `CamelCase`, no `calls()`), and spells out every acronym the first time.
 - *Every code name in the Engineer layer is a value (a number, a quoted string, a status code) or

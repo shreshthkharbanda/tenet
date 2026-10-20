@@ -171,9 +171,18 @@ def main() -> int:
             if role == "narrator":
                 # a story judge's rows (spec-side; never probe content) on this module's previous story
                 prev = meta / "audit" / "story" / f"{mid}.jsonl"
-                vals["AUDIT_NOTES"] = (f"A story judge labelled every sentence of this module's previous story against its claims: "
-                                       f"{prev}. Read it. Every overstated or distorted row is a mistake your rewrite must not "
-                                       f"repeat; the note says what the claims actually say." if prev.exists() else "")
+                persona = meta / "audit" / "story" / f"{mid}.persona.md"
+                tb = meta / "audit" / "story" / f"{mid}.teachback.jsonl"
+                vals["AUDIT_NOTES"] = " ".join(x for x in (
+                    f"A story judge labelled every sentence of this module's previous story against its claims: "
+                    f"{prev}. Read it. Every row that is not supported is a mistake your rewrite must not repeat; the "
+                    f"note says what the claims actually say." if prev.exists() else "",
+                    f"A persona reader read only the Everyone layer of that story and listed where it got lost: "
+                    f"{persona} (\"Where I got lost\"). Answer each item in the Everyone layer: define the term, list "
+                    f"what you counted, say it plainly, or cut the sentence that raised it." if persona.exists() else "",
+                    f"A teach-back judge checked that reader's explanation against the claims: {tb}. Every wrong or "
+                    f"vague statement shows a sentence your reader misread; rewrite the sentence that led there."
+                    if tb.exists() else "") if x)
             if role == "answerer":
                 if not args.snapshot:
                     raise SystemExit("--snapshot required for answerer")

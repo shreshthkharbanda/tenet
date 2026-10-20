@@ -691,3 +691,20 @@ layer and app.js reads the tag; `story_probe` prints exactly the Everyone-tagged
 a block type it cannot print; the terms and meanings of "Words you'll see" are Everyone (their code
 names stay Engineer). Selftest: every lead and every plain term reaches the persona snapshot, and the
 site's layer tags match.
+
+**L78. Judges and readers found four mechanical faults; the gate now catches them.** Found: LiteLLM
+Phase 9 story audit round 2 (ten story judges, two persona readers on the corrected Everyone layer).
+(1) Every module had framing sentences with no chip ("The router spreads AI requests across many
+providers."); G8 let an uncited sentence through when it held no literal, and judges labelled it
+unsupported, which fails the audit: 26 such sentences across ten stories. (2) Two distorted rows
+quoted an error message cut at its first sentence, which reads as the whole message. (3) The persona
+readers listed undefined programming words ("async entry point", "hook", "picker", "callable") and
+rows of Words you'll see the story never used. (4) Judges disagreed on what to judge: some included
+Words-you'll-see rows, some did not, so counts were not comparable. Class: rules a machine can check
+left to a judge, and a judge's unit of work left to its taste. Fix: G8 errors on any uncited
+sentence, on a quoted message that a cited claim continues, on a programming word in the Everyone
+layer with no plain row, and on a row the story never uses (by term or code name, whole words);
+the story-judge brief names its units exactly, Words rows included; the narrator brief carries the
+persona readers' recurring faults (an unlisted count, two polarities for one decision, a status
+whose usual meaning differs, nobody said to notice) and points a rewriting narrator at the persona
+file and the teach-back verdicts as well as the judge rows. Selftest covers each rule.

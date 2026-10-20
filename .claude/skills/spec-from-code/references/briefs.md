@@ -371,6 +371,17 @@ most common fault was a dropped condition ("the check applies" where the claim s
 was built with it"), and readers then generalized the rule to cases it does not cover and answered
 wrongly. When you shorten a rule, keep its condition or say "in the usual case" and put the
 exception in At a glance or Watch out. Name the edge cases a reader would otherwise guess wrong.
+Persona readers (a sales engineer reading only the Everyone layer) got lost in earlier stories in the
+same few ways; write against each:
+- a count you do not list ("nine checks", then five named): list them all, or drop the number;
+- two polarities for one decision ("passes the gate" in one place, "the gate refuses" in another):
+  say what happens to the thing ("benches the deployment", "does not bench it");
+- a status whose usual meaning differs from this one (a 429 that means "no deployment is free",
+  not "you hit your rate limit"): say what it means here, in plain words;
+- nobody said to notice: say who sees a failure (the caller's error, a header, a log line, an alert)
+  as the claims say, or that the claims name no alert;
+- a term the Everyone layer leans on with no row in Words you'll see (a routing group, a tier, a
+  hook); and rows the story never uses, which the gate rejects.
 {{AUDIT_NOTES}}
 
 Run the gate and fix every error and every warning you can, until it passes:

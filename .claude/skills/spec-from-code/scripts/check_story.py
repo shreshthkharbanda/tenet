@@ -37,6 +37,11 @@ CONDITIONAL = re.compile(r"^(When|If|Unless|Where|While|Once)\b")
 IDENT = re.compile(r"(?<![\w`])(?:[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+|[a-z][a-z0-9]*[A-Z][A-Za-z0-9]*|[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*"
                    r"|[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]+|[A-Za-z_][A-Za-z0-9_]*\(\))(?![\w`])")
 ACRONYM = re.compile(r"(?<![\w-])([A-Z]{2,6})s?(?![\w-])")
+# programming words a reader of the Everyone layer stumbles on (L78): each needs a plain row in Words you'll see
+JARGON = ("async", "asynchronous", "sync", "synchronous", "pipeline", "callback", "hook", "wildcard", "callable", "picker",
+          "plugin", "middleware", "coroutine", "singleton", "schema", "enum", "boolean", "regex", "mutex", "payload",
+          "namespace", "serialize", "serialized", "deserialize", "runtime", "thread", "lock", "semaphore", "flag")
+QUOTE = re.compile(r'"([^"\n]{20,})"')
 UNIVERSAL = {"API", "APIs", "HTTP", "HTTPS", "URL", "ID", "IDs", "AI", "CPU", "UTC", "OK", "JSON", "CEO", "CTO", "IP", "US", "UK", "PDF"}
 VALUE = re.compile(r"^(?:-?\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?|minutes?|min|h|hours?|%|x|KB|MB)?|\"[^\"]*\"|'[^']*'|\d{3}(?:\s+[A-Z][\w ]+)?)$")
 PASSIVE = re.compile(r"\b(?:is|are|was|were|be|been|being)\s+(?:\w+ed|built|chosen|done|given|held|kept|known|left|made|"
@@ -371,6 +376,19 @@ class Checker:
                 miss.append(t)
         return miss
 
+    def partial_quote(self, md: str, ids: list[str]) -> str:
+        """The rest of a quoted message when md quotes only its start (L78: a cut message reads as the whole one)."""
+        said = [q.strip() for x in ids if x in self.claims
+                for q in QUOTE.findall(self.claims[x]["text"] + " " + " ".join(self.claims[x].get("detail", [])))]
+        for q in QUOTE.findall(md):
+            q = q.strip()
+            if not said or q in said:
+                continue
+            longer = [m for m in said if m.startswith(q.rstrip(".")) and len(m) > len(q) + 3]
+            if longer:
+                return longer[0][len(q.rstrip(".")):].lstrip(" .")
+        return ""
+
     def check(self, module: str, text: str) -> dict:
         st, errors = parse_story(text)
         warnings: list[str] = []
@@ -391,11 +409,16 @@ class Checker:
                 errors.append(f"{what} cites no claim: {where(md)}")
             for s in sentences(md):
                 sid = expand_ids(s)
-                if literal_tokens(s) and not sid and not ids_fallback:
-                    errors.append(f"sentence states a literal or number but cites no claim: {where(s)}")
+                if not sid and not ids_fallback:
+                    # a story judge labels an uncited sentence unsupported, so the gate asks for the chip (L78)
+                    errors.append(f"sentence cites no claim (end every sentence with the chips it rests on): {where(s)}")
                 miss = self.unsupported(s, sid or ids or ids_fallback or [])
                 if miss:
                     errors.append(f"states {', '.join(miss[:3])} found in neither the cited claims nor their code: {where(s)}")
+                part = self.partial_quote(s, sid or ids or ids_fallback or [])
+                if part:
+                    errors.append(f"quotes part of a message as if it were whole; the claim's message goes on "
+                                  f"('…{part[:40]}'): quote it whole or say it in words: {where(s)}")
             cited.update(ids)
 
         def everyone(md: str, what: str, max_sent: int = MAX_SENT):
@@ -571,6 +594,26 @@ class Checker:
         for acr in sorted({m.group(1) for t in everyone_text for m in ACRONYM.finditer(strip_chips(t))} - UNIVERSAL):
             if not re.search(rf"\({acr}s?\)|\b{acr}s?\s*\(", alltext) and acr.lower() not in defined_terms:
                 errors.append(f"acronym {acr} is never spelled out in the Everyone layer (write it out once: words ({acr}))")
+        # programming words in the Everyone layer need a plain row in Words you'll see (L78)
+        etext = strip_chips(alltext).lower()
+        for j in JARGON:
+            if re.search(rf"\b{j}s?\b", etext) and not any(re.search(rf"\b{j}", term) for term in defined_terms):
+                errors.append(f"the Everyone layer uses '{j}' with no row in Words you'll see; define it there in plain words, or say it plainly")
+        # every term Words you'll see defines is used somewhere else in the story (coherence: no unused terms)
+        body = " ".join([st["headline"], *st["plain"], *st["minute"], *st["watch"],
+                         *[r["when"] + " " + r["then"] for r in (st["glance"] or {}).get("rows", [])]]
+                        + [sec["title"] for sec in st["sections"]]
+                        + [b["md"] for sec in st["sections"] for b in sec["blocks"] if b["t"] == "p"]
+                        + [x for sec in st["sections"] for b in sec["blocks"] if b["t"] == "ul" for x in b["items"]]
+                        + [x["md"] for sec in st["sections"] for b in sec["blocks"] if b["t"] == "path" for x in b["steps"]]
+                        + [" ".join([b["title"], *(n["label"] for n in b["nodes"] + b["actors"] + b["lanes"]),
+                                     *(e["label"] for e in b["edges"]), *(e["label"] + " " + e["state"] for e in b["events"]),
+                                     *(x["title"] + " " + x["md"] for x in b["steps"])])
+                           for sec in st["sections"] for b in sec["blocks"] if b["t"] == "fig"]).lower()
+        for r in st["words_table"]:  # used by its plain term or by one of its code names
+            used = lambda w: re.search(rf"(?<!\w){re.escape(w.lower())}(?!\w)", body)
+            if not used(r["term"]) and not any(used(n) for n in r["names"]):
+                errors.append(f"Words you'll see defines '{r['term']}' but the story never uses it (cut the row or use the term)")
         # whole-story measures
         if eng_words:
             dens = 100 * eng_code / eng_words
