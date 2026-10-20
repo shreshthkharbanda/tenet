@@ -146,8 +146,11 @@ def main() -> int:
         tests = [f["path"] for f in inv["files"] if f.get("is_test")]
         for mid in ids:
             m = next((x for x in mods["modules"] if x["id"] == mid), None)
+            if not m and mid == "_system" and role in ("story-judge", "persona-reader", "teachback-judge", "story-reader"):
+                m = {"id": "_system", "prefix": "SYS", "name": "the system story (the book's opening)", "globs": []}
             if not m:
-                raise SystemExit(f"unknown module {mid}")
+                raise SystemExit(f"unknown module {mid}" + (" (the system story is audited by story-judge, persona-reader and "
+                                                            "teachback-judge only)" if mid == "_system" else ""))
             items = own["assign"].get(mid, [])
             files = "\n".join(f"  {scope_label(i)}   ({i['loc']} LOC)" for i in items)
             ranged = [i for i in items if not i.get("whole")]
@@ -167,7 +170,10 @@ def main() -> int:
             tlist = "\n".join(f"  {t}" for t in tfiles) or "  (none mapped: grep the test tree for this module's public symbols)"
             vals = base | {"MODULE_ID": mid, "PREFIX": m["prefix"], "MODULE_NAME": m.get("name", mid),
                            "GLOBS": ", ".join(m.get("globs", [])), "FILES": files, "TEST_FILES": tlist,
-                           "SCOPE_NOTE": note}
+                           "SCOPE_NOTE": note,
+                           "CLAIMS_HOME": (f"every spec file ({specs}/modules/*.md and {specs}/0*.md: the system story cites "
+                                           f"them all, so find each ID with grep)" if mid == "_system"
+                                           else f"{specs}/modules/{mid}.md")}
             if role == "narrator":
                 # a story judge's rows (spec-side; never probe content) on this module's previous story
                 prev = meta / "audit" / "story" / f"{mid}.jsonl"

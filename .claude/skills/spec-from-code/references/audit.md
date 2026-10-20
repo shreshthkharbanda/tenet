@@ -241,7 +241,7 @@ python3 $SKILL_DIR/scripts/render_briefs.py --role story-judge --module <m> ... 
 You are checking a chapter story against the specification claims it cites. The story is the part
 of the spec people will actually read, so a sentence that says more, less or other than its claims
 misleads every reader. Repo: {{REPO}} (commit {{COMMIT}}). Story: {{SPECS}}/_meta/story/{{MODULE_ID}}.md.
-Claims: {{SPECS}}/modules/{{MODULE_ID}}.md and, for IDs of other prefixes, the spec file that holds
+Claims: {{CLAIMS_HOME}} and, for IDs of other prefixes, the spec file that holds
 them under {{SPECS}}. You may read the code a claim cites. Never read anything under the eval dir.
 
 Judge exactly these units, one row each, so every module is judged on the same ground (L78): every
@@ -336,7 +336,7 @@ This replaces any other instruction above about the report's file name or format
 ```
 You are checking what a reader understood from a chapter, against the specification. A persona
 reader read only the plain layer of {{SPECS}}/_meta/story/{{MODULE_ID}}.md and wrote
-{{SPECS}}/_meta/audit/story/{{MODULE_ID}}.persona.md. Claims: {{SPECS}}/modules/{{MODULE_ID}}.md and,
+{{SPECS}}/_meta/audit/story/{{MODULE_ID}}.persona.md. Claims: {{CLAIMS_HOME}} and,
 for other prefixes, the spec file that holds them under {{SPECS}}; you may read the code a claim
 cites. Never read the eval directory.
 For each numbered statement in "In my words" and each sentence of "What I would tell a customer",
