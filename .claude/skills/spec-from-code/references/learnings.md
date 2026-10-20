@@ -149,3 +149,9 @@ random claim sample (`sample_claims.py`), omission hunters who list the top beha
 the spec, a no-spec control answered as round 0 so every validation row shows lift over prior
 knowledge, a blind judge audit oversampling "agree", a reader-then-checker teachability test, and a
 red team on the gates. `score_audit.py` applies explicit pass thresholds.
+
+**L23. Probers soften their own probes.** Found: LiteLLM failure-handling prober confirmed by
+execution that `set_cooldown_deployments` writes the cooldown and then raises without a running loop,
+then left it out as "too much of a gotcha". Self-censoring surprising behavior biases fidelity upward
+on exactly the behaviors a reader most needs. Fix: the prober brief says gotchas, bugs, and sync/async
+divergences make the best probes; probe what the code does, not what it should do.

@@ -294,7 +294,11 @@ Mix: at least 30% on error and edge paths (empty, missing, oversized, malformed,
 timeout), at least 20% on validation rules and their ordering, at least 15% on configuration and
 defaults, the rest on main-path behavior, side effects, data, interfaces. Cover every public entry
 point with at least one probe. Prefer questions with a single checkable answer ("What status code and
-message are returned when X?") over open ones. Reference answers must be exact and cite the lines
+message are returned when X?") over open ones. Do not filter out behaviors because they look like
+gotchas, bugs, or accidents of implementation: a surprising-but-reachable behavior (a write that
+happens before a raise, a setting silently ignored, sync and async paths that differ) is exactly what
+a spec omits and a caller trips over, so it makes the best probe. Probe what the code does, not what
+it should do. Reference answers must be exact and cite the lines
 that prove them; a reference answer you cannot cite is not a probe, drop it.
 
 Read the tests: behaviors pinned by tests make the best probes, and tests often reveal edge cases.
