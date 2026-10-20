@@ -109,7 +109,7 @@ def main() -> int:
         er = meta / "evidence-report.json"
         if er.exists():
             emod = read_json(er).get("modules", {}).get(mid, {})
-            for kind in ("failed", "stale"):
+            for kind in ("failed", "stale", "flaky"):  # flaky: passed only on the serial re-run; harden it
                 for cid in emod.get(kind, []):
                     if ("evidence", cid) not in seen:
                         seen.add(("evidence", cid))
