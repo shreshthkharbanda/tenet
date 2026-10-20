@@ -539,3 +539,11 @@ reviser confirmed its rewrites by running check scripts in its own scratch dir, 
 dozens of verified checks that the gate never saw again. Fix: the reviser brief tells them to save each
 such script as the claim's evidence check (`_meta/evidence/<module>/check_<ID>.py` with the `# claim:`
 and `# text:` headers), so G7 coverage grows with every revision at no extra cost.
+
+**L68. A reviser's shared-file row reached into another module.** Found: LiteLLM round-2 revision;
+the request-targets reviser wrote a decision row rewriting RCALL-065, a router-calls claim, while the
+router-calls reviser was rewriting its own module in parallel: the single-writer applier would have
+overwritten the owner's work after it finished. Fix: apply_claim_edits applies a reviser's rows only to
+shared files (and its own module); a row against another module's spec is diverted to
+`reconcile/diverted.jsonl`, and build_revise hands it to that module's next reviser as a note with
+the proposed text and evidence.

@@ -95,6 +95,15 @@ def main() -> int:
                     seen.add(("note", cid))
                     add.append({"source": "note", "id": cid, "verdict": "reported", "judge_note": problem.strip()[:1500],
                                 "reporter": rf.stem})
+        # rows another module's reviser proposed for this module's claims (diverted by apply_claim_edits)
+        dvf = meta / "reconcile" / "diverted.jsonl"
+        for r in (read_jsonl(dvf) if dvf.exists() else []):
+            row = {"source": "note", "id": r["id"], "verdict": "proposed_by_other_module",
+                   "judge_note": f"{r.get('from')}: proposed text: {r.get('proposed_text')} Evidence: {r.get('evidence')}",
+                   "reporter": r.get("from")}
+            if r.get("owner") == mid and key(row) not in seen:
+                seen.add(key(row))
+                add.append(row)
         # a failing or stale evidence check means the claim and the code (or the check) disagree: the owner
         # resolves it, by correcting the claim or by fixing a check that was wrong (L65)
         er = meta / "evidence-report.json"

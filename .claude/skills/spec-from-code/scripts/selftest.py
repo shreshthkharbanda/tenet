@@ -197,6 +197,14 @@ def main() -> int:
     check("a claim with sub-bullets from a decision row still lints", rc == 0, out)
     (specs / "modules" / "big-a.md").write_text(before)
     (meta / "reconcile" / "decisions-02.jsonl").unlink()
+    # L68: a reviser's row against another module's claim is diverted to that module's worklist, not applied
+    (meta / "reconcile" / "decisions-revise-big-b-round-1.jsonl").write_text(json.dumps({"row": -1, "verdict": "contradiction",
+        "edits": [{"file": "modules/big-a.md", "id": "BIGA-001", "text": "overwritten by another module"}]}) + "\n")
+    rc, out = run("apply_claim_edits.py", str(specs))
+    dv = [json.loads(l) for l in (meta / "reconcile" / "diverted.jsonl").read_text().splitlines()]
+    check("L68 cross-module reviser row is diverted, not applied", "DIVERTED" in out and dv and dv[-1]["owner"] == "big-a"
+          and "overwritten by another module" not in (specs / "modules" / "big-a.md").read_text(), out)
+    (meta / "reconcile" / "decisions-revise-big-b-round-1.jsonl").unlink(); (meta / "reconcile" / "diverted.jsonl").unlink()
     # L58: applied decision files are ledgered and never replayed; a ledgered file that changed is an error
     rc, out = run("apply_claim_edits.py", str(specs))
     check("L58 ledgered decision files are not re-applied", rc == 0 and "none (all in ledger.json)" in out

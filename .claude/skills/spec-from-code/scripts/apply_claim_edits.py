@@ -36,6 +36,7 @@ def main() -> int:
     edited_ids: set[str] = set()
     edits_by_file: dict[str, list[dict]] = {}
     tail_counts: dict[str, int] = {}
+    diverted: list[dict] = []
     ledger_path = rdir / "ledger.json"
     ledger = json.loads(ledger_path.read_text()) if ledger_path.exists() else {}
     new_files = []
@@ -52,6 +53,14 @@ def main() -> int:
             if row.get("tail_sample"):
                 tail_counts[d.get("verdict")] = tail_counts.get(d.get("verdict"), 0) + 1
             for e in d.get("edits", []) or []:
+                # a reviser owns only its module: its row against ANOTHER module's spec would overwrite that
+                # module's own reviser, running in parallel. Divert it to the owner's next worklist (L68).
+                mm = re.match(r"decisions-revise-(?P<mod>.+)-round-\d+\.jsonl$", df.name)
+                tm = re.match(r"modules/(?P<mod>[^/]+)\.md$", e["file"])
+                if mm and tm and tm.group("mod") != mm.group("mod"):
+                    diverted.append({"owner": tm.group("mod"), "id": e["id"], "proposed_text": e["text"],
+                                     "from": df.name, "evidence": d.get("evidence", "")})
+                    continue
                 edits_by_file.setdefault(e["file"], []).append(e)
             if d.get("verdict") == "unresolvable":
                 row = overlaps[d["row"]] if 0 <= d.get("row", -1) < len(overlaps) else {}
@@ -140,6 +149,12 @@ def main() -> int:
     summary = {"verdicts": counts, "edits_applied": applied, "errors": errors, "questions": len(questions),
                "conflicts": len(conflicts), "tail_sample_verdicts": tail_counts,
                "tables_to_review": tables_to_review, "pointer_chains": chains, "files": [n for n, _ in new_files]}
+    for dv in diverted:
+        eprint(f"DIVERTED: {dv['from']} edits {dv['owner']}'s claim {dv['id']}; sent to that module's next worklist")
+    if diverted and not a.dry_run:
+        with open(rdir / "diverted.jsonl", "a", encoding="utf-8") as f:
+            for dv in diverted:
+                f.write(json.dumps(dv) + "\n")
     if not a.dry_run:
         # Every processed file is ledgered, errors and conflicts included: its other edits were applied, and
         # a fix for what was skipped goes in a new decision file.
