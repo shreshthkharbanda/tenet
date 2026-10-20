@@ -328,3 +328,14 @@ recovery rate would credit the spec. Fix: rebuilders report their copy with `--s
 `verify_reports.py` fails a rebuilder that read outside its copy (the original is reachable on disk) or
 read any test file inside it. Test failure messages seen while running stay fair game and are recorded
 as spec gaps.
+
+**L45. Hyphenated briefs never loaded.** Found: rendering the LiteLLM lifecycle checker; the brief
+marker pattern used `\w+`, so `judge-auditor` and `lifecycle-checker` were silently absent from the
+renderer, and the self-test only rendered roles it already knew. Fix: markers match `[\w-]+`; the
+self-test now discovers every `<!-- brief:... -->` marker in the docs and renders each one.
+
+**L46. Answerers saw spec ambiguity that verdicts could not express.** Found: LiteLLM round-1
+answerers; many "agree" answers carried notes like "the spec does not say how placeholders render" or
+"RSETUP-172 conflicts with RDISP-237". Those are spec defects whatever the verdict. Fix:
+`score_probes.py` routes revision-split answers whose note reports silence, ambiguity, or contradiction
+to the reviser as `answer_note` failures; held-out notes stay out, as with judge side notes (L16).

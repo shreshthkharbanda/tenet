@@ -98,6 +98,24 @@ def main() -> int:
         rc, out = run("render_briefs.py", *role, "--specs", str(specs), "--repo", str(repo), "--scratch", str(tmp / "scratch"))
         ok &= rc == 0
     check("render every role", ok, out)
+    # L45: every brief marker in the docs must load and render (hyphenated names were silently skipped)
+    import re as _re
+    docs = "".join((HERE.parent / "references" / f).read_text() for f in ("briefs.md", "audit.md"))
+    markers = sorted(set(_re.findall(r"<!-- brief:([^ ]+) -->", docs)))
+    sets = ["--set", "SAMPLE_FILE=/x", "--set", "CONTROL_DIR=" + str(tmp / "ctl"), "--set", "READER_SCENARIO=x"]
+    bad = []
+    for mk in markers:
+        if mk in ("pairjudge",):
+            continue  # needs an overlaps file; rendered in the L33 case
+        extra = ["--kind", "interfaces"] if mk == "crosscut" else (["--module", "big-a"] if mk not in (
+            "surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker") else [])
+        if mk == "answerer":
+            extra += ["--snapshot", str(tmp / "snap-x")]
+        rc_, out_ = run("render_briefs.py", "--role", mk, *extra, *sets, "--specs", str(specs), "--repo", str(repo),
+                        "--scratch", str(tmp / "scratch"))
+        if rc_ != 0:
+            bad.append(f"{mk}: {out_.strip().splitlines()[-1] if out_.strip() else rc_}")
+    check(f"L45 all {len(markers)} brief markers render", not bad, "; ".join(bad))
     ext = (meta / "briefs" / "extractor-big-a.md").read_text()
     check("ranged module brief carries the range note", "LINE RANGE" in ext and ranges[0] in ext)
 

@@ -219,6 +219,13 @@ def main() -> int:
                 report["leak_suspects"].append({"module": mid, "probe": pid, "literals": leaked[:5], "verdict": v})
             if v != "agree" and s == "revision":
                 failures.append({**p, "answer": answers[pid].get("answer"), "verdict": v, "judge_note": j.get("note", "")})
+            elif s == "revision" and answers[pid].get("note") and re.search(
+                    r"(?i)does not (say|state|list|give|specify)|not (stated|specified|defined)|ambigu|contradict|cannot (say|tell)|unclear",
+                    str(answers[pid].get("note"))):
+                # The answerer could answer but says the spec was ambiguous or silent: a spec defect even when
+                # the verdict agrees. Revision split only, like judge side notes.
+                failures.append({**p, "answer": answers[pid].get("answer"), "verdict": "answer_note",
+                                 "judge_note": str(answers[pid].get("note"))})
             elif j.get("spec_defect"):
                 # A defect the judge saw that did not flip the verdict. Revision-split ones go to the reviser;
                 # held-out ones only to the human report, or the held-out set would leak into revisions.

@@ -36,7 +36,7 @@ XC = {"interfaces": ("01-interfaces.md", "IF"), "data": ("02-data.md", "DATA"),
 def load_blocks() -> tuple[dict, dict]:
     text = "\n".join((SKILL_DIR / "references" / f).read_text(encoding="utf-8") for f in ("briefs.md", "audit.md"))
     blocks, focus = {}, {}
-    for kind, name, body in re.findall(r"<!-- (brief|focus):(\w+) -->\s*\n```[^\n]*\n(.*?)\n```", text, re.S):
+    for kind, name, body in re.findall(r"<!-- (brief|focus):([\w-]+) -->\s*\n```[^\n]*\n(.*?)\n```", text, re.S):
         (blocks if kind == "brief" else focus)[name] = body
     return blocks, focus
 
