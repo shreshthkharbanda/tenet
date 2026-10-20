@@ -20,6 +20,9 @@ from _common import eprint, eval_dir, read_jsonl, write_json, write_jsonl
 
 VERDICTS = ("agree", "partial", "contradict", "not_in_story")
 SENTENCE = ("supported", "overstated", "distorted", "unsupported")
+# round 2 on LiteLLM: stories at 4.1% and 4.3% overstated still led their readers to contradicted answers,
+# half of which trace to an overstated row; one at 2.9% was clean (L79)
+MAX_OVERSTATED = 0.03
 
 
 def everyone_text(story_md: str) -> str:
@@ -113,9 +116,9 @@ def score(specs: Path, modules: list[str]) -> int:
             if wrong:
                 bad += 1
                 eprint(f"ERROR: {m}: {len(wrong)} story sentence(s) distorted or unsupported, e.g. {wrong[0].get('sentence', '')[:90]!r}")
-            if len(ss) and cnt["overstated"] / len(ss) > 0.10:
+            if len(ss) and cnt["overstated"] / len(ss) > MAX_OVERSTATED:
                 bad += 1
-                eprint(f"ERROR: {m}: {cnt['overstated']}/{len(ss)} sentences overstate their claims (at most 10%)")
+                eprint(f"ERROR: {m}: {cnt['overstated']}/{len(ss)} sentences overstate their claims (at most {MAX_OVERSTATED:.0%})")
         if len(r) == 1:
             eprint(f"ERROR: {m}: no story judgments or sentence labels to score")
             bad += 1

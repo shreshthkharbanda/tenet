@@ -228,7 +228,8 @@ claim says "when Redis is attached"), and a story that, read alone, leads a read
 Per module: one story judge (sentences against claims), one story-only reader (answers the probes
 from the story alone, in a snapshot), one scorer (answers against reference answers). Then
 `story_probe.py score --specs $SPECS`; it fails on any distorted or unsupported sentence, more than
-10% overstated sentences, or any contradicted answer, and the narrator revises with those rows.
+3% overstated sentences, or any contradicted answer, and the narrator revises with every row that is
+not supported (an overstated sentence is the usual cause of a contradicted answer: L79).
 ```
 python3 $SKILL_DIR/scripts/story_probe.py snapshot --specs $SPECS --module <m> --out $SCRATCH/story-snap-<m>
 python3 $SKILL_DIR/scripts/render_briefs.py --role story-reader --module <m> --snapshot $SCRATCH/story-snap-<m> ...

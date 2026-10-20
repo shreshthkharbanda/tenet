@@ -708,3 +708,17 @@ the story-judge brief names its units exactly, Words rows included; the narrator
 persona readers' recurring faults (an unlisted count, two polarities for one decision, a status
 whose usual meaning differs, nobody said to notice) and points a rewriting narrator at the persona
 file and the teach-back verdicts as well as the judge rows. Selftest covers each rule.
+
+**L79. Round 2 of the story audit: v2 stories are far more faithful, and overstated sentences still
+mislead.** Found: LiteLLM Phase 9, nine story judges and two reader-scorer pairs on the v2 stories.
+Sentences judged supported: 85% to 97% per module (deployment-limits 134 of 138 with none distorted
+or unsupported, the only clean story). Overstated: 3% to 12%. Distorted: 0 to 3 per module.
+Unsupported: mostly uncited framing sentences (L78). The probe readers were mixed. Router-selection
+improved: agree, partial, not covered and contradicted went from 5/3/16/1 to 7/6/11/1. Failure-handling
+did not: 8/9/5/3 to 8/6/7/4. Two of its four contradictions trace straight to overstated sentences:
+a counter key stated without the per-error suffix, and a fallback hop said to count like any failure.
+A third traces to a claim that is looser than its code. Both stories were under the old 10% cap
+(4.3% and 4.1% overstated) yet misled their readers. Class: an aggregate threshold on the fault that
+causes wrong answers. Fix: the cap drops to 3%; every row that is not supported goes back to the
+narrator, not only the distorted ones; and claims the judges found looser than their code ("module
+claim" notes) go to the reviser queue, because a story faithful to a loose claim still misleads.
