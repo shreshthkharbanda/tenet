@@ -371,5 +371,5 @@ Every worker ends by writing `_meta/worker-reports/<role>-<module>[-round-N].jso
 }
 ```
 
-`verify_reports.py` checks these against the filesystem. Report what you did, not what you intended;
+Use absolute paths in `outputs` and `files_read`. `verify_reports.py` checks these against the filesystem. Report what you did, not what you intended;
 a report that claims 87 claims when 40 parse fails the gate and the module is re-run.

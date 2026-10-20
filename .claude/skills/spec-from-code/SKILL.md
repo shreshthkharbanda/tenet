@@ -197,7 +197,7 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
 
 ## Files
 
-- `references/briefs.md`: the nine worker prompts; fill placeholders, paste verbatim.
+- `references/briefs.md`: the worker briefs, rendered to files by `render_briefs.py`; never pasted by hand.
 - `references/templates.md`: claim grammar, confidence rules, precision ladder, writing rules, every
   file template, worker report format. Workers read this; you should too, once.
 - `references/implicit-decisions.md`: what implementers invent when a spec is silent.
@@ -205,8 +205,10 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
   limitations.
 - `references/research-basis.md`: which paper each rule comes from and what it found.
 - `references/learnings.md`: every failure class found in real runs and grading, and the fix that
-  removed it. Read before changing this skill.
-- `scripts/`: `inventory.py`, `split_file.py`, `check_shards.py`, `render_briefs.py`, `lint_specs.py`,
-  `coverage.py`, `score_probes.py`, `verify_reports.py`, `snapshot_for_answerers.py`,
-  `changed_modules.py`, `apply_status.py`, `gate.py`. Stdlib Python 3.9+, deterministic, each prints a
-  one-line summary to stderr.
+  removed it. Read before changing this skill; run `scripts/selftest.py` after changing any script.
+- `scripts/`: stdlib Python 3.9+, deterministic, each prints a one-line summary to stderr.
+  Planning: `inventory.py`, `split_file.py`, `check_shards.py`, `changed_modules.py`.
+  Dispatch: `render_briefs.py`, `snapshot_for_answerers.py`.
+  Gates: `lint_specs.py`, `coverage.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
+  Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`.
+  Gate regression tests: `selftest.py`.

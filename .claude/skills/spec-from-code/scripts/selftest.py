@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Regression tests for the gates themselves. Builds a throwaway fixture repo with planted defects
+and asserts each gate catches what it must and stays quiet where it must. Run after any change to
+scripts/: `python3 selftest.py`. Every learning that changed a script adds a case here.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+PY = sys.executable
+FAILS: list[str] = []
+
+
+def run(*args: str, cwd: Path | None = None) -> tuple[int, str]:
+    p = subprocess.run([PY, str(HERE / args[0]), *args[1:]], capture_output=True, text=True, cwd=cwd)
+    return p.returncode, p.stdout + p.stderr
+
+
+def check(name: str, cond: bool, detail: str = "") -> None:
+    print(("PASS " if cond else "FAIL ") + name)
+    if not cond:
+        FAILS.append(name + (": " + detail[-800:] if detail else ""))
+
+
+def git(repo: Path, *a: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True)
+
+
+def main() -> int:
+    tmp = Path(tempfile.mkdtemp(prefix="sfc-selftest-"))
+    repo, specs = tmp / "repo", tmp / "out-specs"   # deliberately NOT named "specs" (L03)
+    (repo / "pkg").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    big = ["class Big:\n", "    def __init__(self):\n", "        self.x = 1\n", "\n"]
+    for i in range(60):
+        big += [f"    def m{i}(self, v):\n", f"        if v > {i}:\n", f"            return v - {i}\n", f"        return {i}\n", "\n"]
+    (repo / "pkg" / "big.py").write_text("".join(big))
+    (repo / "pkg" / "small.py").write_text("def add(a, b):\n    return a + b\n\n\ndef _hidden():\n    return 0\n")
+    (repo / "pkg" / "other.py").write_text("def out_of_scope():\n    return 1\n")
+    (repo / "tests" / "test_small.py").write_text("from pkg.small import add\n\ndef test_add():\n    assert add(1, 2) == 3\n")
+    git(repo, "init", "-q"); git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "init")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    meta = specs / "_meta"
+    meta.mkdir(parents=True)
+
+    # L01: --include scopes; out-of-scope files stay as context
+    rc, out = run("inventory.py", str(repo), "--out", str(meta / "inventory.json"), "--include", "pkg/big.py", "--include", "pkg/small.py")
+    inv = json.loads((meta / "inventory.json").read_text())
+    other = next(f for f in inv["files"] if f["path"] == "pkg/other.py")
+    check("L01 include marks out-of-scope files", rc == 0 and other["in_scope"] is False, out)
+    check("tests detected", any(f["is_test"] for f in inv["files"] if f["path"] == "tests/test_small.py"))
+
+    # L02: split_file cuts at member boundaries, contiguous
+    rc, out = run("split_file.py", str(repo), "pkg/big.py", "--max-loc", "120", "--json")
+    sp = json.loads(out[out.index("{"):]) if rc == 0 else {"ranges": []}
+    rs = sp["ranges"]
+    contiguous = bool(rs) and rs[0]["start"] == 1 and rs[-1]["end"] == sp["lines"] and all(a["end"] + 1 == b["start"] for a, b in zip(rs, rs[1:]))
+    lines = (repo / "pkg" / "big.py").read_text().splitlines()
+    at_defs = all(lines[r["start"] - 1].lstrip().startswith(("def ", "class ", "@")) for r in rs[1:])
+    check("L02 split ranges contiguous and at definitions", contiguous and at_defs and len(rs) >= 2, out)
+
+    ranges = [f"pkg/big.py:{r['start']}-{r['end']}" for r in rs]
+    mods = {"commit": head, "modules": [
+        {"id": "big-a", "prefix": "BIGA", "name": "Big part A", "globs": ranges[:1]},
+        {"id": "big-b", "prefix": "BIGB", "name": "Big part B", "globs": ranges[1:] + ["pkg/small.py"]}],
+        "excluded": []}
+    (meta / "modules.json").write_text(json.dumps(mods))
+    rc, out = run("check_shards.py", "--inventory", str(meta / "inventory.json"), "--modules", str(meta / "modules.json"),
+                  "--out", str(meta / "shards-report.json"), "--min-loc", "1")
+    check("G1 passes a complete range plan", rc == 0, out)
+    gap = json.loads(json.dumps(mods)); gap["modules"][1]["globs"] = ranges[2:] + ["pkg/small.py"] if len(ranges) > 2 else ["pkg/small.py"]
+    (tmp / "gap.json").write_text(json.dumps(gap))
+    rc, out = run("check_shards.py", "--inventory", str(meta / "inventory.json"), "--modules", str(tmp / "gap.json"), "--min-loc", "1")
+    check("G1 fails a range gap", rc == 1 and "not assigned" in out, out)
+
+    # L07: renderer refuses unused inputs; renders every role without leftovers
+    rc, out = run("render_briefs.py", "--role", "judge", "--module", "big-a", "--specs", str(specs), "--repo", str(repo),
+                  "--scratch", str(tmp / "scratch"), "--scope-note", "x")
+    check("L07 renderer refuses a dropped option", rc != 0 and "silently" in out, out)
+    ok = True
+    for role in (["--role", "surveyor"], ["--role", "extractor", "--all-modules"], ["--role", "prober", "--all-modules"],
+                 ["--role", "crosscut", "--kind", "interfaces"], ["--role", "reconciler"], ["--role", "reviser", "--module", "big-a"],
+                 ["--role", "judge", "--module", "big-a"], ["--role", "rebuilder", "--module", "big-b"],
+                 ["--role", "answerer", "--module", "big-a", "--snapshot", str(tmp / "snap")]):
+        rc, out = run("render_briefs.py", *role, "--specs", str(specs), "--repo", str(repo), "--scratch", str(tmp / "scratch"))
+        ok &= rc == 0
+    check("render every role", ok, out)
+    ext = (meta / "briefs" / "extractor-big-a.md").read_text()
+    check("ranged module brief carries the range note", "LINE RANGE" in ext and ranges[0] in ext)
+
+    # G2 lint: planted defects caught; a clean spec passes
+    (specs / "modules").mkdir()
+    sections = ["Purpose", "Scope and boundaries", "Public surface", "Behaviors", "Validation rules", "Error handling",
+                "State and data", "External interactions", "Configuration", "Concurrency and ordering",
+                "Implementation notes", "Open questions and gaps", "Test evidence"]
+    def spec(prefix, module, claims):
+        body = "\n".join(f"## {s}\n" + (claims if s == "Behaviors" else "None.") + "\n" for s in sections)
+        return f"---\nkind: module\nmodule: {module}\nprefix: {prefix}\ncommit: {head}\nstatus: draft\n---\n# {module}\n\n{body}"
+    later = ", ".join(f"`pkg/big.py:{r['start']}-{r['end']}`" for r in rs[1:])
+    good_b = ("- [BIGB-001] {confirmed} `pkg/small.py:1-2` `add` returns the sum of its two arguments with no type checks.\n"
+              f"- [BIGB-002] {{confirmed}} {later} The later methods of `Big` "
+              + " ".join(f"m{i}" for i in range(60)) + " return v minus i when v exceeds i, else i.\n")
+    good_a = "- [BIGA-001] {confirmed} `pkg/big.py::Big` `Big` stores 1 in x at construction; methods m0 return v minus 0 when v exceeds 0.\n"
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
+    (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("G2 clean specs pass", rc == 0, out)
+    bad = good_a + ("- [BIGA-001] {confirmed} `pkg/big.py:1-99999` duplicate id and line past EOF here.\n"
+                    "- [BIGA-002] {inferred} no ref on an inferred claim at all, which must fail.\n"
+                    "- [BIGA-003] {confirmed} `pkg/small.py::nope` symbol that does not exist anywhere.\n"
+                    "- [BIGA-004] {confirmed} `pkg/small.py:1` Claude wrote this claim, mentioning a model.\n"
+                    "- [XX-1] malformed\nsee [BIGZ-001]\napi_key = \"abcdefghijklmnopqrstuvwxyz0123\"\n")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", bad))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    for needle in ("duplicate claim id", "beyond end", "has no source ref", "not found in", "mentions an AI tool",
+                   "does not parse", "does not resolve", "credential literal"):
+        check(f"G2 catches: {needle}", rc == 1 and needle in out, out)
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
+
+    from _common import parse_claims
+    pc = parse_claims("- [AB-001] {confirmed} `pkg/a.py:1-2`, `pkg/b.py::X` `add` returns `3`.\n"
+                      "- [AB-002] {inferred} `Router.completion` retries twice.\n"
+                      "- [AB-003] {gap} Does it time out?\n")
+    check("L19 identifier at text start is not a ref", pc[0]["refs"] == ["pkg/a.py:1-2", "pkg/b.py::X"]
+          and pc[0]["text"].startswith("`add`") and pc[1]["refs"] == [] and pc[1]["text"].startswith("`Router"), json.dumps(pc))
+
+    # L08: freshness is per cited file
+    (repo / "README.md").write_text("unrelated\n")
+    git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "readme")
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("L08 unrelated commit is not stale", rc == 0 and "stale" not in out, out)
+    (repo / "pkg" / "small.py").write_text("def add(a, b):\n    return a + b  # changed\n\n\ndef _hidden():\n    return 0\n")
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo))
+    check("L08 cited-file change is stale", "stale" in out, out)
+
+    # G3 coverage with ranges: range-scoped symbols
+    rc, out = run("coverage.py", str(specs), "--repo", str(repo), "--min-symbol", "0.5")
+    cov = json.loads((meta / "coverage.json").read_text())
+    check("G3 range coverage computed per module", cov["modules"]["big-b"]["file_rate"] == 1.0, json.dumps(cov["modules"]["big-b"])[:400])
+    check("G3 private symbols ignored", not any("_hidden" in s for s in cov["modules"]["big-b"]["unmentioned_symbols"]))
+
+    # G4 probes: exact split, leak detection (true positive and template false positive), side notes, regression
+    probes = [{"id": f"BIGA-P{i:02d}", "module": "big-a", "category": "branch", "edge": False,
+               "question": f"What does m{i} return for v={i + 7}?", "reference_answer": f"It returns `{7}`.",
+               "refs": ["pkg/big.py:5-8"]} for i in range(20)]
+    probes[0]["reference_answer"] = "It raises `ZebraOverflowError` with message \"stripes exhausted\""
+    (meta / "probes").mkdir()
+    (meta / "probes" / "big-a.jsonl").write_text("\n".join(json.dumps(p) for p in probes) + "\n")
+    rc, out = run("score_probes.py", str(specs), "--assign-splits")
+    rows = [json.loads(l) for l in (meta / "probes" / "big-a.jsonl").read_text().splitlines()]
+    check("L11 exact 40% held out", sum(r["split"] == "holdout" for r in rows) == 8, out)
+    snap = tmp / "snap-r1"
+    rc, out = run("snapshot_for_answerers.py", str(specs), "--out", str(snap))
+    q = (snap / "_meta" / "probes" / "big-a.questions.jsonl").read_text()
+    check("snapshot strips reference answers", rc == 0 and "reference_answer" not in q and not (snap / "_meta" / "probes" / "big-a.jsonl").exists(), out)
+    for rnd, agree_n in ((1, 20), (2, 17)):
+        ad, jd = meta / "answers" / f"round-{rnd}", meta / "judgments" / f"round-{rnd}"
+        ad.mkdir(parents=True); jd.mkdir(parents=True)
+        ans, jud = [], []
+        for i, p in enumerate(rows):
+            a = "It returns 7." if i else "ZebraOverflowError(\"stripes exhausted\")"
+            ans.append({"id": p["id"], "answer": a, "unanswerable": False, "claims_used": []})
+            v = "agree" if i < agree_n or p["split"] == "revision" else "gap"
+            j = {"id": p["id"], "verdict": v, "note": ""}
+            if i == 3:
+                j["spec_defect"] = "states the right result for the wrong reason"
+            jud.append(j)
+        (ad / "big-a.jsonl").write_text("\n".join(json.dumps(x) for x in ans) + "\n")
+        (jd / "big-a.jsonl").write_text("\n".join(json.dumps(x) for x in jud) + "\n")
+    rc, out = run("score_probes.py", str(specs), "--round", "1", "--failures-for-revision", "--snapshot", str(snap))
+    val = json.loads((meta / "validation.json").read_text())
+    leak_ids = [l["probe"] for l in val["leak_suspects"]]
+    check("L12 planted leak detected", "BIGA-P00" in leak_ids, json.dumps(val["leak_suspects"]))
+    check("L15 template answers not flagged", leak_ids == ["BIGA-P00"], json.dumps(val["leak_suspects"]))
+    p3 = next(r for r in rows if r["id"] == "BIGA-P03")
+    if p3["split"] == "revision":
+        rev = (meta / "revise" / "round-1" / "big-a.jsonl")
+        check("L16 revision side note routed", rev.exists() and "defect_note" in rev.read_text())
+    else:
+        check("L16 held-out side note kept from revisers", any(n["probe"] == "BIGA-P03" for n in val["holdout_side_notes"]))
+    rc, out = run("score_probes.py", str(specs), "--round", "2", "--snapshot", str(snap))
+    val2 = json.loads((meta / "validation.json").read_text())
+    lost = val2["rounds"]["1"]["big-a"]["holdout_agree"] - val2["modules"]["big-a"]["holdout_agree"]
+    check("L11 regression by count", (val2["modules"]["big-a"]["status"] == "REGRESSION") == (lost >= 2), json.dumps(val2["modules"]))
+
+    # G5 + L03/L17: isolation checks with a specs dir not named "specs"; relative output paths resolve
+    wr = meta / "worker-reports"
+    wr.mkdir()
+    (wr / "prober-big-a.json").write_text(json.dumps({"role": "prober", "module": "big-a", "outputs": [{"path": str(meta / "probes" / "big-a.jsonl")}],
+                                                    "files_read": ["pkg/big.py", str(specs / "modules" / "big-a.md")]}))
+    (wr / "answerer-big-a-round-1.json").write_text(json.dumps({"role": "answerer", "module": "big-a", "snapshot": str(snap),
+                                                              "outputs": [{"path": str(meta / "answers" / "round-1" / "big-a.jsonl")}],
+                                                              "files_read": [str(snap / "modules" / "big-a.md"), "pkg/big.py"]}))
+    (wr / "extractor-big-b.json").write_text(json.dumps({"role": "extractor", "module": "big-b",
+                                                       "outputs": [{"path": f"{specs.name}/modules/big-b.md", "claims": 2}],
+                                                       "files_read": ["pkg/small.py"]}))
+    rc, out = run("verify_reports.py", str(specs), "--repo", str(repo))
+    check("L03 prober reading spec caught (dir not named specs)", "blindness broken" in out, out)
+    check("L03 answerer reading source caught", "outside its snapshot" in out, out)
+    check("L17 relative output path resolves", "extractor-big-b.json: reported output" not in out, out)
+
+    # L09/L10: rebuild scoring is baseline-relative
+    def junit(path: Path, cases: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = "".join(f'<testcase classname="t" name="{k}">' + ("" if v == "pass" else "<failure/>") + "</testcase>" for k, v in cases.items())
+        path.write_text(f"<testsuite>{body}</testsuite>")
+    junit(tmp / "b.xml", {"a": "pass", "b": "pass", "c": "fail"})
+    junit(tmp / "x.xml", {"a": "pass", "b": "fail", "c": "fail"})
+    rc, out = run("score_rebuild.py", "--baseline", str(tmp / "b.xml"), "--after", str(tmp / "x.xml"), "--module", "m", "--out", str(tmp / "s.json"))
+    sc = json.loads((tmp / "s.json").read_text())
+    check("L09 rebuild score ignores baseline failures", sc["score"] == 0.5 and sc["baseline_passing"] == 2, out)
+
+    shutil.rmtree(tmp, ignore_errors=True)
+    print(f"\n{len(FAILS)} failure(s)")
+    for f in FAILS:
+        print(" -", f)
+    return 1 if FAILS else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

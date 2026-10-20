@@ -36,6 +36,17 @@ LITERAL_RES = [
 ]
 
 
+TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?")
+
+
+def tokens(text: str) -> set[str]:
+    return {t.lower() for t in TOKEN_RE.findall(text or "")}
+
+
+def distinctive_token(t: str) -> bool:
+    return (t.isdigit() and len(t) >= 3) or (len(t) >= 5 and any(c.isalpha() for c in t))
+
+
 def distinctive_literals(text: str) -> set[str]:
     out = set()
     for rx in LITERAL_RES:
@@ -132,8 +143,11 @@ def main() -> int:
     prev_rounds = prev_report.get("rounds", {})
     report = {"round": rnd, "modules": {}, "rounds": prev_rounds, "leak_suspects": []}
     snap_root = Path(args.snapshot).resolve() if args.snapshot else Path(args.specs).resolve()
+    # Spec text only: never _meta (reports from earlier rounds quote reference answers) or briefs.
     spec_corpus = "\n".join(f.read_text(encoding="utf-8", errors="replace") for f in snap_root.rglob("*.md")
-                            if "_briefs" not in f.parts)
+                            if not ({"_briefs", "_meta"} & set(f.relative_to(snap_root).parts)))
+    spec_tokens = tokens(spec_corpus)
+    side_notes: list[dict] = []
     lines = [f"# Validation report (round {rnd})", "",
              "Fidelity = share of probes whose spec-only answer agrees with the code-derived reference answer.",
              "Held-out probes are never shown to spec writers; revision probes drive fixes. "
@@ -172,13 +186,30 @@ def main() -> int:
             # Leak check: a literal the answer shares with the code-derived reference, that the spec never
             # contains, could only have come from the code (or a lucky guess). Isolation is instruction-
             # based; this makes a breach visible.
+            # Token-level: a literal is suspicious only if it carries a distinctive token found in neither
+            # the spec nor the question (answers legitimately fill spec templates with the question's values).
             ans_text = str(answers[pid].get("answer", ""))
-            leaked = sorted(l for l in distinctive_literals(p.get("reference_answer", ""))
-                            if l in ans_text and l not in spec_corpus)
+            allowed = spec_tokens | tokens(p.get("question", ""))
+            leaked = []
+            for lit in distinctive_literals(p.get("reference_answer", "")):
+                if lit not in ans_text:
+                    continue
+                novel = [t for t in tokens(lit) if distinctive_token(t) and t not in allowed]
+                if novel:
+                    leaked.append(f"{lit} (novel: {', '.join(sorted(novel)[:3])})")
+            leaked.sort()
             if leaked:
                 report["leak_suspects"].append({"module": mid, "probe": pid, "literals": leaked[:5], "verdict": v})
             if v != "agree" and s == "revision":
                 failures.append({**p, "answer": answers[pid].get("answer"), "verdict": v, "judge_note": j.get("note", "")})
+            elif j.get("spec_defect"):
+                # A defect the judge saw that did not flip the verdict. Revision-split ones go to the reviser;
+                # held-out ones only to the human report, or the held-out set would leak into revisions.
+                if s == "revision":
+                    failures.append({**p, "answer": answers[pid].get("answer"), "verdict": "defect_note",
+                                     "judge_note": j.get("spec_defect")})
+                else:
+                    side_notes.append({"module": mid, "probe": pid, "spec_defect": j.get("spec_defect")})
         rf = stats["revision"]["agree"] / stats["revision"]["n"] if stats["revision"]["n"] else 0.0
         hf = stats["holdout"]["agree"] / stats["holdout"]["n"] if stats["holdout"]["n"] else 0.0
         hc = stats["holdout"]["contradict"]
@@ -214,13 +245,20 @@ def main() -> int:
               "spec from `_meta/rounds/round-<N-1>/` and inspect the revision before trying again. Held-out sets are small "
               "(about 10 probes), so read fidelity with its 95% lower bound, not as a precise number.", ""]
     (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    report["holdout_side_notes"] = side_notes
+    if side_notes:
+        lines += ["## Held-out side notes (for the human review; never given to revisers)", ""]
+        lines += [f"- {n['module']} {n['probe']}: {n['spec_defect']}" for n in side_notes]
+        lines.append("")
+        (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        write_json(meta / "validation.json", report)
     if report["leak_suspects"]:
         lines += ["## Leak suspects", "",
                   "Answers containing a distinctive literal from the code-derived reference that appears nowhere in the "
                   "spec the answerer was given. One or two can be coincidence (a guessable constant); a cluster in one "
                   "module means the answerer read code: discard that module's answers and re-run its answerer.", ""]
         for ls in report["leak_suspects"]:
-            lines.append(f"- {ls['module']} {ls['probe']} ({ls['verdict']}): {', '.join(ls['literals'])}")
+            lines.append(f"- {ls['module']} {ls['probe']} ({ls['verdict']}): {'; '.join(ls['literals'])}")
         (meta / "validation-report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         write_json(meta / "validation.json", report)
         by_mod: dict[str, int] = {}

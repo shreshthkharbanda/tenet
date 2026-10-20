@@ -26,9 +26,19 @@ SOURCE_EXT = {".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".kt", ".go", ".rs",
 PROBER_ALLOWED_META = {"modules.json", "survey.md", "shards-report.json", "inventory.json"}
 
 
-def resolve(p: str, repo: Path) -> Path:
+def resolve(p: str, repo: Path, specs: Path | None = None) -> Path:
+    """Absolute paths as given; relative ones are tried against the repo, the specs dir's parent, and
+    the specs dir, in that order (workers write 'specs/modules/x.md' meaning the specs tree)."""
     q = Path(p)
-    return (q if q.is_absolute() else repo / q).resolve()
+    if q.is_absolute():
+        return q.resolve()
+    for base in [repo] + ([specs.parent, specs] if specs else []):
+        cand = (base / q)
+        if cand.exists():
+            return cand.resolve()
+    if specs and q.parts and q.parts[0] in ("specs", specs.name):
+        return (specs / Path(*q.parts[1:])).resolve()
+    return (repo / q).resolve()
 
 
 def under(p: Path, root: Path) -> bool:
@@ -62,7 +72,7 @@ def main() -> int:
         role = r.get("role", "?")
         module = r.get("module", "?")
         for o in r.get("outputs", []):
-            fp = resolve(o.get("path", ""), repo)
+            fp = resolve(o.get("path", ""), repo, specs)
             if not fp.exists() or (fp.is_file() and fp.stat().st_size == 0):
                 errors.append(f"{rf.name}: reported output {o.get('path')} missing or empty")
                 continue
@@ -72,7 +82,7 @@ def main() -> int:
                 rep = int(o["claims"])
                 if abs(actual - rep) > max(2, 0.10 * max(actual, rep)):
                     errors.append(f"{rf.name}: reported {rep} claims in {o.get('path')} but {actual} parse")
-        reads = [resolve(str(x), repo) for x in r.get("files_read", [])]
+        reads = [resolve(str(x), repo, specs) for x in r.get("files_read", [])]
         if not reads and role not in ("judge",):
             errors.append(f"{rf.name}: no files_read listed; every worker must list what it read")
         if role == "answerer":

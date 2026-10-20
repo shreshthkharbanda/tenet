@@ -95,3 +95,38 @@ time for the probe phase).
 to start from INDEX.md and the cross-cutting files, none of which existed. It coped, but a less
 careful worker could stall or invent. Fix: the answerer brief lists the snapshot and reads whichever
 of those files exist.
+
+**L15. The leak detector cried wolf on templates.** Found: grading the tenet dry round; 8 of 25
+answers were flagged as leaks because they instantiated the spec's output template with values the
+question supplied ("analyzed 3 files · 4 types"). Fix: suspicion is token-level; a literal counts only
+if it carries a distinctive token (5+ letters or 3+ digits) found in neither the spec snapshot nor the
+question. The planted-leak regression case still fires. A detector that fires on honest work trains
+the orchestrator to ignore it, which is worse than no detector.
+
+**L16. Judges saw defects the verdict could not express.** Found: tenet judge; three spec
+inaccuracies (wrong cause for a right outcome, unstated quoting, colour span) did not flip any verdict
+and lived only in prose. Fix: judgments carry an optional `spec_defect`; revision-split ones are
+routed to the reviser as `defect_note` failures; held-out ones go only to the human report, because
+feeding them to revisers would leak the held-out set.
+
+**L17. Relative paths in worker reports.** Found: tenet extractor reported `specs/modules/report.md`
+for a specs dir elsewhere; G5 resolved it against the repo and failed an honest worker. Fix: reports
+use absolute paths; the verifier also tries the specs dir and its parent before failing.
+
+**L18. Measurement contaminated by its own reports.** Found: regression-testing L15; the planted leak
+stopped firing because the "spec corpus" included `_meta/validation-report.md` from the previous
+round, which quoted the leaked literal. Fix: the corpus is spec text only (no `_meta`, no briefs).
+General rule for every check: never let a measurement's own output feed its next input.
+
+**L19. Identifiers swallowed as refs.** Found: the new self-test. The claim grammar treated every
+leading backticked span as a ref, so "`add` returns ..." or "`Router.completion` retries ..." failed
+lint with "path not found", pushing writers to reword claims around the parser. Fix: a span is a ref
+only if shaped like a location (a slash or a file extension, optional `:L1-L2` or `::Symbol`); the
+first span that is not ends the ref list. The change only relaxes the grammar, so workers already
+mid-run are unaffected.
+
+**L20. Gates had no tests of their own.** Found: L15, L18 and L19 were all gate bugs that real data
+exposed; each would have silently mis-measured every later run. Fix: `scripts/selftest.py` builds a
+fixture repo (with a specs dir deliberately not named `specs`) and asserts each gate's catches and
+non-catches, one case per learning that changed a script. Run it after any script change; a change
+that adds a learning adds a case.

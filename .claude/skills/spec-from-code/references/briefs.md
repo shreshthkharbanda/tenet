@@ -354,7 +354,11 @@ code) still agrees. A spec that hedges ("usually", "may") where the code is dete
 agree; mark gap and say the hedge is the defect.
 
 Write {{SPECS}}/_meta/judgments/round-{{ROUND}}/{{MODULE_ID}}.jsonl:
-{"id": "...", "verdict": "agree|contradict|gap|probe_invalid", "note": "one line: the distinguishing fact"}
+{"id": "...", "verdict": "agree|contradict|gap|probe_invalid", "note": "one line: the distinguishing fact",
+ "spec_defect": "optional: a spec inaccuracy you noticed that did not change the verdict"}
+Record spec_defect whenever the spec states something the code contradicts or leaves out, even when
+the answer still agrees (e.g. the right outcome attributed to the wrong cause). These are routed to
+revisers mechanically; do not bury them in the note.
 
 Do not read or edit any spec file; your job is comparison, not repair. Write
 {{SPECS}}/_meta/worker-reports/judge-{{MODULE_ID}}-round-{{ROUND}}.json. Reply with the verdict counts.

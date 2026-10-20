@@ -15,9 +15,24 @@ from pathlib import Path
 CLAIM_RE = re.compile(
     r"^\s*[-*]\s+\[(?P<id>[A-Z][A-Z0-9]{1,11}-\d{3,4})\]\s+"
     r"\{(?P<conf>confirmed|inferred|gap)\}\s*"
-    r"(?P<refs>(?:`[^`\n]+`\s*(?:,\s*)?)*)"
-    r"(?P<text>\S.*)$"
+    r"(?P<rest>\S.*)$"
 )
+# A backticked span is a ref only if it is shaped like a location: it has a slash or a file
+# extension, optionally followed by :L1[-L2] or ::Symbol. Otherwise it is the start of the claim
+# text (e.g. "`add` returns ..."), which must not be swallowed as a ref.
+REF_SHAPE = re.compile(r"^(?:[\w.@+-]+/)*[\w.@+-]*(?:/|\.[A-Za-z0-9]{1,8})(?::\d+(?:-\d+)?|::[\w.$<>-]+)?$")
+
+
+def split_refs(rest: str) -> tuple[list[str], str]:
+    refs: list[str] = []
+    i = 0
+    while True:
+        m = re.match(r"\s*`([^`\n]+)`\s*,?\s*", rest[i:])
+        if not m or not REF_SHAPE.match(m.group(1).strip()):
+            break
+        refs.append(m.group(1).strip())
+        i += m.end()
+    return refs, rest[i:].strip()
 REF_RE = re.compile(r"`([^`\n]+)`")
 XREF_RE = re.compile(r"\[([A-Z][A-Z0-9]{1,11}-\d{3,4})\]")
 ID_RE = re.compile(r"^([A-Z][A-Z0-9]{1,11})-(\d{3,4})$")
@@ -173,12 +188,14 @@ def parse_claims(text: str) -> list[dict]:
         m = CLAIM_RE.match(line)
         if not m:
             continue
-        refs = [r.strip() for r in REF_RE.findall(m.group("refs") or "")]
+        refs, text = split_refs(m.group("rest"))
+        if not text:
+            continue
         claims.append({
             "id": m.group("id"),
             "confidence": m.group("conf"),
             "refs": refs,
-            "text": m.group("text").strip(),
+            "text": text,
             "line": n,
             "section": section,
         })
