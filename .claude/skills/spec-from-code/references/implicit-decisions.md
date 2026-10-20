@@ -88,6 +88,14 @@ The rule that makes this work: **absence of a safeguard is a behavior.** "No tim
   when a Responses stream object is returned, so open Responses streams are not capped"). Stating each
   path's mechanism separately is not enough: readers do not diff them.
 
+## Where a result goes
+- For every function that sanitizes, clears, filters, or transforms values (strip credentials, drop
+  params, clamp limits), say which caller consumes its result and whether that result is what reaches
+  the real side effect (the provider call, the write, the response). A cleared copy that only feeds
+  logging or an id while the real call is built from the original is a defect, not a safeguard; state
+  what the side effect actually receives. Verify by driving the public entry point and inspecting the
+  outgoing call, not by calling the helper.
+
 ## Dead and conditional code
 - Branches that cannot be reached, flags that are always on, compatibility shims: say so. A reviewer
   needs to know what is live.
