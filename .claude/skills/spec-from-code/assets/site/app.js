@@ -130,14 +130,14 @@
   function meter(f) {
     if (f.holdout == null) return "";
     const w = 92, lo = (f.holdout_low ?? f.holdout) * w, pt = f.holdout * w;
-    const tip = `${Math.round(f.holdout * f.holdout_n)} of ${f.holdout_n} held-out questions answered correctly from the spec alone; 95% lower bound ${fmtPct(f.holdout_low)}`;
-    return `<span class="meter" title="${esc(tip)}"><span>Held-out ${fmtPct(f.holdout)}</span><svg viewBox="0 0 ${w} 12" aria-hidden="true">
+    const tip = `Accuracy check: ${Math.round(f.holdout * f.holdout_n)} of ${f.holdout_n} test questions, written from the code and never shown to the spec's writers, were answered correctly from this chapter alone. With so few questions the true rate could be as low as ${fmtPct(f.holdout_low)} (95% confidence).`;
+    return `<span class="meter" title="${esc(tip)}"><span>Accuracy check ${Math.round(f.holdout * f.holdout_n)}/${f.holdout_n}</span><svg viewBox="0 0 ${w} 12" aria-hidden="true">
       <rect class="track" x="0" y="4" width="${w}" height="4" rx="2"/><rect class="ci" x="${lo}" y="2" width="${Math.max(2, pt - lo)}" height="8" rx="2"/>
       <circle class="pt" cx="${pt}" cy="6" r="4.5"/></svg></span>`;
   }
   const pill = (s) => s ? `<span class="pill ${esc(s.toLowerCase())}">${esc(s)}</span>` : "";
   function glyphCounts(c) {
-    return `<span class="glyphs"><span title="confirmed in the code"><i class="g confirmed"></i>${c.confirmed}</span><span title="inferred from the code"><i class="g inferred"></i>${c.inferred}</span><span title="open question"><i class="g gap"></i>${c.gap}</span></span>`;
+    return `<span class="glyphs"><span title="Confirmed: read directly in the code"><i class="g confirmed"></i>${c.confirmed} confirmed</span><span title="Inferred: follows from the code but depends on something outside it"><i class="g inferred"></i>${c.inferred} inferred</span><span title="Open question: the code does not settle it"><i class="g gap"></i>${c.gap} open</span></span>`;
   }
   function stripSVG(fl, i) {
     const steps = fl.steps, n = steps.length, W = 360, pad = 14, y = 16;
@@ -418,7 +418,7 @@
           <div class="facts">
             <div><b>${B.stats.claims.toLocaleString()}</b><span>claims, each citing code</span></div>
             <div><b>${mods.length}</b><span>chapters</span></div>
-            <div><b>${validated}/${mods.length}</b><span>validated on held-out questions</span></div>
+            <div><b>${validated}/${mods.length}</b><span>chapters passed the accuracy check</span></div>
             <div><b>${B.stats.defects}</b><span>suspected defects</span></div>
           </div>
           <p class="label">Start here</p>
@@ -434,7 +434,7 @@
       </figure>
       <section class="block" id="paths"><header><h2>What happens when…</h2><p>Each path follows one request through the chapters, step by step.</p></header>
         <div class="paths">${B.flows.map(pathCard).join("")}</div></section>
-      <section class="block"><header><h2>Chapters</h2><p>In reading order. Held-out score: questions a reader answered correctly from the spec alone.</p></header>
+      <section class="block"><header><h2>Chapters</h2><p>In reading order. Accuracy check: unseen test questions answered correctly from the chapter alone.</p></header>
         <div class="chapters">${ordered().filter((f) => f.kind === "module").map((f, k) => chapterRow(f, k + 1)).join("")}</div></section>
       <section class="block L2"><header><h2>Needs a decision</h2><p>${B.stats.defects} suspected defects: behavior the code has that looks unintended.</p></header>
         <div class="defect-list">${(B.headline_defects || []).concat(B.defects.map((d) => d.id)).filter((v, k, a) => a.indexOf(v) === k).slice(0, 6).map((id) => B.defects.find((d) => d.id === id)).filter(Boolean).map(defectCard).join("")}</div>
@@ -785,7 +785,7 @@
           <h1>${esc(shortTitle(f))}</h1>
           <div class="ch-meta">
             ${meter(f)}
-            ${f.evidence ? `<span class="kv" title="Share of confirmed behavioral claims backed by an executed check script"><b>${fmtPct(f.evidence)}</b> executed</span>` : ""}
+            ${f.evidence ? `<span class="kv" title="Share of this chapter's confirmed behavior claims that a script ran against the real code and confirmed"><b>${fmtPct(f.evidence)}</b> run against the code</span>` : ""}
             ${glyphCounts(f.claims)}
             <span class="kv">${f.story ? `<span><b>${Math.max(1, Math.round(f.story.words / 238))}</b> min story</span><span><b>${readingMinutes(f)}</b> min ledger</span>` : `<span><b>${readingMinutes(f)}</b> min read</span>`}${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
           </div>

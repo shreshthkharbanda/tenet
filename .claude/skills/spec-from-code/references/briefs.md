@@ -695,8 +695,11 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
   ambiguous, or self-contradictory there;
 - falsifier: a sampled claim shown false or imprecise, with the evidence and counterexample;
 - omission: a high-consequence behavior the spec states vaguely, omits, or contradicts;
-- lint: a placeholder template without rendering, or a table row carrying untracked values or a
-  value found in neither the claims it cites nor their code;
+- lint: a placeholder template without rendering, a table row carrying untracked values or a value
+  found in neither the claims it cites nor their code, or a claim dense with code names: rewrite it
+  words first (what happens, in plain words, then the exact names an engineer needs, at most 4), with
+  the same meaning, ID and refs; if it states two things, keep one under the ID and add the other as
+  a new claim (templates.md, "Natural language first");
 - rebuild: a guess an implementer had to make from this spec, or a spec bug found while rebuilding;
 - note: another worker (a cross-cutting writer, a falsifier, the reconciler) reported this claim as
   wrong or incomplete while working on its own file; verify it in the code before acting on it.
