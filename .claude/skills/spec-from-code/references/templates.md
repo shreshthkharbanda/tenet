@@ -21,7 +21,7 @@ Contents
 A claim is one bullet, one sentence, one trigger, one observable outcome:
 
 ```
-- [PREFIX-NNN] {confidence} `path:L1-L2`, `path::Symbol` Text.
+- [PREFIX-NNN] {confidence} `path:START-END`, `path::Symbol` Text.
 ```
 
 - `PREFIX` is the module's prefix from `_meta/modules.json` (or `SYS`, `IF`, `DATA`, `CFG`, `OPS` for the
@@ -29,7 +29,7 @@ A claim is one bullet, one sentence, one trigger, one observable outcome:
   renumbered. When a claim is wrong, rewrite its text; when it is obsolete, delete it. A new fact gets the
   next unused number.
 - `{confidence}` is exactly one of `{confirmed}`, `{inferred}`, `{gap}` (section 2).
-- Refs are backticked, comma separated, relative to the repo root. Forms: `path:L1-L2`, `path:L1`,
+- Refs are backticked, comma separated, relative to the repo root. Forms: `path:START-END` (line numbers, e.g. `src/a.py:88-104`; an `L` prefix is accepted), `path:LINE`,
   `path::Symbol` (the symbol name must occur in that file), or a bare `path`. Prefer line ranges for
   behavior and symbol refs for interface facts; both are verified by the linter. Every confirmed or
   inferred claim needs at least one ref. A gap may have none.
@@ -183,7 +183,7 @@ What the system is for and who calls it, in one paragraph. Then the one-sentence
 |---|---|---|---|---|
 
 Then a narrative of how the modules fit, with cross-module claims:
-- [SYS-001] {confirmed} `path:L1-L2` <system-level fact, e.g. the single process model, the request lifecycle owner>
+- [SYS-001] {confirmed} `path:START-END` <system-level fact, e.g. the single process model, the request lifecycle owner>
 
 ## Main paths
 For each primary use case (3 to 7), the end-to-end path as an ordered list of steps, each step naming
@@ -356,7 +356,7 @@ List of the `{gap}` claims with one line each on what would resolve them.
 Optional. Behavior that looks unintended: it contradicts its own docstring or name, a sibling path
 (sync vs async), a caller's evident expectation, or the module's purpose. The normative sections
 still state what the code DOES; this section says why it looks wrong, as claims:
-- [PFX-0xx] {confirmed} `path:L1-L2` <what happens>. Looks unintended because <evidence>. Impact: <who
+- [PFX-0xx] {confirmed} `path:START-END` <what happens>. Looks unintended because <evidence>. Impact: <who
   hits it and how>.
 ```
 

@@ -115,7 +115,7 @@ def main() -> int:
     def ref_hits(ref: str, item: dict) -> bool:
         if ref_path(ref) != item["path"]:
             return False
-        m = re.match(r"^.+?:(\d+)(?:-(\d+))?$", ref.strip())
+        m = re.match(r"^.+?:L?(\d+)(?:-L?(\d+))?$", ref.strip())
         if not m or "::" in ref:
             return True  # bare path or symbol ref: counts for the file
         a = int(m.group(1)); b = int(m.group(2) or a)

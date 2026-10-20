@@ -110,7 +110,10 @@ def main() -> int:
 
     if role in ("surveyor", "reconciler", "control", "judge-auditor", "redteam", "reader", "lifecycle-checker"):
         name = f"audit-{role}.md" if role not in ("surveyor", "reconciler") else f"{role}.md"
-        rendered.append((role, "all", out_dir / name, fill(blocks[role], base | {"SCOPE_NOTE": args.scope_note or default_scope}, must)))
+        dest = out_dir / name
+        if role == "control":  # the control may read only its own directory, so its brief lives there
+            dest = Path(base["CONTROL_DIR"]).resolve() / "_brief.md" if "CONTROL_DIR" in base else dest
+        rendered.append((role, "all", dest, fill(blocks[role], base | {"SCOPE_NOTE": args.scope_note or default_scope}, must)))
     elif role == "crosscut":
         if not args.kind:
             raise SystemExit("--kind required for crosscut")

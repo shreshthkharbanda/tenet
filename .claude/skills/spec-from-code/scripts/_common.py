@@ -20,7 +20,7 @@ CLAIM_RE = re.compile(
 # A backticked span is a ref only if it is shaped like a location: it has a slash or a file
 # extension, optionally followed by :L1[-L2] or ::Symbol. Otherwise it is the start of the claim
 # text (e.g. "`add` returns ..."), which must not be swallowed as a ref.
-REF_SHAPE = re.compile(r"^(?:[\w.@+-]+/)*[\w.@+-]*(?:/|\.[A-Za-z0-9]{1,8})(?::\d+(?:-\d+)?|::[\w.$<>-]+)?$")
+REF_SHAPE = re.compile(r"^(?:[\w.@+-]+/)*[\w.@+-]*(?:/|\.[A-Za-z0-9]{1,8})(?::L?\d+(?:-L?\d+)?|::[\w.$<>-]+)?$")
 
 
 def split_refs(rest: str) -> tuple[list[str], str]:
@@ -228,7 +228,7 @@ def resolve_ref(repo: Path, ref: str) -> tuple[bool, str]:
         if not re.search(r"\b" + re.escape(sym.strip()) + r"\b", content):
             return False, f"symbol '{sym}' not found in {path}"
         return True, ""
-    m = re.match(r"^(.+?):(\d+)(?:-(\d+))?$", ref)
+    m = re.match(r"^(.+?):L?(\d+)(?:-L?(\d+))?$", ref)
     if m:
         path, a, b = m.group(1), int(m.group(2)), m.group(3)
         fp = repo / path
@@ -251,7 +251,7 @@ def ref_path(ref: str) -> str:
     ref = ref.strip()
     if "::" in ref:
         return ref.split("::", 1)[0]
-    m = re.match(r"^(.+?):(\d+)(?:-(\d+))?$", ref)
+    m = re.match(r"^(.+?):L?(\d+)(?:-L?(\d+))?$", ref)
     return m.group(1) if m else ref
 
 

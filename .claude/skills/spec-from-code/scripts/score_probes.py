@@ -20,7 +20,7 @@ import hashlib
 import re
 from pathlib import Path
 
-from _common import eprint, read_json, read_jsonl, write_json, write_jsonl
+from _common import eprint, read_json, read_jsonl, resolve_ref, write_json, write_jsonl
 
 CATEGORIES = {"validation", "error", "branch", "side_effect", "config", "interface", "data", "concurrency", "default"}
 VERDICTS = {"agree", "contradict", "gap", "probe_invalid"}
@@ -92,6 +92,7 @@ def main() -> int:
     ap.add_argument("--round", type=int, default=None)
     ap.add_argument("--failures-for-revision", action="store_true")
     ap.add_argument("--min-probes", type=int, default=12)
+    ap.add_argument("--repo", default=None, help="repo root, to verify probe refs (default: inventory.json repo_root)")
     ap.add_argument("--snapshot", default=None,
                     help="the spec snapshot answerers read this round; used for leak detection (default: specs dir)")
     args = ap.parse_args()
@@ -103,6 +104,9 @@ def main() -> int:
 
     if args.assign_splits:
         n = 0
+        inv_path = meta / "inventory.json"
+        repo_root = Path(args.repo).resolve() if args.repo else (
+            Path(read_json(inv_path)["summary"]["repo_root"]) if inv_path.exists() else Path("."))
         for pf in sorted(probes_dir.glob("*.jsonl")):
             rows = read_jsonl(pf)
             seen = set()
@@ -117,6 +121,10 @@ def main() -> int:
                     errors.append(f"{pf.name}: probe {r.get('id')} category {r.get('category')!r} not in {sorted(CATEGORIES)}")
                 if not r.get("refs"):
                     errors.append(f"{pf.name}: probe {r.get('id')} has no refs (reference answers must cite code)")
+                for ref in r.get("refs", []):
+                    ok, why = resolve_ref(repo_root, str(ref))
+                    if not ok:
+                        errors.append(f"{pf.name}: probe {r.get('id')} ref `{ref}`: {why}")
                 if "split" not in r:
                     r["split"] = None
                     n += 1

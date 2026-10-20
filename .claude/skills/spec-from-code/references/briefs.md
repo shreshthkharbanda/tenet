@@ -130,7 +130,7 @@ Method:
    If behavior looks unintended, state what the code does in the normative sections anyway, and add it
    under "## Suspected defects" with the evidence (see templates.md).
 4. Write {{SPECS}}/modules/{{MODULE_ID}}.md. Every fact is a claim with an ID {{PREFIX}}-001, -002, ...
-   and a verified ref (path:L1-L2 relative to the repo root, or path::Symbol). Aim for one claim per
+   and a verified ref (path:START-END relative to the repo root, or path::Symbol). Aim for one claim per
    10-30 lines of non-trivial logic; a 2000-LOC module typically needs 60-150 claims. Every in-scope
    file must be cited by at least one claim or named in Scope and boundaries as trivial/dead with a
    reason. Every public symbol should be named in the spec.
@@ -178,7 +178,7 @@ Before writing, read {{REFS}}/templates.md (grammar, confidence, precision ladde
 writing rules, and the template for {{XC_FILE}}; copy its frontmatter and headings exactly) and
 {{REFS}}/implicit-decisions.md.
 
-Every fact is a claim {{XC_PREFIX}}-001, -002, ... with a verified ref (path:L1-L2 or path::Symbol,
+Every fact is a claim {{XC_PREFIX}}-001, -002, ... with a verified ref (path:START-END or path::Symbol,
 relative to the repo root). You may read any source in the repo. Do not read {{SPECS}}/modules/
 (those are being written independently). Do not modify source. No tool or model mentions. Redact
 secrets as [REDACTED] plus a gap.
@@ -292,7 +292,7 @@ Tests:
 
 Write {{N_PROBES}} probes to {{SPECS}}/_meta/probes/{{MODULE_ID}}.jsonl, one JSON object per line:
 {"id": "{{PREFIX}}-P01", "module": "{{MODULE_ID}}", "category": "validation|error|branch|side_effect|config|interface|data|concurrency|default",
- "edge": true, "question": "...", "reference_answer": "...", "refs": ["path:L1-L2"],
+ "edge": true, "question": "...", "reference_answer": "...", "refs": ["path:START-END"],
  "difficulty": "easy|medium|hard", "verified_by": "reading|execution|test"}
 `edge` is true when the probe exercises an error or boundary path (empty, missing, oversized,
 malformed, dependency failure, timeout, null). `verified_by` says how you confirmed the reference.

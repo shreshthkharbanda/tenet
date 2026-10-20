@@ -220,3 +220,11 @@ the worker found the real cause. Fix: qualified mentions (`Class.method`, `modul
 `Type::method`) count; self-test case added. Rule for the orchestrator: before sending a gate failure
 to a worker, open two of the flagged items in the spec and confirm they are really absent. A gate
 false positive that a worker "fixes" is worse than none: it bends correct specs toward the checker.
+
+**L32. Ref notation drifted, and probe refs were never checked.** Found: LiteLLM probe sample; probers
+wrote `path:L145-230` because the prober brief and grammar line showed `path:L1-L2` while examples used
+bare numbers; lint would have rejected the `L` form in claims, and probe refs were never resolved at
+all. Fix: one notation in every doc (`path:START-END`), an `L` prefix accepted everywhere refs are
+parsed, and `score_probes.py --assign-splits` resolves every probe ref (file exists, lines in range)
+before the held-out split is frozen. The control answerer's brief is rendered inside its own
+directory, like answerer briefs inside their snapshot, so reading it does not break isolation.
