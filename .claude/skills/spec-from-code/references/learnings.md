@@ -752,3 +752,14 @@ counted, so the warning stays trustworthy; on the eleven LiteLLM stories it foun
 new figure kind, `table` (input, what happens, claims: 3 to 14 rows of plain words), renders as a
 scannable lookup in the Everyone layer and reaches the persona snapshot. The narrator brief asks
 for one wherever a rule turns on many values.
+
+**L82. The Everyone layer pointed at sections it hides, and its glossary escaped its rules.** Found:
+LiteLLM Phase 9, persona reader round 4 on router-selection: "'At a glance lists them': the chapter
+has no At a glance section". The sentence was the meaning of a Words-you'll-see row. Since L77 that
+meaning belongs to the Everyone layer, but G8 still checked it only for code. Applying the full
+Everyone rules to those rows found five more faults across four stories: undefined jargon
+("callable", "callback"), an acronym never spelled out (PTU), and the hidden-section pointer. Class:
+moving a part between layers without moving its checks, and text that refers across layers. Fix: G8
+runs every Everyone check on each row's term and meaning, and errors when Everyone text names a part
+that layer hides (At a glance, In one minute, the ledger, another lens). "flag" left the jargon list:
+readers understood it, and a tripwire that fires on plain words teaches narrators to ignore it.

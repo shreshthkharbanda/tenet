@@ -40,8 +40,10 @@ ACRONYM = re.compile(r"(?<![\w-])([A-Z]{2,6})s?(?![\w-])")
 # programming words a reader of the Everyone layer stumbles on (L78): each needs a plain row in Words you'll see
 JARGON = ("async", "asynchronous", "sync", "synchronous", "pipeline", "callback", "hook", "wildcard", "callable", "picker",
           "plugin", "middleware", "coroutine", "singleton", "schema", "enum", "boolean", "regex", "mutex", "payload",
-          "namespace", "serialize", "serialized", "deserialize", "runtime", "thread", "lock", "semaphore", "flag")
+          "namespace", "serialize", "serialized", "deserialize", "runtime", "thread", "semaphore")
 QUOTE = re.compile(r'"([^"\n]{20,})"')
+# parts of a story the Everyone layer hides: its text must not send the reader there (L82)
+ENGINEER_ONLY = re.compile(r"\b(?:at a glance|in one minute|the ledger|expert (?:view|layer|lens)|engineer (?:view|layer|lens))\b", re.I)
 UNIVERSAL = {"API", "APIs", "HTTP", "HTTPS", "URL", "ID", "IDs", "AI", "CPU", "UTC", "OK", "JSON", "CEO", "CTO", "IP", "US", "UK", "PDF"}
 VALUE = re.compile(r"^(?:-?\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?|minutes?|min|h|hours?|%|x|KB|MB)?|\"[^\"]*\"|'[^']*'|\d{3}(?:\s+[A-Z][\w ]+)?)$")
 PASSIVE = re.compile(r"\b(?:is|are|was|were|be|been|being)\s+(?:\w+ed|built|chosen|done|given|held|kept|known|left|made|"
@@ -455,6 +457,10 @@ class Checker:
             ids_ = identifiers(md)
             if ids_:
                 errors.append(f"{what} uses the code name {ids_[0]}; say it in plain words (the Everyone layer has no code): {where(md)}")
+            hidden = ENGINEER_ONLY.search(strip_chips(md))
+            if hidden:
+                errors.append(f"{what} points the reader at {hidden.group(0)!r}, which the Everyone layer does not show; "
+                              f"say it here instead: {where(md)}")
             for s in sentences(md):
                 n = words(s)
                 total_sent += 1
@@ -535,6 +541,8 @@ class Checker:
                     errors.append(f"{what} must be plain words: {where(part)}")
             if len(r["means"].split()) > 30:
                 errors.append(f"Words you'll see meaning over 30 words: {where(r['means'])}")
+            # term and meaning are Everyone (L77): the same rules as the rest of that layer
+            everyone(r["term"] + ": " + r["means"], f"Words you'll see row '{r['term']}'")
             if not r["names"]:
                 errors.append(f"Words you'll see row '{r['term']}' names no code (put the code names in backticks)")
             if not r["ids"]:

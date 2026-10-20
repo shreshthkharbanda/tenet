@@ -700,6 +700,11 @@ def main() -> int:
           rc == 0 and "- Number at the bound: the bound [BIGA-002]" in snap and rc3 == 1 and "row 'Number below the bound' cites no claim" in out3,
           out + out2 + out3)
     (sdir / "big-a.md").write_text(good_story)
+    (sdir / "big-a.md").write_text(good_story.replace("- A Big object always starts with the number one [BIGA-001].",
+                                                      "- A Big object always starts with the number one; At a glance lists the rest [BIGA-001]."))
+    rc, out = run("check_story.py", str(specs), "--module", "big-a", "--repo", str(repo))
+    check("L82 the Everyone layer may not send its reader to a section it hides", rc == 1 and "does not show" in out, out)
+    (sdir / "big-a.md").write_text(good_story)
     check("L81 an announced count that its list does not match is flagged; clauses and 'both' items are not counted",
           _ac("It checks four places: the request, the deployment and the router [BIGA-001].") == (4, 3)
           and _ac("Three places: the request, the deployment and the router.") is None
