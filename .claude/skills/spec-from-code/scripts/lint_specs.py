@@ -17,7 +17,8 @@ from pathlib import Path
 
 import subprocess
 
-from _common import XREF_RE, eprint, git_head, parse_claims, parse_frontmatter, read_json, ref_path, resolve_ref, write_json
+from _common import (XREF_RE, eprint, git_head, parse_claims, parse_frontmatter, read_json, ref_path, ref_span, resolve_ref,
+                     write_json)
 
 REQUIRED_SECTIONS = {
     "module": ["Purpose", "Scope and boundaries", "Public surface", "Behaviors", "Validation rules",
@@ -39,6 +40,11 @@ SECRET_PATTERNS = [
     (re.compile(r"eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}"), "JWT literal"),
 ]
 TOOL_MENTION = re.compile(r"\b(Claude|ChatGPT|GPT-?\d|Copilot|Cursor|Gemini|Codex|subagent|as an AI)\b")
+# Stock phrases that state no observable outcome. Each had 0 hits in 2,460 confirmed LiteLLM claims, and
+# a hollowed spec of "handles this case appropriately" claims passed lint (red team E1).
+UNFALSIFIABLE = re.compile(r"(?i)\b(appropriately|as appropriate|as needed|as expected|properly|correctly|gracefully|"
+                           r"handles errors|expected (?:result|behaviou?r)|various|accordingly|and so on|etc)\b")
+WIDE_REF = 120  # lines; matches find_overlaps --max-span and coverage --max-ref-span
 
 
 def changed_since(repo: Path, commit: str, cache: dict):
@@ -121,8 +127,10 @@ def main() -> int:
             cited = {ref_path(r) for c in parse_claims(body) for r in c["refs"]}
             scope_globs = fm.get("scope") or []
             if changed is None:
-                msg = f"{relp}: written at commit {str(commit)[:10]}, HEAD is {head[:10]}, and git cannot diff them"
-                (errors if args.strict_fresh else warnings).append(msg)
+                # An unknown commit makes freshness unverifiable, so it is an error, not one warning among
+                # hundreds (red team E22). Staleness of a known commit stays a warning unless --strict-fresh.
+                errors.append(f"{relp}: written at commit {str(commit)[:10]}, HEAD is {head[:10]}, and git cannot diff "
+                              f"them (unknown or unfetched commit); stamp the commit the spec was written against")
             else:
                 from _common import glob_to_regex, parse_scope_entry
                 rx = [glob_to_regex(parse_scope_entry(g)[0]) for g in scope_globs if isinstance(g, str)]
@@ -144,6 +152,7 @@ def main() -> int:
         claims = parse_claims(body)
         claims_by_file[relp] = claims
         counts = {"confirmed": 0, "inferred": 0, "gap": 0}
+        seen_text: dict[str, str] = {}
         for c in claims:
             cid = c["id"]
             counts[c["confidence"]] += 1
@@ -157,9 +166,30 @@ def main() -> int:
             if c["confidence"] == "gap" and "?" not in c["text"] and "unknown" not in c["text"].lower() and "cannot" not in c["text"].lower():
                 warnings.append(f"{relp}:{c['line']}: {cid} is a gap; phrase it as the open question it leaves")
             for r in c["refs"]:
-                ok, why = resolve_ref(repo, r)
+                if "::" in r and (repo / ref_path(r)).is_file():
+                    # a symbol ref must name a definition or assignment (`Class.method` looks inside the class);
+                    # a word that merely occurs in the file, like `None`, is not a location (red team E3)
+                    ok = ref_span(repo, r) is not None
+                    why = f"names no definition or assignment: not found in {ref_path(r)} as one; cite the lines"
+                else:
+                    ok, why = resolve_ref(repo, r)
                 if not ok:
                     errors.append(f"{relp}:{c['line']}: {cid} ref `{r}`: {why}")
+                elif c["confidence"] == "confirmed":
+                    sp = ref_span(repo, r)
+                    if sp and sp[2] - sp[1] > WIDE_REF:
+                        warnings.append(f"{relp}:{c['line']}: {cid} ref `{r}` spans {sp[2] - sp[1] + 1} lines; cite the "
+                                        f"lines that decide the behavior (wide refs do not count toward line coverage and "
+                                        f"pair for reconciliation only through a shared identifier)")
+            norm = re.sub(r"\W+", " ", c["text"].lower()).strip()
+            if norm in seen_text:
+                errors.append(f"{relp}:{c['line']}: {cid} repeats the text of {seen_text[norm]}; one claim per fact")
+            seen_text.setdefault(norm, cid)
+            if c["confidence"] == "confirmed":
+                hit = UNFALSIFIABLE.search(re.sub(r"`[^`\n]*`", " ", c["text"]))  # quoted literals are facts, not prose
+                if hit:
+                    errors.append(f"{relp}:{c['line']}: {cid} says {hit.group(0)!r}, which no test can falsify; state the "
+                                  f"observable outcome (value, message, state change) instead")
             if len(c["text"]) < 20:
                 warnings.append(f"{relp}:{c['line']}: {cid} is very short; one claim = one trigger + one observable outcome")
             if TOOL_MENTION.search(c["text"]):

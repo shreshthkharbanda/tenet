@@ -12,18 +12,20 @@ Contents: 1 Gates · 2 Probe loop · 3 Rebuild loop · 4 Orchestrator spot check
 | Gate | Script | Passes when | On failure |
 |---|---|---|---|
 | G1 shards | `check_shards.py` | every in-scope source file is in exactly one module; no module > 6000 LOC error-level | re-run Surveyor with the unassigned/multiply-assigned list |
-| G2 lint | `lint_specs.py` | zero errors: grammar, unique IDs, refs resolve, sections present, no secrets, no tool mentions, cross-refs resolve | re-run the owning Extractor/Reviser with the error lines |
-| G3 coverage | `coverage.py` | per module: >= 95% in-scope files cited, >= 85% public symbols mentioned | re-run Extractor in revise mode with the uncited list |
+| G2 lint | `lint_specs.py` | zero errors: grammar, unique IDs, refs resolve, `::Symbol` refs name a definition or assignment, sections present, no secrets, no tool mentions, cross-refs resolve, no claim text repeated within a file, no unfalsifiable stock phrase ("appropriately", "properly", "as needed"...) in a `{confirmed}` claim, commit stamp known to git. Warns on `{confirmed}` refs wider than 120 lines | re-run the owning Extractor/Reviser with the error lines |
+| G3 coverage | `coverage.py` | per module, from its own claims only (cross-cutting refs never count): >= 95% in-scope files cited, >= 85% public symbols mentioned in visible text (not HTML comments or fences), >= 60% of non-blank owned lines inside a confirmed/inferred ref of <= 120 lines (`--min-lines`; LiteLLM 78-91%), <= 15% of checkable claims unanchored, i.e. none of their backticked tokens in the cited lines +/-5 (`--max-unanchored`; LiteLLM 3-11%) | re-run Extractor in revise mode with the uncited files, uncited line stretches, and unanchored claim IDs from `traceability.md` |
 | G4 probes | `score_probes.py --round N` | per module held-out fidelity >= 0.90, zero held-out contradictions and >= 8 valid held-out probes (validated); >= 0.75 provisional. Errors: agree on an empty answer; 3+ agrees sharing none of the reference's literals; 70%+ answers copying reference phrasing absent from the spec; > 25% invalid in either split | Reviser round, see section 2; re-judge or re-answer per the error |
 | G5 reports | `verify_reports.py --transcripts DIR` | every finished dispatch has its report; outputs exist and postdate the launch; role rules hold on the transcript (writers never touch `$EVAL` or snapshots; probers and judges read no spec text; answerers and the control stay in their snapshot; rebuilders stay in their copy and read no tests) | re-run that worker; a writer that touched `$EVAL` contaminates its module's held-out score |
+| G6 ownership | `check_ownership.py` | <= 20% of a cross-cutting file's claims restate module-owned lines, <= 10% of a module's claims are about another module's lines. A pointer `[ID]` exempts a claim only when it names a claim of a module owning the cited lines that is related to it (overlapping lines of the same file, or a shared backticked literal); `::Symbol` and bare-path refs resolve to their owners | send the writer the flagged IDs; replace restatements with related pointers |
 
 `gate.py specs --repo . [--round N] [--transcripts DIR]` runs whatever has inputs and prints one
 table; `_meta/status.json` holds the result. A gate whose inputs should exist never skips silently:
 `--round` without probes is a FAIL, and G5 runs whenever anything was dispatched. Run it after every
 phase. Trust the table over any worker's summary.
 
-Freshness: every spec file carries `commit:`. Lint warns when it differs from HEAD; `--strict-fresh`
-makes it an error. A spec for moved code is not a spec.
+Freshness: every spec file carries `commit:`. Lint warns when a file it cites changed since that commit;
+`--strict-fresh` makes it an error. A commit git cannot diff against HEAD (unknown, mistyped, or not
+fetched) is always an error: freshness cannot be checked at all. A spec for moved code is not a spec.
 
 ## 2. Probe loop (Fidelity Probes, adapted)
 

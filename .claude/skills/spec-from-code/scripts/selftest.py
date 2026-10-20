@@ -444,6 +444,92 @@ def main() -> int:
     sc = json.loads((tmp / "s.json").read_text())
     check("L09 rebuild score ignores baseline failures", sc["score"] == 0.5 and sc["baseline_passing"] == 2, out)
 
+    # L59 (round-1 red team): gates check what refs point at, not only that they resolve
+    a_lo, a_hi = rs[0]["start"], rs[0]["end"]
+    big_lines = (repo / "pkg" / "big.py").read_text().splitlines()
+    k = next(i for i in range(10, 60) if a_lo <= big_lines.index(f"    def m{i}(self, v):") + 1 <= a_hi - 3)
+    dk = big_lines.index(f"    def m{k}(self, v):") + 1
+    mk = f"`pkg/big.py:{dk}-{dk + 3}`"
+    anchored = f"- [BIGA-002] {{confirmed}} {mk} `m{k}` returns `v - {k}` when v exceeds `{k}`, else `{k}`.\n"
+    chunks = "".join(f"- [BIGA-{10 + n:03d}] {{confirmed}} `pkg/big.py:{s}-{min(s + 99, a_hi)}` Chunk {n}: each method "
+                     f"`mN` here returns v minus N when v exceeds N, else N (part {n}).\n"
+                     for n, s in enumerate(range(a_lo, a_hi + 1, 100)))
+    head_a = "- [BIGA-001] {confirmed} `pkg/big.py:1-3` `Big` stores `1` in `x` at construction.\n"
+    cov_args = ("coverage.py", str(specs), "--repo", str(repo), "--min-file", "0", "--min-symbol", "0")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks))
+    rc, out = run(*cov_args)
+    ca = json.loads((meta / "coverage.json").read_text())["modules"]["big-a"]
+    check("L59 full range: line coverage passes", ca["line_rate"] >= 0.95 and ca["ok"], json.dumps(ca)[:500])
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored))
+    rc, out = run(*cov_args)
+    ca = json.loads((meta / "coverage.json").read_text())["modules"]["big-a"]
+    check("L59 truncated spec fails line coverage", not ca["ok"] and ca["line_rate"] < 0.6 and "lines" in out
+          and ca["uncovered_stretches"], out)
+    stray = f"- [BIGA-003] {{confirmed}} `pkg/big.py:1-2` `m{k}` returns `v - {k}` when v exceeds `{k}`.\n"
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks + stray))
+    rc, out = run(*cov_args)
+    ca = json.loads((meta / "coverage.json").read_text())["modules"]["big-a"]
+    check("L59 a ref pointing away from the claim's tokens is unanchored; rate gates the module",
+          ca["unanchored"] == ["BIGA-003"] and not ca["ok"] and "unanchored" in out, json.dumps(ca)[:500])
+    # cross-cutting refs no longer satisfy a module's file coverage; symbols in HTML comments do not count
+    only_big = "".join(f"- [BIGB-{n + 1:03d}] {{confirmed}} `pkg/big.py:{r['start']}-{r['end']}` `Big` methods here return "
+                       f"v minus i when v exceeds i (range {n}).\n" for n, r in enumerate(rs[1:]))
+    (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", only_big + "<!-- add -->\n"))
+    xc_cfg = ("---\nkind: config\nprefix: CFG\ncommit: " + head + "\nstatus: draft\n---\n# Config\n\n## Settings\n"
+              "- [CFG-001] {confirmed} `pkg/small.py:1-2` `add` takes two arguments.\n\n## Precedence\nNone.\n")
+    (specs / "03-config.md").write_text(xc_cfg)
+    run(*cov_args)
+    cb = json.loads((meta / "coverage.json").read_text())["modules"]["big-b"]
+    check("L59 cross-cutting refs do not cover a module's file", "pkg/small.py" in cb["uncovered_files"], json.dumps(cb)[:400])
+    check("L59 a symbol named only in an HTML comment is unmentioned", "pkg/small.py::add" in cb["unmentioned_symbols"],
+          json.dumps(cb["unmentioned_symbols"]))
+    # G2: duplicate text, unfalsifiable phrases, symbol refs naming no definition, wide refs, unknown commit
+    lint_bad = (head_a + anchored + chunks
+                + f"- [BIGA-004] {{confirmed}} {mk} `m{k}` returns `v - {k}` when v exceeds `{k}`, else `{k}`.\n"
+                + "- [BIGA-005] {confirmed} `pkg/big.py:1-3` Handles this case appropriately and returns the result.\n"
+                + "- [BIGA-006] {confirmed} `pkg/big.py::return` `Big` keeps its state.\n"
+                + f"- [BIGA-007] {{confirmed}} `pkg/big.py::Big.m{k}` `m{k}` compares `v` with `{k}` first.\n"
+                + f"- [BIGA-008] {{confirmed}} `pkg/big.py:1-{a_hi}` `Big` defines the methods of this range.\n")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", lint_bad))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo), "--only", "modules/big-a.md")
+    check("L59 G2 catches repeated claim text", rc == 1 and "BIGA-004 repeats the text of BIGA-002" in out, out)
+    check("L59 G2 catches an unfalsifiable stock phrase", "BIGA-005 says 'appropriately'" in out, out)
+    check("L59 G2 catches a symbol ref naming no definition, accepts Class.method",
+          "BIGA-006 ref `pkg/big.py::return`: names no definition" in out and "BIGA-007" not in out, out)
+    check("L59 G2 warns on a wide confirmed ref", f"BIGA-008 ref `pkg/big.py:1-{a_hi}` spans" in out, out)
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored).replace(
+        f"commit: {head}", "commit: 0123456789abcdef0123456789abcdef01234567"))
+    rc, out = run("lint_specs.py", str(specs), "--repo", str(repo), "--only", "modules/big-a.md")
+    check("L59 an unknown commit stamp is an error, not a warning", rc == 1 and "ERROR" in out and "cannot diff" in out, out)
+    # reconcile worklist: same-file pairs, and wide refs that share a literal
+    same = (head_a + anchored + chunks
+            + f"- [BIGA-004] {{confirmed}} {mk} `m{k}` returns `v - {k + 1}` when v exceeds `{k + 1}`.\n"
+            + f"- [BIGA-008] {{confirmed}} `pkg/big.py:1-{a_hi}` Across the class, `v - {k}` is what `m{k}` returns.\n"
+            + f"- [BIGA-009] {{confirmed}} `pkg/big.py:1-{a_hi}` `Big` has no class attributes besides `x`.\n")
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", same))
+    rc, out = run("find_overlaps.py", str(specs), "--repo", str(repo))
+    ov = [json.loads(l) for l in (meta / "overlaps.jsonl").read_text().splitlines() if l.strip()]
+    ids = {frozenset((r["a"]["id"], r["b"]["id"])): r for r in ov}
+    check("L59 same-file claims on the same lines are paired", frozenset(("BIGA-002", "BIGA-004")) in ids, out)
+    check("L59 a wide ref pairs only with a claim sharing a literal",
+          frozenset(("BIGA-002", "BIGA-008")) in ids and frozenset(("BIGA-002", "BIGA-009")) not in ids, out)
+    # G6: a pointer must name a related claim of the owner; a bare path into a split file is owned
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", head_a + anchored + chunks))
+    own_xc = ("---\nkind: config\nprefix: CFG\ncommit: " + head + "\nstatus: draft\n---\n# Config\n\n## Settings\n"
+              f"- [CFG-001] {{confirmed}} {mk} `m{k}` returns `v - {k}` above `{k}`.\n"
+              f"- [CFG-002] {{confirmed}} {mk} `m{k}` returns `v - {k}` above `{k}` (context: [BIGA-001]).\n"
+              f"- [CFG-003] {{confirmed}} {mk} `m{k}` is specified in [BIGA-002].\n"
+              "- [CFG-004] {confirmed} `pkg/big.py` `Big` methods return v minus i when v exceeds i.\n"
+              "- [CFG-005] {confirmed} `pkg/big.py:1-3` `Big` starts with `1` in `x`; see [BIGA-001].\n\n## Precedence\nNone.\n")
+    (specs / "03-config.md").write_text(own_xc)
+    rc, out = run("check_ownership.py", str(specs), "--repo", str(repo), "--max-restated", "0.9")
+    own_r = json.loads((meta / "ownership.json").read_text())["03-config.md"]
+    check("L59 G6 counts only related pointers; bare refs into a split file are owned",
+          own_r["ids"] == ["CFG-001", "CFG-002", "CFG-004"] and own_r["pointers_unrelated"] == 1, json.dumps(own_r))
+    (specs / "03-config.md").unlink()
+    (specs / "modules" / "big-a.md").write_text(spec("BIGA", "big-a", good_a))
+    (specs / "modules" / "big-b.md").write_text(spec("BIGB", "big-b", good_b))
+
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n{len(FAILS)} failure(s)")
     for f in FAILS:

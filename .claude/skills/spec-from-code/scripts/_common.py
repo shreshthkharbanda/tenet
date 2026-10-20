@@ -399,3 +399,148 @@ UNIVERSAL_RE = re.compile(
 
 def is_universal(text: str) -> bool:
     return bool(UNIVERSAL_RE.search(text or ""))
+
+
+# ---------------------------------------------------------------------------
+# Ref geometry: which lines a ref actually points at. Shared by coverage (line rate, anchor check),
+# lint (symbol refs must name a definition), check_ownership (owners of symbol refs into split
+# files) and find_overlaps. The round-1 red team showed that "the ref resolves" says nothing about
+# whether it points at the behavior: `::None`, a directory, or lines 1-2 all resolved (L57).
+LINE_REF_RE = re.compile(r"^(.+?):L?(\d+)(?:-L?(\d+))?$")
+DOC_SUFFIXES = (".md", ".rst", ".txt", ".adoc")
+_LINES_CACHE: dict[str, list[str]] = {}
+
+_DEF_MODS = (r"(?:(?:export|default|pub(?:\([^)]*\))?|public|private|protected|internal|static|final|abstract|sealed|"
+             r"async|override|virtual|synchronized|open|data|suspend|inline|unsafe|extern)\s+)*")
+_DEF_KW = (r"(?:def|class|function|func|fn|fun|interface|struct|enum|trait|type|module|object|record|const|let|var|"
+           r"val|defmodule|defp|macro|impl)")
+_METHOD_MODS = (r"(?:(?:public|private|protected|internal|static|final|abstract|synchronized|override|virtual|async|"
+                r"sealed|default)\s+)+")
+
+
+def repo_lines(repo: Path, path: str) -> list[str]:
+    key = str(repo / path)
+    if key not in _LINES_CACHE:
+        try:
+            _LINES_CACHE[key] = (repo / path).read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            _LINES_CACHE[key] = []
+    return _LINES_CACHE[key]
+
+
+def _def_line(lines: list[str], name: str, lo: int = 0, hi: int | None = None) -> int | None:
+    """0-based line of the definition (or assignment) of `name` within lines[lo:hi], by priority:
+    a definition keyword, a Go method, a modifier-led method declaration, an assignment, a field."""
+    hi = len(lines) if hi is None else hi
+    if name in ("None", "True", "False", "null", "nil", "undefined", "self", "this"):
+        return None
+    n = re.escape(name)
+    typ = r"[\w.]+(?:\[[^\]\n]*\]|<[^>\n]*>)?"
+    rxs = [re.compile(r"^\s*" + _DEF_MODS + _DEF_KW + r"\s+\*?\s*" + n + r"(?![\w$])"),
+           re.compile(r"^func\s+\([^)]*\)\s*" + n + r"\s*[(\[]"),
+           re.compile(r"^\s*" + _METHOD_MODS + r"[\w<>\[\],.?]+(?:\s+[\w<>\[\],.?]+)*\s+" + n + r"\s*\("),
+           re.compile(r"^\s*(?:self\.|this\.|@)?" + n + r"\s*(?::[^=\n]+)?=(?!=)"),
+           # a quoted mapping key, or a field declared with a bare type (`name: int`, `name?: string;`)
+           re.compile(r"^\s*['\"]" + n + r"['\"]\s*:"),
+           re.compile(r"^\s*" + n + r"\??\s*:\s*" + typ + r"(?:\s*\|\s*" + typ + r")*\s*[;,]?\s*(?:#.*|//.*)?$")]
+    for rx in rxs:
+        for i in range(lo, min(hi, len(lines))):
+            if rx.match(lines[i]):
+                return i
+    return None
+
+
+def _block_end(lines: list[str], i: int) -> int:
+    """Last 0-based line of the block opened at line i, read from indentation: deeper lines belong to it,
+    and a closer (`)`, `]`, `}`) at the opener's indent ends it."""
+    ind = len(lines[i]) - len(lines[i].lstrip())
+    end, k = i, i + 1
+    while k < len(lines):
+        s = lines[k]
+        if not s.strip():
+            k += 1
+            continue
+        ki = len(s) - len(s.lstrip())
+        if ki > ind or (ki == ind and s.lstrip()[:1] in ")]}"):
+            end = k
+            k += 1
+            continue
+        break
+    return end
+
+
+def symbol_span(repo: Path, path: str, sym: str) -> tuple[int, int] | None:
+    """1-based (start, end) of the definition `sym` names in path (`Class.method` is looked up inside
+    the class first), or None when it names no definition or assignment."""
+    lines = repo_lines(repo, path)
+    parts = [p for p in re.split(r"\.|::", sym.strip()) if p]
+    if not lines or not parts:
+        return None
+    lo, hi, found = 0, len(lines), None
+    for p in parts:
+        i = _def_line(lines, p, lo, hi)
+        if i is None:
+            found = None
+            break
+        found = (i, _block_end(lines, i))
+        lo, hi = found[0], found[1] + 1
+    if found is None and len(parts) > 1:
+        i = _def_line(lines, parts[-1])
+        found = (i, _block_end(lines, i)) if i is not None else None
+    return (found[0] + 1, found[1] + 1) if found else None
+
+
+def ref_span(repo: Path, ref: str) -> tuple[str, int, int] | None:
+    """(path, start, end) a line or symbol ref points at; None for a bare path, a directory, or a
+    symbol that names no definition."""
+    ref = ref.strip()
+    if "::" in ref:
+        path, sym = ref.split("::", 1)
+        sp = symbol_span(repo, path, sym)
+        return (path, sp[0], sp[1]) if sp else None
+    m = LINE_REF_RE.match(ref)
+    if m:
+        a = int(m.group(2))
+        return m.group(1), a, int(m.group(3) or a)
+    return None
+
+
+def visible_text(body: str) -> str:
+    """Spec text a reader sees: HTML comments and fenced blocks removed."""
+    body = re.sub(r"<!--.*?-->", " ", body, flags=re.S)
+    return re.sub(r"(?ms)^\s*```.*?^\s*```[^\n]*$", " ", body)
+
+
+def anchor_tokens(text: str) -> set[str]:
+    """Tokens a claim's cited lines should contain: identifier parts of 4+ characters and numbers of 2+
+    digits from its backticked spans."""
+    out: set[str] = set()
+    for t in re.findall(r"`([^`\n]{2,80})`", text):
+        out |= {p for p in re.split(r"[^\w]+", t) if len(p) >= 4 and not p.isdigit()}
+        out |= set(re.findall(r"\b\d{2,}\b", t))
+    return out
+
+
+def anchor_status(repo: Path, refs: list[str], text: str, pad: int = 5) -> bool | None:
+    """True when some backticked token of the claim occurs in the lines its refs point at (+/- pad);
+    False when none does; None when there is nothing to check (no refs or no tokens). A directory, a
+    doc file, a symbol naming no definition, and a bare path to a file over 200 lines give no lines."""
+    toks = anchor_tokens(text)
+    if not toks or not refs:
+        return None
+    window: list[str] = []
+    for r in refs:
+        rp = ref_path(r)
+        if rp.endswith(DOC_SUFFIXES) or "/docs/" in "/" + rp:
+            continue
+        sp = ref_span(repo, r)
+        if sp is None:
+            ls = repo_lines(repo, rp) if "::" not in r and (repo / rp).is_file() else []
+            if 0 < len(ls) <= 200:
+                window += ls
+            continue
+        path, a, b = sp
+        ls = repo_lines(repo, path)
+        window += ls[max(0, a - 1 - pad):min(len(ls), b + pad)]
+    w = "\n".join(window)
+    return any(re.search(r"(?<!\w)" + re.escape(x) + r"(?!\w)", w) or (len(x) >= 6 and x in w) for x in toks)

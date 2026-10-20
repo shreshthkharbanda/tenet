@@ -454,3 +454,17 @@ records applied decision files, which are never replayed, and a changed ledgered
 dry runs write nothing; build_revise dedupes on (source, id). Same round: rendering message templates
 by running the code exposed wrong claims in 4 modules (the precision ladder is a falsification tool,
 not just formatting).
+
+**L59. Gates counted refs and pointers without checking what they point at.** Found: LiteLLM red team,
+round 1 (exploits 4, 5, 8, 9, 11, 13): a module cut to 16 bare-path claims, or truncated after its
+first third, passed lint and coverage; refs to `::None`, a directory or lines 1-2 passed; a
+contradiction hid from reconciliation behind a ref wider than 120 lines or inside one file; G6 took
+any owner-module pointer, related or not. Fix: G3 adds line coverage from the module's own refs of
+<= 120 lines (>= 60%; real modules 78-93%, truncated 39%, hollow 0%), an anchor check (<= 15% of
+claims whose backticked tokens are absent from the cited lines; real 3-11%), symbols matched in
+visible text only, and cross-cutting refs no longer count toward a module; lint errors on repeated
+claim text, unfalsifiable stock phrases in confirmed claims (0 real hits before adding each), `::Symbol`
+refs that name no definition, and an unknown commit stamp; find_overlaps pairs same-file and
+wide-ref claims; a G6 pointer must name a related claim (overlapping lines or a shared literal;
+honest pointers kept 204/205). Every threshold was set from the false-positive rate measured on the
+real specs before it was turned on.

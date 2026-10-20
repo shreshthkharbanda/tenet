@@ -128,7 +128,10 @@ Send every gate failure back to the worker that wrote the file: SendMessage to i
 the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if the resume fails.
 - G2 lint errors: send the owning extractor the error lines. Lint is strict on
   purpose; an unresolvable ref or a duplicate ID is how specs rot.
-- G3 coverage below threshold: send that extractor the uncited files and unmentioned symbols. "Trivial" files must be named as such in Scope and boundaries, not ignored.
+- G3 coverage below threshold: send that extractor the uncited files, unmentioned symbols, uncited line
+  stretches (line coverage under 60% means part of the range was never specified, the usual sign of a
+  worker that ran out of context), and unanchored claim IDs (refs that point away from what the claim
+  says), all listed in `_meta/traceability.md`. "Trivial" files must be named as such in Scope and boundaries, not ignored.
 - G5 discrepancies: a missing report for a dispatched worker, outputs that do not exist or predate
   the launch, counts that do not match, or an access the role forbids (seen in the transcript). Send
   the worker the discrepancy; its output is untrusted until the report verifies. A writer that
@@ -147,13 +150,16 @@ operations when the Surveyor says the scope has none). These files index the mod
 and add only facts no module owns. Then run
 `python3 $SKILL_DIR/scripts/check_ownership.py $SPECS --repo $REPO` (G6): a cross-cutting file in which
 more than 20% of claims restate module-owned lines without a pointer, or a module spec in which more
-than 10% of claims are about another module's lines, goes back to its writer. One fact, one owner is
-what keeps revisions from leaving stale copies behind.
+than 10% of claims are about another module's lines, goes back to its writer. A pointer counts only
+when the claim it names is about the same thing (overlapping lines or a shared backticked literal):
+tacking any owner ID onto a restatement does not. One fact, one owner is what keeps revisions from
+leaving stale copies behind.
 
 ## Phase 3: reconcile (pair judges in parallel, a script applies edits, then 1 Reconciler; G2)
 
-First run `python3 $SKILL_DIR/scripts/find_overlaps.py $SPECS`: it lists claim pairs from different
-files that cite overlapping lines, near-duplicates with differing values first. That worklist is how
+First run `python3 $SKILL_DIR/scripts/find_overlaps.py $SPECS`: it lists claim pairs that cite
+overlapping lines, from different files or the same one (a corrected claim added beside the old one),
+plus wide refs that share an identifier, near-duplicates with differing values first. That worklist is how
 the Reconciler finds contradictions; reading thousands of claims for them does not work. Then:
 1. Render pair judges (`--role pairjudge`, one per 60 rows; `--set SLICE_SIZE=N` to change) and
    dispatch them in parallel. They only write decisions; they never edit specs.
