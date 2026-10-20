@@ -482,3 +482,8 @@ dfn.term:hover::after, dfn.term:focus-visible::after { content: attr(data-means)
 .sfig.lookup table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
 .sfig.lookup th { text-align: left; font: 700 0.92rem/1.4 var(--display); padding: 8px 14px 8px 0; width: 38%; vertical-align: top; border-bottom: 1px solid var(--rule-2); }
 .sfig.lookup td { padding: 8px 0; vertical-align: top; border-bottom: 1px solid var(--rule-2); }
+
+/* reading time follows the lens: the Everyone layer, or the whole story */
+.m-e { display: none; }
+:root[data-lens="everyone"] .m-e { display: inline; }
+:root[data-lens="everyone"] .m-x { display: none; }

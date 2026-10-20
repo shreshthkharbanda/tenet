@@ -168,7 +168,7 @@
     return `<a class="chap" href="#${f.slug}"><span class="n">${n}</span>
       <div><h3>${esc(shortTitle(f))}</h3><p>${f.story && f.story.headline ? f.story.headline : f.lede || ""}</p></div>
       <div class="stats">${f.kind === "module" ? `<div style="display:flex;gap:8px;align-items:center">${meter(f)} ${pill(f.status)}</div>` : ""}
-        <div class="kv">${f.story ? `<span class="brief-badge" title="This chapter opens with a short illustrated story">In brief · <b>${Math.max(1, Math.round(f.story.words / 238))}</b> min</span>` : ""}<span><b>${f.claims.confirmed + f.claims.inferred + f.claims.gap}</b> claims</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}<span><b>${readingMinutes(f)}</b> min</span></div></div></a>`;
+        <div class="kv">${f.story ? `<span class="brief-badge" title="This chapter opens with a short illustrated story">In brief · <b>${Math.max(1, Math.round((f.story.everyone_words || f.story.words) / 238))}</b> min</span>` : ""}<span><b>${f.claims.confirmed + f.claims.inferred + f.claims.gap}</b> claims</span>${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}<span><b>${readingMinutes(f)}</b> min</span></div></div></a>`;
   }
   function defectCard(d) {
     const f = fileMeta(d.file);
@@ -539,7 +539,9 @@
     const sec = st.sections.map((x, k) => `<section class="st-sec" id="story-${k}"><h3>${x.title}</h3>${x.blocks.map((b) =>
       b.t === "p" ? `<p class="${b.lead ? "lead " : ""}${lay(b)}">${b.h}</p>` : b.t === "ul" ? `<ul class="${lay(b)}">${b.items.map((i) => `<li>${i.h}</li>`).join("")}</ul>`
         : b.t === "path" ? pathBlock(b) : figureShell(b)).join("")}</section>`).join("");
-    const mins = Math.max(1, Math.round((st.words_n || st.words || 0) / 238));
+    // reading time for what the chosen lens shows: the Everyone layer, or the whole story
+    const m = (n) => Math.max(1, Math.round((n || 0) / 238));
+    const mins = st.everyone_words ? `<span class="m-e">${m(st.everyone_words)}</span><span class="m-x">${m(st.all_words)}</span>` : m(st.words_n || st.words);
     return `<section class="story" aria-label="Chapter in brief">
       <p class="label">${f ? "The chapter in brief" : "Start here"} · ${mins} min</p>
       <h2 class="headline">${st.headline}</h2>
@@ -845,7 +847,7 @@
             ${meter(f)}
             ${f.evidence ? `<span class="kv" title="Share of this chapter's confirmed behavior claims that a script ran against the real code and confirmed"><b>${fmtPct(f.evidence)}</b> run against the code</span>` : ""}
             ${glyphCounts(f.claims)}
-            <span class="kv">${f.story ? `<span><b>${Math.max(1, Math.round(f.story.words / 238))}</b> min story</span><span><b>${readingMinutes(f)}</b> min ledger</span>` : `<span><b>${readingMinutes(f)}</b> min read</span>`}${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
+            <span class="kv">${f.story ? `<span><b>${Math.max(1, Math.round((f.story.everyone_words || f.story.words) / 238))}</b> min story</span><span><b>${readingMinutes(f)}</b> min ledger</span>` : `<span><b>${readingMinutes(f)}</b> min read</span>`}${f.defects ? `<span><b>${f.defects}</b> suspected defects</span>` : ""}</span>
           </div>
           ${uses.length ? `<div class="neighbors L2"><span>Cites</span>${uses.map((l) => `<a href="#${l.to}" title="${l.n} citations">${esc(nameOf(l.to))}</a>`).join("")}</div>` : ""}
           ${usedBy.length ? `<div class="neighbors L2"><span>Cited by</span>${usedBy.map((l) => `<a href="#${l.from}" title="${l.n} citations">${esc(nameOf(l.from))}</a>`).join("")}</div>` : ""}

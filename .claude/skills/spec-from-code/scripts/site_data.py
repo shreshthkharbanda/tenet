@@ -173,7 +173,7 @@ def parse_file(text: str) -> tuple[dict, list[dict], dict]:
     return fm, [s for s in sections if s["blocks"] or s["level"] > 1 or s["title"]], claims
 
 
-def render_story(st: dict) -> dict:
+def render_story(st: dict, stats: dict | None = None) -> dict:
     """A checked story with its markdown rendered to escaped HTML (chips become claim links)."""
     def fig(f):
         return {"kind": f["kind"], "id": f["id"], "title": html.escape(f["title"]),
@@ -208,6 +208,7 @@ def render_story(st: dict) -> dict:
         "sections": [{"title": inline(sec["title"]), "plain": plain(sec["title"]), "blocks": [block(b) for b in sec["blocks"]]}
                      for sec in st["sections"]],
         "watch": [inline(x) for x in st["watch"]], "words_n": st["words"],
+        "everyone_words": (stats or {}).get("everyone_words"), "all_words": (stats or {}).get("all_words"),
     }
 
 
@@ -324,8 +325,9 @@ def main() -> int:
                 eprint(f"WARN: {mid}: story left out, G8 has {len(r['errors'])} errors (first: {r['errors'][0]})")
                 book["files"][-1]["story_errors"] = len(r["errors"])
             else:
-                story = render_story(r["story"])
-                book["files"][-1]["story"] = {"words": r["stats"]["words"], "figures": r["stats"]["figures"],
+                story = render_story(r["story"], r["stats"])
+                book["files"][-1]["story"] = {"words": r["stats"]["words"], "everyone_words": r["stats"]["everyone_words"],
+                                              "all_words": r["stats"]["all_words"], "figures": r["stats"]["figures"],
                                               "headline": inline(r["story"]["headline"]),
                                               "grade": r["stats"]["plain_grade"], "code_per_100": r["stats"]["code_per_100"]}
         write_json(out / f"f-{sl}.json", {"slug": sl, "rel": rel, "title": title, "sections": sections, "claims": claims,
@@ -371,7 +373,7 @@ def main() -> int:
         if r["errors"]:
             eprint(f"WARN: the system story is left out, G8 has {len(r['errors'])} errors (first: {r['errors'][0]})")
         else:
-            book["system"] = render_story(r["story"])
+            book["system"] = render_story(r["story"], r["stats"])
             for sec in book["system"]["sections"]:
                 for b in sec["blocks"]:
                     if b["t"] == "path":

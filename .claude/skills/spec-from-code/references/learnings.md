@@ -805,3 +805,15 @@ scoped to the evidence the writer chose. Fix: the story-judge brief now asks it 
 for each sentence's key terms before labelling it supported, and to label it overstated when an
 uncited claim qualifies it. Teach-back judging stays in the loop, because it is what catches a
 reader misled by a figure's shape.
+
+**L86. The length limit counted prose, so the length moved into tables.** Found: LiteLLM Phase 9,
+after the persona-driven rewrites. G8's 700-to-1,800-word limit counts paragraphs and bullets. The
+Everyone layer also holds the meanings in Words you'll see, figure steps, path steps and the new
+lookup tables. Measured, that layer ran 1,600 to 3,400 words per chapter (7 to 14 minutes), and
+5,300 for the system story, while the site promised "In brief · 4 min". Each round of answering a
+persona reader's questions added rows and tables, not prose, so the limit never fired. Class: a
+budget measured on a proxy that writers can route around. Fix: G8 counts what each layer's reader
+sees. The Everyone layer warns over 2,400 words (about 10 minutes) for a chapter and over 4,800 for
+the system story. The site's reading time follows the lens, so "In brief" means the Everyone layer
+and the Engineer lens shows the whole story. The prose limit stays a warning: putting back a dropped
+condition adds words, and accuracy wins that trade.

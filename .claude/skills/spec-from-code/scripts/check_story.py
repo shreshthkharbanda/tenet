@@ -691,7 +691,15 @@ class Checker:
         coverage = len(subs & hit) / len(subs) if subs else 1.0
         if coverage < 0.5 and not system:
             warnings.append(f"chips reach {coverage:.0%} of the module's subsections")
-        stats = {"words": st["words"], "claims_cited": len(cited), "coverage": round(coverage, 3),
+        # reading time is what a reader of each layer sees, tables, terms and figure steps included (L86)
+        ev_words = sum(words(strip_chips(x)) for x in everyone_text)
+        all_words = words(strip_chips(parse_frontmatter(text)[1]).replace("|", " "))
+        cap = 4800 if system else 2400
+        if ev_words > cap:
+            warnings.append(f"the Everyone layer is {ev_words} words (about {round(ev_words / 238)} min; aim for at most "
+                            f"{round(cap / 238)}): move detail a non-engineer does not need to the Engineer layer")
+        stats = {"words": st["words"], "everyone_words": ev_words, "all_words": all_words,
+                 "claims_cited": len(cited), "coverage": round(coverage, 3),
                  "figures": sum(b["t"] == "fig" for s_ in st["sections"] for b in s_["blocks"]),
                  "plain_words": sum(words(p) for p in st["plain"]), "plain_grade": grade(" ".join(st["plain"])) if st["plain"] else None,
                  "code_per_100": round(100 * eng_code / eng_words, 2) if eng_words else 0.0,
