@@ -44,10 +44,16 @@ def inline(md: str) -> str:
     return "".join(out)
 
 
+CHIP = r'<a class="xr" [^>]*>[^<]*</a>'
+CHIP_RUN = re.compile(rf"{CHIP}(?:\s*(?:,|;|and|&ndash;|-)?\s*{CHIP})*")
+
+
 def _prose(s: str) -> str:
     s = html.escape(s, quote=False)
     s = RANGE.sub(lambda m: f'<a class="xr" href="#{m.group(1)}" data-id="{m.group(1)}">{m.group(1)}&ndash;{m.group(2).split("-")[1]}</a>', s)
     s = XREF_RE.sub(lambda m: f'<a class="xr" href="#{m.group(1)}" data-id="{m.group(1)}">{m.group(1)}</a>', s)
+    # a run of chips is one citation: the Everyone lens shows it as one quiet marker (L80)
+    s = CHIP_RUN.sub(lambda m: f'<span class="cites">{m.group(0)}</span>', s)
     s = BOLD.sub(r"<strong>\1</strong>", s)
     return ITAL.sub(r"<em>\1</em>", s)
 

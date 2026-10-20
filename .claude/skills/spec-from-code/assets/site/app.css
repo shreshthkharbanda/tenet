@@ -430,6 +430,12 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 .story .words dt { font: 700 0.95rem/1.4 var(--display); }
 .story .words dd { margin: 0; font-size: 0.95em; }
 .story .words .code-names { display: block; margin-top: 3px; font-size: 0.86em; color: var(--muted); }
+@media (min-width: 900px) { .story .words.many dl { grid-template-columns: 1fr 1fr; column-gap: 28px; } }
+:root[data-lens="everyone"] .story .words .code-names { display: inline; margin: 0; }
+/* a defined term carries its plain meaning on hover or focus */
+dfn.term { font-style: normal; text-decoration: underline dotted color-mix(in srgb, var(--muted) 70%, transparent); text-underline-offset: 0.2em; cursor: help; position: relative; }
+dfn.term:hover::after, dfn.term:focus-visible::after { content: attr(data-means); position: absolute; left: 0; top: calc(100% + 6px); z-index: 30; width: max-content; max-width: min(22rem, 80vw);
+  padding: 8px 10px; border-radius: 8px; background: var(--ink, #111); color: var(--bg, #fff); font: 500 0.82rem/1.4 var(--sans); box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); white-space: normal; }
 .pathsteps { list-style: none; margin: 8px 0 12px; padding: 0; border-left: 4px solid var(--c); }
 .pathsteps li { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 10px; padding: 6px 0 6px 10px; }
 .pathsteps .n { font: 800 0.95rem/1.6 var(--display); color: var(--c); font-variant-numeric: tabular-nums; }
@@ -461,3 +467,11 @@ pre.fence { background: var(--code-bg); border: 1px solid var(--rule); border-ra
 :root[data-lens="everyone"] .st-sec p.lead { margin-bottom: 14px; }
 .claim .cdetail { margin: 6px 0 0; padding-left: 1.1em; font-size: 0.95em; color: var(--ink-2); }
 .claim .cdetail li { margin: 2px 0; }
+
+/* Everyone lens: a run of claim chips is one quiet marker, the evidence one click away (L80) */
+:root[data-lens="everyone"] .cites { font-size: 0; white-space: nowrap; }
+:root[data-lens="everyone"] .cites .xr { display: none; }
+:root[data-lens="everyone"] .cites .xr:first-child { display: inline-block; width: 0.42rem; height: 0.42rem; padding: 0; margin: 0 0.1rem 0 0.22rem;
+  border: 0; border-radius: 50%; background: var(--muted); opacity: 0.4; vertical-align: 0.42rem; font-size: 0; }
+:root[data-lens="everyone"] .cites .xr:first-child:hover, :root[data-lens="everyone"] .cites .xr:first-child:focus-visible { opacity: 1; background: var(--accent); }
+:root[data-lens="everyone"] .story .glance td.ids .cites .xr:first-child { margin: 0; }

@@ -722,3 +722,20 @@ A third traces to a claim that is looser than its code. Both stories were under 
 causes wrong answers. Fix: the cap drops to 3%; every row that is not supported goes back to the
 narrator, not only the distorted ones; and claims the judges found looser than their code ("module
 claim" notes) go to the reviser queue, because a story faithful to a loose claim still misleads.
+
+**L80. The CTO reader found the evidence noisy and the page repetitive; definitions belong where
+the term is.** Found: LiteLLM Phase 9, the persona reader of the system story (a CTO) and the
+coordinator's screenshots. (1) "The bracketed claim IDs were noise to this reader": every sentence
+ends with one to four chips, which an engineer wants and an executive skips. (2) The home page
+showed the system story's plain words twice, as the cover and again in the story card. The story
+card also sat above the system map, so the map, the one picture of the whole system, came after
+six sections of prose. The system story's figure was never drawn on the home page at all; it was a
+blank shell, because the figure-drawing step ran only in chapter views. (3) Words you'll see had 42
+rows on the home page and 28 to 33 in chapters, open by default. Readers met a term in the prose
+long after its row had scrolled away. Class: the evidence and the definitions were shown at one
+density for every reader, in one place. Fix: a run of chips is one citation (`site_data` wraps it).
+The Everyone lens shows it as one quiet dot that opens the first claim, and the Engineer and Expert
+lenses keep the full IDs. Each defined term, at its first use in each section, carries its plain
+meaning on hover or keyboard focus (Mayer's signalling and pre-training principles, applied just in
+time). A list of more than 16 terms starts collapsed, in two columns. The home page goes cover,
+map, system story with its figures drawn and terms defined, then paths and chapters.

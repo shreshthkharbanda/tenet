@@ -428,12 +428,12 @@
           <p class="label">Compiled from <a href="${esc(B.repo)}/tree/${esc(B.commit)}" target="_blank" rel="noopener">${esc(B.repo.replace(/^https?:\/\//, ""))}</a> at <span class="mono">${esc(B.commit.slice(0, 10))}</span></p>
         </aside>
       </div>
-      ${B.system ? `<div class="system-story">${storyHTML(B.system, null)}</div>` : ""}
       <figure class="mapcard"><div class="head"><span class="label">System map</span><span class="label" style="text-transform:none;letter-spacing:0">Pick a path to trace it; pick a box to open its chapter</span></div>
         <div class="mapwrap" id="map"></div>
         <div class="legend" id="legend"></div>
         <figcaption class="label" style="text-transform:none;letter-spacing:0;padding:6px 4px 2px;font-weight:600">Boxes are chapters. Each colored line is one path a request takes, entering a box where that chapter does the next step; dashed lines lead to chapters a step consults. The bar in each box is its validation status: green validated, amber provisional.</figcaption>
       </figure>
+      ${B.system ? `<div class="system-story">${storyHTML(B.system, null, true)}</div>` : ""}
       <section class="block" id="paths"><header><h2>What happens when…</h2><p>Each path follows one request through the chapters, step by step.</p></header>
         <div class="paths">${B.flows.map(pathCard).join("")}</div></section>
       <section class="block"><header><h2>Chapters</h2><p>In reading order. Accuracy check: unseen test questions answered correctly from the chapter alone.</p></header>
@@ -443,6 +443,14 @@
         <p style="margin-top:14px"><a href="#defects">All ${B.stats.defects} suspected defects →</a></p></section>
       <section class="block"><header><h2>Reference</h2><p>Facts that span chapters.</p></header>
         <div class="shelf">${B.files.filter((f) => f.kind !== "module").map((f) => `<a href="#${f.slug}"><b>${esc(shortTitle(f))}</b><span>${f.claims.confirmed + f.claims.inferred + f.claims.gap} claims · ${readingMinutes(f)} min</span></a>`).join("")}<a href="#glossary"><b>Glossary</b><span>${B.glossary.length} terms</span></a></div></section>`;
+    if (B.system) {  // the system story's terms and figures, as a chapter's
+      const sys = $(".system-story", view);
+      defineTerms(sys, B.system.words);
+      for (const fg of B.system.sections.flatMap((x) => x.blocks.filter((b) => b.t === "fig"))) {
+        const el = $(`.sfig[data-fig="${fg.id}"]`, sys);
+        if (el) drawFigure(el, fg);
+      }
+    }
     $("#map").innerHTML = '<p class="loading" style="padding:30px 8px">Laying out the map…</p>';
     const { svg } = await renderMap($("#map"));
     const legend = $("#legend");
@@ -521,8 +529,9 @@
   }
 
   /* ---------- chapter story: the readable layer over the ledger ---------- */
-  const chips = (ids) => ids.map((x) => `<a class="xr" href="#${x}" data-id="${x}">${x}</a>`).join(" ");
-  function storyHTML(st, f) {
+  const chips = (ids) => ids.length ? `<span class="cites">${ids.map((x) => `<a class="xr" href="#${x}" data-id="${x}">${x}</a>`).join(" ")}</span>` : "";
+  // skipPlain: the home cover already shows the system story's plain words, so its card leaves them out
+  function storyHTML(st, f, skipPlain) {
     const n = f ? f.claims.confirmed + f.claims.inferred + f.claims.gap : 0;
     // each block carries its layer from the story gate (check_story.block_layer), the same definition the
     // persona readers are tested on; the lens hides Engineer blocks from Everyone
@@ -534,15 +543,49 @@
     return `<section class="story" aria-label="Chapter in brief">
       <p class="label">${f ? "The chapter in brief" : "Start here"} · ${mins} min</p>
       <h2 class="headline">${st.headline}</h2>
-      ${st.plain.length ? `<div class="plain L1"><span class="label">In plain words</span>${st.plain.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
+      ${st.plain.length && !skipPlain ? `<div class="plain L1"><span class="label">In plain words</span>${st.plain.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
       ${st.minute.length ? `<div class="minute L2"><span class="label">In one minute</span>${st.minute.map((p) => `<p>${p}</p>`).join("")}</div>` : ""}
-      ${st.words.length ? `<details class="words" open><summary class="label">Words you'll see (${st.words.length})</summary><dl>${st.words.map((w) =>
+      ${st.words.length ? `<details class="words${st.words.length > 16 ? " many" : ""}"${st.words.length > 16 ? "" : " open"}><summary class="label">Words you'll see (${st.words.length})</summary><dl>${st.words.map((w) =>
         `<div><dt>${w.term}</dt><dd>${w.means}<span class="code-names"><span class="L2">${w.code}</span> ${chips(w.ids)}</span></dd></div>`).join("")}</dl></details>` : ""}
       ${st.glance.length ? `<div class="glance L2"><span class="label">At a glance</span><div class="tbl"><table><thead><tr><th>When</th><th>Then</th><th>Claims</th></tr></thead><tbody>${st.glance.map((r) => `<tr><td>${r.when}</td><td>${r.then}</td><td class="ids">${chips(r.ids)}</td></tr>`).join("")}</tbody></table></div></div>` : ""}
       ${sec}
       ${st.watch.length ? `<div class="watch"><span class="label">Watch out</span><ul>${st.watch.map((w) => `<li>${w}</li>`).join("")}</ul></div>` : ""}
       ${f ? `<p class="to-ledger L2">Every claim in this chapter follows, in the order of the module (${n} claims). <button class="btn lens-jump" data-lens-go="expert">Show all ${n} claims</button></p>` : ""}
     </section>`;
+  }
+  // each defined term, at its first use in each section, carries its plain meaning on hover or focus
+  // (signalling and pre-training: the reader never has to scroll back to Words you'll see)
+  function defineTerms(root, words) {
+    if (!root || !words || !words.length) return;
+    const strip = (h) => { const d = document.createElement("div"); d.innerHTML = h; d.querySelectorAll(".cites").forEach((c) => c.remove()); return d.textContent.trim(); };
+    const terms = words.map((w) => ({ term: strip(w.term), means: strip(w.means) })).filter((w) => w.term.length > 2)
+      .sort((a, b) => b.term.length - a.term.length);
+    const rx = (s) => new RegExp(`(^|[^\\w-])(${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}s?)(?![\\w-])`, "i");
+    const parts = $$(".plain, .st-sec, .watch, .minute, .glance", root);
+    parts.forEach((part) => {
+      const seen = new Set();
+      const walk = document.createTreeWalker(part, NodeFilter.SHOW_TEXT, { acceptNode: (n) =>
+        n.parentElement.closest("a, code, h3, dfn, .label, .sfig-art, button, .tl-events") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
+      const nodes = [];
+      while (walk.nextNode()) nodes.push(walk.currentNode);
+      for (const node of nodes) {
+        let n = node;
+        for (const w of terms) {
+          if (seen.has(w.term) || !n || !n.parentNode) continue;
+          const m = rx(w.term).exec(n.nodeValue);
+          if (!m) continue;
+          seen.add(w.term);
+          const at = m.index + m[1].length;
+          const rest = n.splitText(at);
+          const after = rest.splitText(m[2].length);
+          const d = document.createElement("dfn");
+          d.className = "term"; d.tabIndex = 0; d.dataset.means = w.means; d.textContent = rest.nodeValue;
+          d.setAttribute("aria-description", w.means);
+          rest.replaceWith(d);
+          n = after;
+        }
+      }
+    });
   }
   function pathBlock(b) {
     const i = B.flows.findIndex((x) => x.id === b.flow);
@@ -818,6 +861,7 @@
     }, { rootMargin: "-80px 0px -70% 0px" });
     $$("h2[id], h3[id], #story-top, .st-sec[id]", view).forEach((h) => io.observe(h));
     if (st) {
+      defineTerms($("#story-top", view), st.words);
       const figs = st.sections.flatMap((x) => x.blocks.filter((b) => b.t === "fig"));
       for (const fg of figs) { const el = $(`.sfig[data-fig="${fg.id}"]`, view); if (el) drawFigure(el, fg); }
     }
