@@ -175,6 +175,8 @@ Full protocol in `references/validation.md` section 2. In short:
    ```
    python3 $SKILL_DIR/scripts/gate.py $SPECS --repo $REPO --round 1
    ```
+   Probes judged `probe_invalid` with evidence get their reference corrected once with
+   `scripts/correct_probe.py` (logged) before the next round.
    `_meta/validation-report.md` has the table; `_meta/revise/round-1/<module>.jsonl` has revision-split
    failures only. The held-out failures exist in the judgments but are never handed to a writer.
 

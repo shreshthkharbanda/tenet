@@ -289,3 +289,11 @@ can keep such a row in sync.
 claim text starting with `os.environ/` parsed as a directory ref and failed resolution. Fix: a
 directory ref needs two or more path segments; single tokens ending in `/` stay text. Self-test case
 added beside L19's.
+
+**L40. A wrong reference answer mis-scores every round.** Found: LiteLLM round-0 control judge
+executed RDISP-P12 and showed its reference omitted a suffix appended under a default-on flag. Left
+alone, the probe is "invalid" forever, shrinking the held-out set or penalizing a correct spec. Fix:
+`correct_probe.py` amends the reference once (never the question or split), logged with reason and
+evidence in `_meta/probe-corrections.jsonl`, so held-out integrity stays auditable. Judges that mark
+probe_invalid with execution evidence feed it; the orchestrator applies corrections before the next
+round.
