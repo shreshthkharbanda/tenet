@@ -38,6 +38,8 @@ def main() -> int:
         results.append(run("G2 lint", [str(HERE / "lint_specs.py"), str(specs), "--repo", args.repo, "--out", str(meta / "lint-report.json")]))
         if (meta / "modules.json").exists():
             results.append(run("G3 coverage", [str(HERE / "coverage.py"), str(specs), "--repo", args.repo]))
+        if (meta / "modules.json").exists() and any(specs.glob("0[1-4]-*.md")):
+            results.append(run("G6 ownership", [str(HERE / "check_ownership.py"), str(specs), "--repo", args.repo]))
     else:
         results.append(("G2 lint", -1, "skipped: no specs yet"))
     if args.round is not None and (meta / "probes").exists():

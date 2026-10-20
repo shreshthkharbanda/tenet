@@ -29,9 +29,13 @@ def main() -> int:
     from _common import split_refs
     errors, applied, counts, questions = [], 0, {}, []
     edits_by_file: dict[str, list[dict]] = {}
+    tail_counts: dict[str, int] = {}
     for df in sorted(rdir.glob("decisions-*.jsonl")):
         for d in read_jsonl(df):
             counts[d.get("verdict")] = counts.get(d.get("verdict"), 0) + 1
+            row = overlaps[d["row"]] if 0 <= d.get("row", -1) < len(overlaps) else {}
+            if row.get("tail_sample"):
+                tail_counts[d.get("verdict")] = tail_counts.get(d.get("verdict"), 0) + 1
             for e in d.get("edits", []) or []:
                 edits_by_file.setdefault(e["file"], []).append(e)
             if d.get("verdict") == "unresolvable":
@@ -100,7 +104,14 @@ def main() -> int:
         write_json(rdir / "conflicts.json", conflicts)
     write_json(rdir / "applied.json", {"verdicts": counts, "edits_applied": applied, "errors": errors,
                                        "questions": len(questions), "conflicts": len(conflicts),
+                                       "tail_sample_verdicts": tail_counts,
                                        "pointer_chains": chains})
+    if tail_counts:
+        n = sum(tail_counts.values())
+        bad = tail_counts.get("contradiction", 0) + tail_counts.get("unresolvable", 0)
+        eprint(f"tail sample: {bad}/{n} contradictions or unresolvable below the cut"
+               + (" -- the unjudged tail still hides contradictions: raise find_overlaps.py --max and judge more"
+                  if n and bad / n >= 0.03 else ""))
     for c in conflicts:
         eprint(f"CONFLICT: {c['file']} {c['id']}: {len(c['variants'])} different edits; left unchanged, see reconcile/conflicts.json")
     for ch in chains[:20]:

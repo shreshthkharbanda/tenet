@@ -164,8 +164,9 @@ fills `{{XC_*}}` from the focus block below.
 <!-- brief:crosscut -->
 ```
 You are writing one cross-cutting file of a behavioral specification of a codebase: the {{XC_KIND}}
-file. Module specs are being written in parallel by others; yours is the system-wide view of one
-concern. Precision about observable behavior counts; implementation detail does not.
+file. The module specs are finished and have passed lint and coverage. Your file is the system-wide
+INDEX of one concern across them, plus the facts that no module owns. Every fact lives in exactly one
+place: the module that owns the code. Restating module facts here makes two copies that drift apart.
 
 Repo: {{REPO}} (commit {{COMMIT}}). Output: {{SPECS}}/{{XC_FILE}} (frontmatter kind: {{XC_KIND}},
 prefix: {{XC_PREFIX}}). Scope: {{SCOPE_NOTE}}
@@ -178,10 +179,21 @@ Before writing, read {{REFS}}/templates.md (grammar, confidence, precision ladde
 writing rules, and the template for {{XC_FILE}}; copy its frontmatter and headings exactly) and
 {{REFS}}/implicit-decisions.md.
 
-Every fact is a claim {{XC_PREFIX}}-001, -002, ... with a verified ref (path:START-END or path::Symbol,
-relative to the repo root). You may read any source in the repo. Do not read {{SPECS}}/modules/
-(those are being written independently). Do not modify source. No tool or model mentions. Redact
-secrets as [REDACTED] plus a gap.
+How to write it:
+1. Read the module specs under {{SPECS}}/modules/ (their Public surface, Configuration, State and data,
+   and Error handling sections first). Build the index the template asks for (entry points, error
+   catalog, settings, stores...), with one row per item and, in each row, the module claim IDs that
+   specify it ([MOD-NNN]).
+2. Write a claim of your own ({{XC_PREFIX}}-001, -002, ...) only for a fact no module claim states:
+   precedence across modules, values read in code outside the specified scope (constants, globals,
+   environment read at import), system-wide invariants, and gaps between modules. Read the source to
+   verify each one; refs are path:START-END or path::Symbol, relative to the repo root.
+3. If a module claim is wrong or missing something you need, do not restate it correctly here: list
+   it in your worker report notes as "module claim X-NNN: <problem>" so it is fixed at its owner, and
+   point to it anyway.
+A claim of yours that cites lines a module owns must carry that module's claim ID, or the ownership
+gate (check_ownership.py) counts it as a restatement and fails the file above 20%. Do not modify source
+or module specs. No tool or model mentions. Redact secrets as [REDACTED] plus a gap.
 
 Finish by running:
   python3 {{SKILL_DIR}}/scripts/lint_specs.py {{SPECS}} --repo {{REPO}} --only {{XC_FILE}}

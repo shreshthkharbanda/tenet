@@ -41,6 +41,10 @@ def main() -> int:
     ap.add_argument("specs")
     ap.add_argument("--max", type=int, default=400)
     ap.add_argument("--max-span", type=int, default=120, help="ignore refs wider than this many lines (too coarse to pair)")
+    ap.add_argument("--tail-sample", type=int, default=60,
+                    help="append this many random pairs from below the cut, marked tail_sample, so the yield of the "
+                         "unjudged tail is measured instead of assumed")
+    ap.add_argument("--seed", type=int, default=7)
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
     claims = []
@@ -82,7 +86,15 @@ def main() -> int:
     # duplicates whose values differ are the likeliest real contradictions; then other suspicious pairs
     dup_conflict = [r for r in dups if r["score"] >= 3]
     rest = [r for r in pairs if r not in dup_conflict]
-    write_jsonl(specs / "_meta" / "overlaps.jsonl", (dup_conflict + rest)[: a.max])
+    ranked = dup_conflict + rest
+    head, tail = ranked[: a.max], ranked[a.max:]
+    import random
+    sample = random.Random(a.seed).sample(tail, min(a.tail_sample, len(tail)))
+    for r in sample:
+        r["tail_sample"] = True
+    write_jsonl(specs / "_meta" / "overlaps.jsonl", head + sample)
+    write_jsonl(specs / "_meta" / "overlaps-meta.jsonl", [{"total_pairs": len(pairs), "judged_head": len(head),
+                                                          "tail": len(tail), "tail_sampled": len(sample)}])
     files_dup: dict[str, int] = {}
     for r in dups:
         for side in ("a", "b"):

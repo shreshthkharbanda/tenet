@@ -159,6 +159,17 @@ def main() -> int:
           and (specs / "modules" / "big-a.md").read_text() == before, out)
     (meta / "reconcile" / "decisions-01.jsonl").unlink()
 
+    # L36: ownership gate: cross-cutting restatement fails, pointers pass
+    xc = ("---\nkind: config\nprefix: CFG\ncommit: " + head + "\nstatus: draft\n---\n# Config\n\n## Settings\n"
+          "- [CFG-001] {confirmed} `pkg/small.py:1-2` `add` sums its arguments without checks.\n"
+          "- [CFG-002] {confirmed} `pkg/small.py:1-2` `add` behavior is specified in [BIGB-001].\n\n## Precedence\nNone.\n")
+    (specs / "03-config.md").write_text(xc)
+    rc, out = run("check_ownership.py", str(specs), "--repo", str(repo), "--max-restated", "0.4")
+    own_r = json.loads((meta / "ownership.json").read_text())
+    check("L36 restating module lines without a pointer is counted", own_r["03-config.md"]["flagged"] == 1
+          and own_r["03-config.md"]["ids"] == ["CFG-001"] and rc == 1, out)
+    (specs / "03-config.md").unlink()
+
     # L08: freshness is per cited file
     (repo / "README.md").write_text("unrelated\n")
     git(repo, "add", "."); git(repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "readme")

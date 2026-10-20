@@ -255,3 +255,24 @@ one agreed edit, leaves conflicting claims untouched, writes `reconcile/conflict
 non-zero; the orchestrator resolves each conflict by picking the variant whose pointer reaches the
 owning claim directly (or sends both to one judge). It also flags pointer chains (a pointer to a
 pointer), which make a reader hop twice.
+
+**L36. Cross-cutting files were second copies of the module specs.** Found: LiteLLM reconcile. Pair
+judges found 78 of 120 "same-code" pairs were duplicates in paraphrase (my similarity classifier called
+them distinct), and the new ownership gate measured restatement directly: 91% of 01-interfaces, 94% of
+02-data, and 80% of 03-config claims restate behavior that module specs own, against 0-9% "foreign"
+claims in module specs. Cross-cutting writers ran in parallel with extractors, could not cite claim IDs
+that did not exist yet, and so re-specified everything; post-hoc dedupe of ~2,600 duplicate pairs is not
+affordable, and every duplicate drifts on the next revision. Fix: Phase 2b runs cross-cutting writers
+after module specs pass G2/G3; their brief makes them indexes (rows carry module claim IDs) that add
+claims only for facts no module owns, and report module-claim problems instead of restating them;
+`check_ownership.py` (G6, in `gate.py`) fails a cross-cutting file over 20% unpointed restatement and a
+module spec over 10% claims about another module's lines. Probers move up beside extractors, since they
+read only code.
+
+**L37. Contradictions hide below the duplicate ranking, and the tail was assumed empty.** Found:
+LiteLLM pair judges; the top 60 rows (near-duplicates with differing values) held 0 contradictions,
+rows 60-300 held 8, the overlap list had 4,039 pairs and only the top 300 were judged. Fix:
+`find_overlaps.py` appends a random sample of the unjudged tail (marked `tail_sample`), and
+`apply_claim_edits.py` reports the tail's contradiction rate, telling the orchestrator to judge more
+when it is 3% or higher. With L36 in place the list should shrink by an order of magnitude, which makes
+judging all of it affordable.

@@ -102,9 +102,9 @@ in briefs rather than globs, so no worker has to re-derive scope.
 
 ## Phase 2: extract (M + 4 workers in parallel, then gates G2, G3, G5)
 
-Dispatch, in one message, one Extractor per module (`--role extractor --all-modules`) plus the
-cross-cutting extractors (`--role crosscut --kind interfaces --kind data --kind config --kind
-operations`; drop data or operations when the Surveyor says the scope has none). Launch at most ~12 at once; queue the rest and dispatch the
+Dispatch, in one message, one Extractor per module (`--role extractor --all-modules`) and, right
+behind them in the queue, one Prober per module (Phase 4 step 1: probers read only code, so they need
+not wait). Cross-cutting files come after (Phase 2b), because they index the module specs. Launch at most ~12 at once; queue the rest and dispatch the
 next batch as results arrive. Workers are independent by design: none reads another's output.
 
 When all return:
@@ -125,6 +125,16 @@ the fix costs minutes instead of a re-read. Re-dispatch a fresh worker only if t
 Spot check (`references/validation.md` section 4): per module, open two random `{confirmed}` claims at
 their refs. A miss sends the module back with the miss named. This is cheap and it changes how
 extractors behave.
+
+## Phase 2b: cross-cutting index files (after module specs pass G2 and G3; then G6)
+
+Dispatch `--role crosscut --kind interfaces --kind data --kind config --kind operations` (drop data or
+operations when the Surveyor says the scope has none). These files index the module specs by claim ID
+and add only facts no module owns. Then run
+`python3 $SKILL_DIR/scripts/check_ownership.py $SPECS --repo $REPO` (G6): a cross-cutting file in which
+more than 20% of claims restate module-owned lines without a pointer, or a module spec in which more
+than 10% of claims are about another module's lines, goes back to its writer. One fact, one owner is
+what keeps revisions from leaving stale copies behind.
 
 ## Phase 3: reconcile (pair judges in parallel, a script applies edits, then 1 Reconciler; G2)
 
@@ -262,7 +272,7 @@ entry point. Do not commit; say the specs are uncommitted and offer to.
 - `scripts/`: stdlib Python 3.9+, deterministic, each prints a one-line summary to stderr.
   Planning: `inventory.py`, `split_file.py`, `check_shards.py`, `changed_modules.py`.
   Dispatch: `render_briefs.py`, `dispatch.py`, `snapshot_for_answerers.py`.
-  Gates: `lint_specs.py`, `coverage.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
+  Gates: `lint_specs.py`, `coverage.py`, `check_ownership.py`, `score_probes.py`, `verify_reports.py`, `gate.py`.
   Reconcile: `find_overlaps.py`, `apply_claim_edits.py`, `collect_defects.py`.
   Audit: `sample_claims.py`, `score_audit.py` (briefs in `references/audit.md`).
   Rebuild: `prepare_rebuild.py`, `score_rebuild.py`. Finalize: `apply_status.py`, `collect_defects.py`.
