@@ -480,8 +480,14 @@ dfn.term:hover::after, dfn.term:focus-visible::after { content: attr(data-means)
 .sfig.lookup { display: block; padding: 14px 16px; }
 .sfig.lookup figcaption { margin: 0 0 10px; }
 .sfig.lookup table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
-.sfig.lookup th { text-align: left; font: 700 0.92rem/1.4 var(--display); padding: 8px 14px 8px 0; width: 38%; vertical-align: top; border-bottom: 1px solid var(--rule-2); }
-.sfig.lookup td { padding: 8px 0; vertical-align: top; border-bottom: 1px solid var(--rule-2); }
+.sfig.lookup th { text-align: left; font: 700 0.92rem/1.4 var(--display); padding: 8px 14px 8px 0; width: 38%; vertical-align: top; border: 0;
+  text-transform: none; letter-spacing: 0; color: var(--ink); background: none; }
+.sfig.lookup .tbl, .sfig.lookup table { border: 0; background: none; }
+.sfig.lookup td { color: var(--ink-2); }
+.sfig.lookup td { padding: 8px 0; vertical-align: top; border: 0; }
+.sfig.lookup tr { border-bottom: 1px solid var(--rule-2); }
+.sfig.lookup tr:last-child { border-bottom: 0; }
+.sfig.lookup .tbl { max-width: none; overflow: visible; }
 
 /* reading time follows the lens: the Everyone layer, or the whole story */
 .m-e { display: none; }
