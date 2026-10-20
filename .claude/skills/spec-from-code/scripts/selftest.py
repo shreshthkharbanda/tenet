@@ -433,6 +433,24 @@ def main() -> int:
     (meta / "status.json").unlink(); (specs / "INDEX.md").unlink()
     (ev / "validation.json").write_text(json.dumps(v_before))
 
+    # L61: G7 executable evidence: passing, failing, stale and orphan checks
+    edir = meta / "evidence" / "big-a"
+    edir.mkdir(parents=True)
+    txt = next(c["text"] for c in __import__("_common").parse_claims((specs / "modules" / "big-a.md").read_text()) if c["id"] == "BIGA-001")
+    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys; sys.exit(0)\n")
+    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
+    ev_r = json.loads((meta / "evidence-report.json").read_text())["modules"]["big-a"]
+    check("L61 a passing check backs its claim", rc == 0 and ev_r["passed"] == ["BIGA-001"], out)
+    (edir / "check_BIGA-001.py").write_text(f"# claim: BIGA-001\n# text: {txt}\nimport sys; sys.exit(1)\n")
+    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
+    check("L61 a failing check fails G7", rc == 1 and "check for BIGA-001 fails" in out, out)
+    (edir / "check_BIGA-001.py").write_text("# claim: BIGA-001\n# text: some older wording\nimport sys; sys.exit(0)\n")
+    (edir / "check_BIGA-999.py").write_text("# claim: BIGA-999\n# text: x\n")
+    rc, out = run("check_evidence.py", str(specs), "--module", "big-a", "--python", sys.executable)
+    check("L61 changed claim text makes its evidence stale; unknown ids are orphans",
+          rc == 1 and "BIGA-001 changed since it was verified" in out and "BIGA-999, which is not a claim" in out, out)
+    shutil.rmtree(meta / "evidence")
+
     # L09/L10: rebuild scoring is baseline-relative
     def junit(path: Path, cases: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

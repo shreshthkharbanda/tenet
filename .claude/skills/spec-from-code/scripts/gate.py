@@ -9,6 +9,7 @@ runs whenever anything was dispatched (zero reports for a dispatched run is a FA
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -55,6 +56,15 @@ def main() -> int:
             results.append(("G4 probes", 1, f"FAIL: --round {args.round} asked for but {eval_dir(specs) / 'probes'} does not exist"))
     else:
         results.append(("G4 probes", -1, "skipped: pass --round N after answers and judgments exist"))
+    if (meta / "evidence").exists():
+        run_cfg = json.loads((meta / "run.json").read_text()) if (meta / "run.json").exists() else {}
+        if not run_cfg.get("python"):
+            results.append(("G7 evidence", 1, "FAIL: _meta/evidence exists but _meta/run.json has no 'python' (and "
+                                             "'run_cwd', 'run_env') to run the checks with"))
+        else:
+            results.append(run("G7 evidence", [str(HERE / "check_evidence.py"), str(specs), "--python", run_cfg["python"],
+                                               *(["--cwd", run_cfg["run_cwd"]] if run_cfg.get("run_cwd") else []),
+                                               *[x for k, v in (run_cfg.get("run_env") or {}).items() for x in ("--env", f"{k}={v}")]]))
     if (meta / "dispatch.jsonl").exists() or any(d.exists() for d in reports_dirs(specs)):
         results.append(run("G5 reports", [str(HERE / "verify_reports.py"), str(specs), "--repo", args.repo,
                                           *[x for t in args.transcripts for x in ("--transcripts", t)]]))

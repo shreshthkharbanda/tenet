@@ -59,7 +59,9 @@ Record how to run the project's code in `$SPECS/_meta/env.md`: interpreter, envi
 the project's declared test environment (extras, dependency groups, dev requirements) rather than
 chasing import errors one package at a time, and confirm the scoped tests collect with no import
 errors. Workers get this file through `{{RUN_ENV}}` and use it to execute what they would otherwise
-guess.
+guess. Record the same thing for scripts in `_meta/run.json` (written by inventory.py; add the keys):
+`"python"` (interpreter), `"run_cwd"` (a scratch working directory), `"run_env"` (a dict of
+environment variables). `gate.py` uses them to re-run evidence checks (G7).
 
 Agent estimate: 1 Surveyor + 4 cross-cutting + M extractors + M probers + M answerers + M judges per
 round + revisers for failing modules + rebuilders. For M modules and R rounds that is roughly
