@@ -554,3 +554,8 @@ gap). Deleted IDs break answers, pointers and evidence that cite them, and silen
 Fix: IDs are never deleted; a resolved gap becomes {confirmed} with the answer, a disproved defect
 becomes a claim of what the code does. Lint compares IDs with the latest `_meta/rounds/round-*`
 backup (or `--baseline`) and fails on any that disappeared.
+
+**L70. A partial evidence run erased the others' results.** Found: LiteLLM round-2 revision; a reviser
+ran `check_evidence.py --module deployment-limits` and overwrote the shared evidence report, dropping
+affinity-checks' results (it noticed and restored a copy). Fix: a `--module` run merges its modules into
+`_meta/evidence-report.json` and replaces only their errors.

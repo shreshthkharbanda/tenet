@@ -33,7 +33,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from _common import eprint, parse_claims, parse_frontmatter, read_jsonl, write_json
+from _common import eprint, parse_claims, parse_frontmatter, read_json, read_jsonl, write_json
 
 NORMATIVE = {"Behaviors", "Validation rules", "Error handling", "State and data", "External interactions",
              "Configuration", "Concurrency and ordering", "Public surface"}
@@ -150,7 +150,15 @@ def main() -> int:
         backed = len({c for c in res["passed"] if c in conf}) + res["tests"]
         res["evidence_rate"] = round(backed / len(conf), 3) if conf else None
         report["modules"][mid] = res
-    write_json(specs / "_meta" / "evidence-report.json", {**report, "errors": errors})
+    # a --module run updates its modules in the shared report; it never erases the others' results (L70)
+    rp = specs / "_meta" / "evidence-report.json"
+    if a.module and rp.exists():
+        prev = read_json(rp)
+        merged = {**prev.get("modules", {}), **report["modules"]}
+        kept = [e for e in prev.get("errors", []) if e.split(":", 1)[0] not in report["modules"]]
+        write_json(rp, {"modules": merged, "errors": kept + errors})
+    else:
+        write_json(rp, {**report, "errors": errors})
     for e in errors[:100]:
         eprint("ERROR:", e)
     for mid, r in report["modules"].items():
