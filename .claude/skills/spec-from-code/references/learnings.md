@@ -174,3 +174,11 @@ baseline failures); `render_briefs.py` injects it as `{{RUN_ENV}}` into extracto
 judge, and falsifier briefs. Phase 0 must also install the project's declared test environment
 (extras and dependency groups) and confirm the scoped tests collect without import errors, not just
 that some tests run.
+
+**L26. Independent convergence was invisible.** Found: LiteLLM iteration 1; the deployment-limits
+extractor and the data cross-cutting writer, isolated from each other, both flagged the same TPM
+read/write key mismatch. Agreement between independent workers is the strongest evidence a suspected
+defect is real, and nothing surfaced it. Fix: `collect_defects.py` counts, for each defect, the other
+modules or roles that flagged overlapping lines, and ranks by it. The Reconciler harvests suspected
+defects from gaps, implementation notes, and worker reports into each module's `## Suspected
+defects`, so runs that predate the section (or workers that only mention a bug in prose) lose nothing.

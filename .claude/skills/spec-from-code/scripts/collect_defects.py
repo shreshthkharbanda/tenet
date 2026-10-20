@@ -8,9 +8,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from _common import eprint, parse_claims, parse_frontmatter
+
+
+def spans(where: str) -> list[tuple[str, int, int]]:
+    out = []
+    for ref in re.findall(r"[\w./-]+\.\w+:\d+(?:-\d+)?", where or ""):
+        path, rng = ref.rsplit(":", 1)
+        a, _, b = rng.partition("-")
+        out.append((path, int(a), int(b or a)))
+    return out
+
+
+def overlaps(x: list, y: list) -> bool:
+    return any(p == q and not (b1 < a2 or b2 < a1) for p, a1, b1 in x for q, a2, b2 in y)
 
 
 def main() -> int:
@@ -32,10 +46,20 @@ def main() -> int:
         for b in r.get("suspected_bugs", []) or []:
             if isinstance(b, dict):
                 rows.append((r.get("module", "?"), f"({r.get('role')})", b.get("where", ""), b.get("what", "") + (" Evidence: " + b["evidence"] if b.get("evidence") else "")))
+    # Convergence: the same code flagged by independent workers (different modules or roles) is the strongest
+    # signal a defect is real. Count, for each row, how many OTHER sources point at overlapping lines.
+    sp = [spans(w) for _, _, w, _ in rows]
+    conv = []
+    for i, (m, _, _, _) in enumerate(rows):
+        others = {rows[j][0] + rows[j][1] for j in range(len(rows)) if j != i and rows[j][0] != m and overlaps(sp[i], sp[j])}
+        conv.append(len(others))
+    order = sorted(range(len(rows)), key=lambda i: -conv[i])
     lines = ["# Suspected defects", "", "Behavior the code exhibits that looks unintended. The specs state what the code does; "
-             "this list says where that looks wrong. Each needs a decision: fix the code, or accept and keep the spec.", "",
-             "| Module | Claim | Where | What and why |", "|---|---|---|---|"]
-    lines += [f"| {m} | {i} | `{w}` | {t} |" for m, i, w, t in rows]
+             "this list says where that looks wrong. Each needs a decision: fix the code, or accept and keep the spec. "
+             "Independent sources counts other modules or roles that flagged overlapping lines; two or more independent "
+             "sources is strong evidence.", "",
+             "| Module | Claim | Where | Independent sources | What and why |", "|---|---|---|---:|---|"]
+    lines += [f"| {rows[i][0]} | {rows[i][1]} | `{rows[i][2]}` | {conv[i]} | {rows[i][3]} |" for i in order]
     (specs / "_meta" / "suspected-defects.md").write_text("\n".join(lines) + "\n")
     eprint(f"collected {len(rows)} suspected defects -> _meta/suspected-defects.md")
     return 0

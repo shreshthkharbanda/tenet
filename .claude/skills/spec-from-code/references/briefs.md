@@ -249,6 +249,12 @@ Tasks, in order:
    the codebase who has 15 minutes; this is the short book the module specs are appendices to.
 4. Write {{SPECS}}/_meta/gaps.md: every {gap} claim in every spec, grouped by module, with ref and
    question, plus what would resolve it (a test to write, a person to ask, a dependency to read).
+4b. Suspected defects. Read every worker report under {{SPECS}}/_meta/worker-reports/ (notes,
+   suspected_bugs) and every {gap} and Implementation note. Where one describes behavior that looks
+   unintended, make sure the owning module spec has it as a claim under "## Suspected defects" (add the
+   section if missing; the claim states what happens, why it looks unintended, and the impact). When
+   two modules flag the same code, keep one claim in the owning module and cross-reference it from the
+   other. Then run `python3 {{SKILL_DIR}}/scripts/collect_defects.py {{SPECS}}`.
 5. Write {{SPECS}}/INDEX.md per the template (under 100 lines). Leave fidelity and rebuild columns
    as "pending" if _meta/validation.json does not exist yet; the orchestrator refreshes the table later.
 
