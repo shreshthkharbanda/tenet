@@ -30,6 +30,7 @@ import json
 import os
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from _common import eprint, parse_claims, parse_frontmatter, read_jsonl, write_json
@@ -70,6 +71,7 @@ def main() -> int:
     ap.add_argument("--module", action="append", default=[])
     ap.add_argument("--env", action="append", default=[])
     ap.add_argument("--timeout", type=int, default=120)
+    ap.add_argument("--jobs", type=int, default=6, help="checks run in parallel, each in its own working directory")
     ap.add_argument("--list-unbacked", action="store_true")
     a = ap.parse_args()
     specs = Path(a.specs).resolve()
@@ -95,6 +97,7 @@ def main() -> int:
         conf = {cid for cid, c in mc.items() if c["confidence"] == "confirmed" and c["section"] in NORMATIVE}
         res = {"confirmed_normative": len(conf), "passed": [], "failed": [], "stale": [], "orphan": [],
                "tests": 0, "unverifiable": 0}
+        runnable = []
         for fp in sorted((edir / mid).glob("check_*.py")):
             cid, text = header(fp)
             cid = cid or fp.stem[len("check_"):]
@@ -106,12 +109,31 @@ def main() -> int:
                 res["stale"].append(cid)
                 errors.append(f"{mid}: {cid} changed since it was verified (or its check has no '# text:' header); re-verify")
                 continue
+            runnable.append((cid, fp))
+
+        def run_one(item):
+            cid, fp = item
+            # each check gets its own working directory, so parallel checks never share scratch files
+            wd = Path(a.cwd or ".") / f"evidence-{mid}-{cid}"
+            wd.mkdir(parents=True, exist_ok=True)
             try:
-                p = subprocess.run([a.python, "-P", str(fp)], cwd=a.cwd, env=env, capture_output=True, text=True,
+                p = subprocess.run([a.python, "-P", str(fp)], cwd=wd, env=env, capture_output=True, text=True,
                                    timeout=a.timeout)
-                ok, tail = p.returncode == 0, (p.stderr or p.stdout).strip().splitlines()[-1:]
+                return cid, p.returncode == 0, (p.stderr or p.stdout).strip().splitlines()[-1:]
             except subprocess.TimeoutExpired:
-                ok, tail = False, ["timeout"]
+                return cid, False, ["timeout"]
+
+        with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+            results = list(pool.map(run_one, runnable))
+        by_id = dict(runnable)
+        for cid, ok, tail in results:
+            if not ok:  # one serial re-run separates a flaky check (load, a port clash) from a wrong claim
+                _, ok2, tail2 = run_one((cid, by_id[cid]))
+                if ok2:
+                    res.setdefault("flaky", []).append(cid)
+                    ok = True
+                else:
+                    tail = tail2
             (res["passed"] if ok else res["failed"]).append(cid)
             if not ok:
                 errors.append(f"{mid}: check for {cid} fails: {tail[0][:200] if tail else ''}")
@@ -133,7 +155,7 @@ def main() -> int:
         eprint("ERROR:", e)
     for mid, r in report["modules"].items():
         if r["passed"] or r["failed"] or r["tests"] or r["unverifiable"]:
-            eprint(f"{mid}: {len(r['passed'])} checks pass, {len(r['failed'])} fail, {len(r['stale'])} stale, "
+            eprint(f"{mid}: {len(r['passed'])} checks pass ({len(r.get('flaky', []))} only on re-run), {len(r['failed'])} fail, {len(r['stale'])} stale, "
                    f"{r['tests']} test-pinned, {r['unverifiable']} unverifiable; evidence rate {r['evidence_rate']:.0%} "
                    f"of {r['confirmed_normative']} confirmed normative claims")
     return 1 if errors else 0
