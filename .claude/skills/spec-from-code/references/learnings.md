@@ -533,3 +533,9 @@ read, a second instance). Fix: the evidence sweep is Phase 3b of the pipeline; t
 attacks those unstated conditions after checking the stated ones; revisers update a claim's check when
 they change the claim; revise worklists collect findings from every audit round, keyed by the round
 that found them (a claim found wrong again later is a new finding).
+
+**L67. Revisers executed claims and threw the scripts away.** Found: LiteLLM round-2 revision; every
+reviser confirmed its rewrites by running check scripts in its own scratch dir, so the run produced
+dozens of verified checks that the gate never saw again. Fix: the reviser brief tells them to save each
+such script as the claim's evidence check (`_meta/evidence/<module>/check_<ID>.py` with the `# claim:`
+and `# text:` headers), so G7 coverage grows with every revision at no extra cost.

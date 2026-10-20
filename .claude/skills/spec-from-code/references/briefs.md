@@ -606,7 +606,12 @@ Failures: {{SPECS}}/_meta/revise/round-{{ROUND}}/{{MODULE_ID}}.jsonl. Each row h
   wrong or incomplete while working on its own file; verify it in the code before acting on it.
 - evidence: the claim's check script (_meta/evidence/<module>/check_<ID>.py) fails or is stale.
   Whenever you change a claim that has a check script, update the script's `# text:` line and
-  assertions to the new text and run it; a changed claim with an unchanged check fails the gate. Run
+  assertions to the new text and run it; a changed claim with an unchanged check fails the gate.
+When you confirm a behavior by running it, keep the script as that claim's evidence instead of
+throwing it away: save it as {{SPECS}}/_meta/evidence/{{MODULE_ID}}/check_<ID>.py with the two header
+lines (`# claim: <ID>` and `# text: <the claim's final text, one line, refs omitted>`), make it exit 0
+only when the claim holds, and run it the way the run environment says. Evidence accumulates this way
+at no extra cost (L67). Run
   it; correct the claim if the code disagrees, or fix the check if it tests the wrong thing, and keep
   its `# text:` line equal to the claim's final text.
 The probe rows are revision-split only; a separate held-out set you will never see is scored
