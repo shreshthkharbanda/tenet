@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
-"""Gate G3: traceability. Which in-scope files and public symbols does each
-module spec actually cite? Writes coverage.json and traceability.md.
+"""Gate G3: traceability. Which in-scope files, lines and public symbols does each
+module spec actually cite, and do its refs point at the lines its claims talk about?
+Writes coverage.json and traceability.md.
 
-Usage: coverage.py <specs_dir> --repo <root> [--min-file 0.95] [--min-symbol 0.85]
+Per module, all from the module's OWN spec (cross-cutting refs never count for a module):
+  - file rate: owned files (or ranges) cited by some claim
+  - symbol rate: public symbols named in the visible spec text (HTML comments and fences do not count)
+  - line rate: non-blank owned lines inside a confirmed/inferred claim ref of at most --max-ref-span
+    lines. One ref per file satisfied the file rate, so a spec missing the back two-thirds of its
+    range passed (red team E1b: 39% of lines); real specs measure 78-91%.
+  - unanchored rate: claims none of whose backticked tokens occur in the cited lines +/-5; a ref to
+    `::None`, a directory, or lines 1-2 resolves but points at nothing (red team E3); real specs 3-11%.
+
+Usage: coverage.py <specs_dir> --repo <root> [--min-file 0.95] [--min-symbol 0.85] [--min-lines 0.6]
+                   [--max-unanchored 0.15] [--max-ref-span 120]
 Exit 1 if any module is below threshold (list the misses so an extractor can re-run on them).
 """
 from __future__ import annotations
@@ -11,7 +22,8 @@ import argparse
 import re
 from pathlib import Path
 
-from _common import build_ownership, eprint, parse_claims, parse_frontmatter, read_json, ref_path, scope_label, write_json
+from _common import (anchor_status, build_ownership, eprint, parse_claims, parse_frontmatter, read_json, ref_path,
+                     ref_span, repo_lines, scope_label, visible_text, write_json)
 
 SYMBOL_RES = {
     "python": [re.compile(r"^\s*(?:async\s+)?def\s+([A-Za-z]\w*)\s*\("), re.compile(r"^\s*class\s+([A-Za-z]\w*)")],
@@ -85,6 +97,11 @@ def main() -> int:
     ap.add_argument("--repo", required=True)
     ap.add_argument("--min-file", type=float, default=0.95)
     ap.add_argument("--min-symbol", type=float, default=0.85)
+    ap.add_argument("--min-lines", type=float, default=0.6,
+                    help="share of non-blank owned lines inside some narrow confirmed/inferred claim ref")
+    ap.add_argument("--max-unanchored", type=float, default=0.15,
+                    help="share of checkable claims whose backticked tokens are absent from the cited lines")
+    ap.add_argument("--max-ref-span", type=int, default=120, help="refs wider than this do not count toward line coverage")
     args = ap.parse_args()
     specs = Path(args.specs).resolve()
     repo = Path(args.repo).resolve()
@@ -101,16 +118,10 @@ def main() -> int:
         fm, body = parse_frontmatter(text)
         if fm.get("kind") != "module" or not fm.get("module"):
             continue
-        spec_text_by_module[fm["module"]] = body
+        spec_text_by_module[fm["module"]] = visible_text(body)
         claims_by_module[fm["module"]] = parse_claims(body)
-    # cross-cutting specs also cite files; count those refs toward file coverage
-    xc_refs: list[str] = []
-    for name in ("00-overview.md", "01-interfaces.md", "02-data.md", "03-config.md", "04-operations.md"):
-        p = specs / name
-        if p.exists():
-            _, body = parse_frontmatter(p.read_text(encoding="utf-8", errors="replace"))
-            for c in parse_claims(body):
-                xc_refs += c["refs"]
+    # Cross-cutting refs do not count for a module: an extractor that skipped a file a crosscut writer
+    # happened to cite passed G3 while traceability.md showed the file with no claims (red team E2).
 
     def ref_hits(ref: str, item: dict) -> bool:
         if ref_path(ref) != item["path"]:
@@ -121,7 +132,32 @@ def main() -> int:
         a = int(m.group(1)); b = int(m.group(2) or a)
         return not (b < item["start"] or a > item["end"])
 
-    report = {"modules": {}, "thresholds": {"file": args.min_file, "symbol": args.min_symbol}}
+    def line_cover(item: dict, claims: list) -> tuple[int, int, list[str]]:
+        """(non-blank owned lines, covered, uncovered stretches of 20+ non-blank lines)."""
+        lines = repo_lines(repo, item["path"])
+        nb = [i for i in range(item["start"], min(item["end"], len(lines)) + 1) if lines[i - 1].strip()]
+        cov: set[int] = set()
+        for c in claims:
+            if c["confidence"] == "gap":
+                continue
+            for r in c["refs"]:
+                sp = ref_span(repo, r)
+                if sp and sp[0] == item["path"] and sp[2] - sp[1] <= args.max_ref_span:
+                    cov.update(range(sp[1], sp[2] + 1))
+        holes, run = [], []
+        for i in nb:
+            if i in cov:
+                if len(run) >= 20:
+                    holes.append(f"{item['path']}:{run[0]}-{run[-1]}")
+                run = []
+            else:
+                run.append(i)
+        if len(run) >= 20:
+            holes.append(f"{item['path']}:{run[0]}-{run[-1]}")
+        return len(nb), sum(1 for i in nb if i in cov), holes
+
+    report = {"modules": {}, "thresholds": {"file": args.min_file, "symbol": args.min_symbol, "lines": args.min_lines,
+                                            "unanchored": args.max_unanchored, "ref_span": args.max_ref_span}}
     md = ["# Traceability: source -> claims", "",
           "Generated by coverage.py. A file (or line range) with no claims is trivial, dead, or a spec gap; the extractor must say which.", ""]
     failing = []
@@ -136,10 +172,20 @@ def main() -> int:
             label = scope_label(it)
             ids = sorted({c["id"] for c in claims for r in c["refs"] if ref_hits(r, it)})
             refs_by_item[label] = ids
-            if ids or any(ref_hits(r, it) for r in xc_refs):
-                covered.append(label)
-            else:
-                uncovered.append(label)
+            (covered if ids else uncovered).append(label)
+        line_tot = line_cov = 0
+        holes: list[str] = []
+        for it in items:
+            n_, c_, h_ = line_cover(it, claims)
+            line_tot, line_cov = line_tot + n_, line_cov + c_
+            holes += h_
+        checkable, unanchored = 0, []
+        for c in claims:
+            st = anchor_status(repo, c["refs"], c["text"])
+            if st is not None:
+                checkable += 1
+                if st is False:
+                    unanchored.append(c["id"])
         total_syms, hit_syms, missed = 0, 0, []
         for it in items:
             syms = public_symbols(repo / it["path"], lang_by_path.get(it["path"], ""), it["start"], it["end"])
@@ -152,18 +198,33 @@ def main() -> int:
                     missed.append(f"{it['path']}::{s_}")
         file_rate = (len(covered) / len(items)) if items else 1.0
         sym_rate = (hit_syms / total_syms) if total_syms else 1.0
-        ok = file_rate >= args.min_file and sym_rate >= args.min_symbol and bool(claims)
+        line_rate = (line_cov / line_tot) if line_tot else 1.0
+        un_rate = (len(unanchored) / checkable) if checkable else 0.0
+        ok = (file_rate >= args.min_file and sym_rate >= args.min_symbol and line_rate >= args.min_lines
+              and un_rate <= args.max_unanchored and bool(claims))
         if not ok:
             failing.append(mid)
         report["modules"][mid] = {
             "files": len(items), "files_cited": len(covered), "file_rate": round(file_rate, 3),
             "public_symbols": total_syms, "symbols_mentioned": hit_syms, "symbol_rate": round(sym_rate, 3),
+            "lines": line_tot, "lines_covered": line_cov, "line_rate": round(line_rate, 3), "uncovered_stretches": holes[:40],
+            "anchor_checkable": checkable, "unanchored": unanchored, "unanchored_rate": round(un_rate, 3),
             "claims": len(claims), "uncovered_files": uncovered, "unmentioned_symbols": missed, "ok": ok,
         }
         md.append(f"## {mid} ({m.get('prefix')})")
         md.append("")
-        md.append(f"Files cited: {len(covered)}/{len(items)} ({file_rate:.0%}). Public symbols mentioned: {hit_syms}/{total_syms} ({sym_rate:.0%}). Claims: {len(claims)}.")
+        md.append(f"Files cited: {len(covered)}/{len(items)} ({file_rate:.0%}). Public symbols mentioned: {hit_syms}/{total_syms} ({sym_rate:.0%}). "
+                  f"Lines inside a narrow claim ref: {line_cov}/{line_tot} ({line_rate:.0%}). "
+                  f"Unanchored claims: {len(unanchored)}/{checkable} ({un_rate:.0%}). Claims: {len(claims)}.")
         md.append("")
+        if holes:
+            md.append("Owned stretches of 20+ non-blank lines no claim cites: " + ", ".join(f"`{h}`" for h in holes[:20])
+                      + (f" (+{len(holes) - 20})" if len(holes) > 20 else ""))
+            md.append("")
+        if unanchored:
+            md.append("Claims whose backticked tokens appear nowhere in the cited lines (check the ref): "
+                      + ", ".join(unanchored[:30]) + (f" (+{len(unanchored) - 30})" if len(unanchored) > 30 else ""))
+            md.append("")
         md.append("| File | LOC | Claims |")
         md.append("|---|---:|---|")
         for it in items:
@@ -182,9 +243,15 @@ def main() -> int:
     (specs / "_meta" / "traceability.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     for mid in failing:
         r = report["modules"][mid]
-        eprint(f"BELOW THRESHOLD: {mid}: files {r['file_rate']:.0%}, symbols {r['symbol_rate']:.0%}, claims {r['claims']}")
+        eprint(f"BELOW THRESHOLD: {mid}: files {r['file_rate']:.0%}, symbols {r['symbol_rate']:.0%}, "
+               f"lines {r['line_rate']:.0%} (min {args.min_lines:.0%}), unanchored {r['unanchored_rate']:.0%} "
+               f"(max {args.max_unanchored:.0%}), claims {r['claims']}")
         for p in r["uncovered_files"][:20]:
             eprint("   uncited file:", p)
+        for h in (r["uncovered_stretches"][:10] if r["line_rate"] < args.min_lines else []):
+            eprint("   uncited lines:", h)
+        if r["unanchored_rate"] > args.max_unanchored:
+            eprint("   unanchored claims:", ", ".join(r["unanchored"][:20]))
     eprint(f"coverage: {len(report['modules'])} modules, {len(failing)} below threshold -> _meta/coverage.json, _meta/traceability.md")
     return 1 if failing else 0
 
