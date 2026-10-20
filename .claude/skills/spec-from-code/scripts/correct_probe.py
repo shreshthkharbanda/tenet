@@ -21,9 +21,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("specs")
     ap.add_argument("--id", required=True)
-    g = ap.add_mutually_exclusive_group(required=True)
+    g = ap.add_mutually_exclusive_group(required=False)
     g.add_argument("--append")
     g.add_argument("--replace")
+    ap.add_argument("--question-append", default=None,
+                    help="sharpen an ambiguous question (e.g. pin a setup detail); never changes its split")
     ap.add_argument("--reason", required=True)
     ap.add_argument("--evidence", required=True)
     a = ap.parse_args()
@@ -34,7 +36,12 @@ def main() -> int:
         for r in rows:
             if r["id"] == a.id:
                 old = r["reference_answer"]
-                r["reference_answer"] = a.replace if a.replace is not None else old.rstrip() + " " + a.append.strip()
+                if a.replace is not None:
+                    r["reference_answer"] = a.replace
+                elif a.append is not None:
+                    r["reference_answer"] = old.rstrip() + " " + a.append.strip()
+                if a.question_append:
+                    r["question"] = r["question"].rstrip() + " " + a.question_append.strip()
                 r["corrected"] = r.get("corrected", 0) + 1
                 hit = (pf, old, r["reference_answer"])
         if hit and hit[0] == pf:
@@ -42,6 +49,8 @@ def main() -> int:
             break
     if not hit:
         raise SystemExit(f"no probe {a.id}")
+    if a.append is None and a.replace is None and not a.question_append:
+        raise SystemExit("nothing to correct: pass --append, --replace, or --question-append")
     with open(meta / "probe-corrections.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps({"id": a.id, "when": time.strftime("%Y-%m-%dT%H:%M:%S"), "reason": a.reason,
                             "evidence": a.evidence, "old": hit[1], "new": hit[2]}) + "\n")
