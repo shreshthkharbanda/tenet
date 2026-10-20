@@ -158,6 +158,13 @@ coverage without saying anything; bare-path refs that satisfy file coverage; cla
 unfalsifiable ("handles errors appropriately"); copying the same claim under many IDs; hedged
 claims that a lenient judge would accept; anything in the probe flow that lets the spec writer
 learn held-out answers; ways a worker could falsify its own report and pass verify_reports.py.
+If an earlier round's red-team report exists ({{SPECS}}/_meta/audit/round-*/redteam.md), first re-run
+each of its exploits against the current scripts and say which are closed and which still pass. Then
+attack the newer defenses: the eval dir (_meta/run.json names it), G5 with --transcripts (accesses a
+transcript cannot show: imports, scripts that open files they do not name, paths built at runtime),
+G7 evidence checks that pass without testing their claim (assert True, a bare try/except, assertions
+about something other than what the `# text:` line says, a check that never reaches the entry point),
+the verdict checks in score_probes.py, waivers, and the decision ledger in apply_claim_edits.py.
 
 For each exploit: demonstrate it on the copy (run the gate and show it passes), rate severity
 (how likely an honest-but-rushed worker produces this by accident, and how much it would mislead a
