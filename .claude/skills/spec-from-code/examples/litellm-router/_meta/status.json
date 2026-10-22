@@ -1,0 +1,30 @@
+{
+  "G1 shards": {
+    "rc": 0,
+    "summary": "shards: 10 modules, 34 in-scope files, 0 unassigned, 0 multiply assigned, 0 range errors, 0 errors"
+  },
+  "G2 lint": {
+    "rc": 0,
+    "summary": "lint: 14 spec files, 2795 claims, 0 errors, 14 warnings"
+  },
+  "G3 coverage": {
+    "rc": 0,
+    "summary": "coverage: 10 modules, 0 below threshold -> _meta/coverage.json, _meta/traceability.md"
+  },
+  "G6 ownership": {
+    "rc": 0,
+    "summary": "ownership: 14 spec files, 0 over threshold -> _meta/ownership.json"
+  },
+  "G4 probes": {
+    "rc": -1,
+    "summary": "skipped: pass --round N after answers and judgments exist"
+  },
+  "G7 evidence": {
+    "rc": 0,
+    "summary": "deployment-limits: 143 checks pass (3 only on re-run), 0 fail, 0 stale, 0 test-pinned, 0 unverifiable; evidence rate 100% of 143 confirmed normative claims"
+  },
+  "G5 reports": {
+    "rc": 0,
+    "summary": "verify: 132 worker reports, 0 discrepancies"
+  }
+}

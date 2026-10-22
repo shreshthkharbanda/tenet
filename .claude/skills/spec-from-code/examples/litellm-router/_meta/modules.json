@@ -1,0 +1,401 @@
+{
+  "commit": "93b79d2587d186fb7266556a34a22d03f187a3da",
+  "modules": [
+    {
+      "id": "router-setup",
+      "prefix": "RSETUP",
+      "name": "Router construction, configuration and completion entry points",
+      "globs": [
+        "litellm/router.py:1-3315"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_router.py",
+        "tests/unit/test_router/test_router_endpoints.py",
+        "tests/unit/test_router/test_router_provider_endpoints.py",
+        "tests/unit/test_router/test_router_callback_hook_sequence.py",
+        "tests/unit/test_router_redis_init.py",
+        "tests/unit/test_router_silent_experiment.py",
+        "tests/unit/router_utils/test_router_interactions_endpoints.py",
+        "tests/unit/router_strategy/test_router_routing_groups.py",
+        "tests/unit/types/test_router.py"
+      ],
+      "depends_on": [
+        "router-calls",
+        "router-dispatch",
+        "router-deployments",
+        "router-selection",
+        "failure-handling",
+        "deployment-limits",
+        "affinity-checks",
+        "routing-contracts",
+        "request-targets"
+      ],
+      "entry_points": [
+        "litellm/router.py::Router.__init__",
+        "litellm/router.py::Router.completion",
+        "litellm/router.py::Router.acompletion",
+        "litellm/router.py::Router.routing_strategy_init",
+        "litellm/router.py::Router.initialize_router_endpoints",
+        "litellm/router.py::Router.add_optional_pre_call_checks",
+        "litellm/router.py::Router.update_redis_cache"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Lines 1-3315 hold the module-level stream/fallback helper types and the Router constructor with everything it wires (Redis/DualCache, strategy selectors, routing groups, factory-built endpoint attributes, optional pre-call checks) plus the sync/async completion entry points that hand off to the retry/fallback loop."
+    },
+    {
+      "id": "router-calls",
+      "prefix": "RCALL",
+      "name": "Per-call execution, streaming recovery and non-chat endpoint wrappers",
+      "globs": [
+        "litellm/router.py:3316-6605"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_router.py",
+        "tests/unit/test_router/test_router_timeout.py",
+        "tests/unit/test_router_streaming_fallback_metadata.py",
+        "tests/unit/test_router_google_genai.py",
+        "tests/unit/batch_completion/**",
+        "tests/unit/test_batch_completion_models_all_responses.py",
+        "tests/unit/llms/anthropic/pass_through/messages/test_anthropic_messages_router.py",
+        "tests/integration/sdk/test_router_sync_stream_fallback_wire.py",
+        "tests/integration/sdk/test_router_tool_call_stream_fallback_budget_wire.py"
+      ],
+      "depends_on": [
+        "router-selection",
+        "router-dispatch",
+        "failure-handling",
+        "affinity-checks",
+        "request-targets"
+      ],
+      "entry_points": [
+        "litellm/router.py::Router._acompletion",
+        "litellm/router.py::Router._acompletion_streaming_iterator",
+        "litellm/router.py::Router._aresponses_streaming_iterator",
+        "litellm/router.py::Router._aanthropic_messages_streaming_iterator",
+        "litellm/router.py::Router.abatch_completion",
+        "litellm/router.py::Router.schedule_acompletion",
+        "litellm/router.py::Router.aimage_generation",
+        "litellm/router.py::Router.atranscription",
+        "litellm/router.py::Router.aspeech",
+        "litellm/router.py::Router.arerank",
+        "litellm/router.py::Router.atext_completion",
+        "litellm/router.py::Router.aguardrail"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Lines 3316-6605 execute one routed call: bind the picked deployment into call kwargs (credentials, client, timeouts), run it, and keep streams alive across mid-stream failures (retry, fallback, prefill continuation), with thin per-endpoint wrappers (image, audio, rerank, text completion, adapters, search, guardrail, generic API) that share that shape."
+    },
+    {
+      "id": "router-dispatch",
+      "prefix": "RDISP",
+      "name": "Endpoint dispatch factories and the retry/fallback loop",
+      "globs": [
+        "litellm/router.py:6606-9865"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_router.py",
+        "tests/unit/test_router/test_router_fallbacks.py",
+        "tests/unit/test_router/test_router_retries.py",
+        "tests/unit/test_router/test_router_vector_store_endpoints.py",
+        "tests/unit/test_router/test_router_helper_utils.py",
+        "tests/unit/test_router_weighted_failover.py",
+        "tests/unit/test_router_order_fallback.py",
+        "tests/unit/test_router_per_deployment_num_retries.py",
+        "tests/unit/test_router_retry_non_retryable_errors.py",
+        "tests/unit/test_router_retry_backoff_headers.py",
+        "tests/unit/test_router_exception_redaction.py",
+        "tests/unit/test_container_router.py",
+        "tests/unit/test_retrieve_batch_bedrock_dispatch.py",
+        "tests/integration/sdk/test_router_include_fallback_errors_wire.py",
+        "tests/integration/sdk/test_router_cooldown_fallback_sdk.py"
+      ],
+      "depends_on": [
+        "router-calls",
+        "router-selection",
+        "failure-handling",
+        "deployment-limits",
+        "request-targets"
+      ],
+      "entry_points": [
+        "litellm/router.py::Router.factory_function",
+        "litellm/router.py::Router.async_function_with_fallbacks",
+        "litellm/router.py::Router.async_function_with_retries",
+        "litellm/router.py::Router.function_with_fallbacks",
+        "litellm/router.py::Router.aembedding",
+        "litellm/router.py::Router.acreate_file",
+        "litellm/router.py::Router.acreate_batch",
+        "litellm/router.py::Router.aretrieve_batch",
+        "litellm/router.py::Router.deployment_callback_on_success",
+        "litellm/router.py::Router.deployment_callback_on_failure",
+        "litellm/router.py::Router.generate_model_id"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Lines 6606-9865 turn every litellm.* API function into a routed call (factory_function and the embedding/files/batches/vector-store/responses/passthrough builders), run it through the retry-then-fallback loop, and record the outcome on the deployment (success/failure callbacks, usage counters, admission and healthy-deployment lookup, model-id hashing)."
+    },
+    {
+      "id": "router-deployments",
+      "prefix": "RDEPLOY",
+      "name": "Deployment registry and model metadata",
+      "globs": [
+        "litellm/router.py:9866-13216"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_router.py",
+        "tests/unit/test_router/test_router_get_deployments.py",
+        "tests/unit/test_router/test_router_helper_utils.py",
+        "tests/unit/test_router_model_cost_isolation.py",
+        "tests/unit/test_add_deployment_no_master_key.py",
+        "tests/unit/test_openai_service_tier_long_context_pricing.py",
+        "tests/unit/router_strategy/test_auto_router.py",
+        "tests/unit/router_strategy/test_complexity_router.py",
+        "tests/unit/router_strategy/test_quality_router.py",
+        "tests/unit/router_strategy/adaptive_router/test_router_dispatch.py"
+      ],
+      "depends_on": [
+        "routing-contracts",
+        "request-targets",
+        "deployment-limits",
+        "failure-handling"
+      ],
+      "entry_points": [
+        "litellm/router.py::Router.set_model_list",
+        "litellm/router.py::Router.add_deployment",
+        "litellm/router.py::Router.upsert_deployment",
+        "litellm/router.py::Router.delete_deployment",
+        "litellm/router.py::Router.get_deployment",
+        "litellm/router.py::Router.get_model_info",
+        "litellm/router.py::Router.get_model_group_info",
+        "litellm/router.py::Router.get_model_group_usage",
+        "litellm/router.py::Router.get_model_names",
+        "litellm/router.py::Router.get_all_deployments"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Lines 9866-13216 own the in-memory deployment registry: building deployments from config (including auto/complexity/adaptive/quality strategy-router pseudo-deployments), adding/upserting/deleting them with their indexes and per-deployment pricing registration, and answering model, model-group and usage metadata queries."
+    },
+    {
+      "id": "router-selection",
+      "prefix": "RSELECT",
+      "name": "Deployment selection pipeline and router settings",
+      "globs": [
+        "litellm/router.py:13217-16278"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_router.py",
+        "tests/unit/test_router_get_settings.py",
+        "tests/unit/test_router_retry_policy_update.py",
+        "tests/unit/test_router_block_helpers.py",
+        "tests/unit/router_strategy/test_router_routing_plugins.py",
+        "tests/unit/router_strategy/test_router_tag_routing.py",
+        "tests/unit/router_strategy/test_router_tag_regex_routing.py",
+        "tests/unit/router_utils/test_router_health_check_routing.py",
+        "tests/unit/proxy/management_endpoints/test_router_settings_endpoints.py"
+      ],
+      "depends_on": [
+        "failure-handling",
+        "deployment-limits",
+        "affinity-checks",
+        "routing-contracts",
+        "request-targets",
+        "router-deployments"
+      ],
+      "entry_points": [
+        "litellm/router.py::Router.async_get_available_deployment",
+        "litellm/router.py::Router.get_available_deployment",
+        "litellm/router.py::Router.async_get_healthy_deployments",
+        "litellm/router.py::Router.async_pre_routing_hook",
+        "litellm/router.py::Router.get_available_deployment_for_pass_through",
+        "litellm/router.py::Router.get_model_list",
+        "litellm/router.py::Router.get_model_access_groups",
+        "litellm/router.py::Router.get_settings",
+        "litellm/router.py::Router.update_settings",
+        "litellm/router.py::Router.set_custom_routing_strategy",
+        "litellm/router.py::Router.reset"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Lines 13217-16278 decide which deployment serves a request: resolve the model group (aliases, wildcards, access groups, PTU teams), run pre-call token/param checks and the cooldown/blocked/health/team/reservation filters, apply pre-routing strategies and plugins, call the strategy selector, record the routing decision, and expose the router's mutable settings."
+    },
+    {
+      "id": "failure-handling",
+      "prefix": "FAILURE",
+      "name": "Cooldowns, deployment health state, retry policy and fallback bookkeeping",
+      "globs": [
+        "litellm/router_utils/cooldown_cache.py",
+        "litellm/router_utils/cooldown_callbacks.py",
+        "litellm/router_utils/cooldown_handlers.py",
+        "litellm/router_utils/health_state_cache.py",
+        "litellm/router_utils/routing_read_batch.py",
+        "litellm/router_utils/router_callbacks/**",
+        "litellm/router_utils/fallback_event_handlers.py",
+        "litellm/router_utils/add_retry_fallback_headers.py",
+        "litellm/router_utils/response_headers.py",
+        "litellm/router_utils/get_retry_from_policy.py",
+        "litellm/router_utils/handle_error.py"
+      ],
+      "test_globs": [
+        "tests/unit/router_utils/test_cooldown_cache.py",
+        "tests/unit/router_utils/test_cooldown_handlers.py",
+        "tests/unit/router_utils/test_health_state_cache.py",
+        "tests/unit/router_utils/test_health_check_allowed_fails_integration.py",
+        "tests/unit/router_utils/test_routing_read_batch.py",
+        "tests/unit/router_utils/test_fallback_event_handlers.py",
+        "tests/unit/router_utils/test_add_retry_fallback_headers.py",
+        "tests/unit/router_utils/test_get_retry_from_policy.py",
+        "tests/unit/router_utils/test_handle_error.py",
+        "tests/unit/responses/test_responses_router_cooldown.py"
+      ],
+      "depends_on": [
+        "request-targets"
+      ],
+      "entry_points": [
+        "litellm/router_utils/cooldown_handlers.py::set_cooldown_deployments",
+        "litellm/router_utils/cooldown_handlers.py::async_get_cooldown_deployments",
+        "litellm/router_utils/cooldown_cache.py::CooldownCache.add_deployment_to_cooldown",
+        "litellm/router_utils/fallback_event_handlers.py::run_async_fallback",
+        "litellm/router_utils/fallback_event_handlers.py::get_fallback_model_group",
+        "litellm/router_utils/get_retry_from_policy.py::get_num_retries_from_retry_policy",
+        "litellm/router_utils/add_retry_fallback_headers.py::add_fallback_headers_to_response",
+        "litellm/router_utils/handle_error.py::async_raise_no_deployment_exception",
+        "litellm/router_utils/routing_read_batch.py::RoutingReadBatch.async_get_cooldown_deployments"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "These files answer what happens after a deployment call fails: whether the deployment is cooled down and for how long, where cooldown and health-check state live (with the batched Redis read that serves selection), per-minute success/failure counters, which retry budget applies, which fallback group is tried next and how the attempt is recorded, and the retry/fallback headers and alerts that report it."
+    },
+    {
+      "id": "deployment-limits",
+      "prefix": "LIMITS",
+      "name": "Per-deployment rate limits, I/O-token reservations, PTU shares and access windows",
+      "globs": [
+        "litellm/router_utils/pre_call_checks/model_rate_limit_check.py",
+        "litellm/router_utils/pre_call_checks/io_token_rate_limit_check.py",
+        "litellm/router_utils/ptu_shares.py",
+        "litellm/router_utils/access_windows.py"
+      ],
+      "test_globs": [
+        "tests/unit/test_router/test_enforce_model_rate_limits.py",
+        "tests/unit/test_router/test_io_token_rate_limits.py",
+        "tests/unit/router_utils/test_ptu_shares.py",
+        "tests/unit/router_utils/test_access_windows.py"
+      ],
+      "depends_on": [
+        "failure-handling"
+      ],
+      "entry_points": [
+        "litellm/router_utils/pre_call_checks/model_rate_limit_check.py::ModelRateLimitingCheck.async_pre_call_check",
+        "litellm/router_utils/pre_call_checks/io_token_rate_limit_check.py::async_io_token_pre_call_check",
+        "litellm/router_utils/pre_call_checks/io_token_rate_limit_check.py::async_io_token_reconcile_success",
+        "litellm/router_utils/pre_call_checks/io_token_rate_limit_check.py::async_io_token_refund_failure",
+        "litellm/router_utils/ptu_shares.py::filter_ptu_shared_deployments",
+        "litellm/router_utils/ptu_shares.py::team_ptu_ceiling",
+        "litellm/router_utils/access_windows.py::filter_reserved_deployments"
+      ],
+      "critical": true,
+      "rebuild_candidate": true,
+      "rationale": "Each file enforces a capacity or access limit configured on a deployment (RPM/TPM ceilings, reserve/reconcile/refund of input and output token budgets, per-team PTU share ceilings, reserved time windows), so they share one contract: admit, reject with a rate-limit error, or drop the deployment from the candidate set."
+    },
+    {
+      "id": "affinity-checks",
+      "prefix": "AFFINITY",
+      "name": "Deployment affinity and compatibility pre-call filters",
+      "globs": [
+        "litellm/router_utils/pre_call_checks/deployment_affinity_check.py",
+        "litellm/router_utils/pre_call_checks/encrypted_content_affinity_check.py",
+        "litellm/router_utils/pre_call_checks/prompt_caching_deployment_check.py",
+        "litellm/router_utils/pre_call_checks/responses_api_deployment_check.py",
+        "litellm/router_utils/pre_call_checks/continuation_prefill_check.py",
+        "litellm/router_utils/prompt_caching_cache.py"
+      ],
+      "test_globs": [
+        "tests/unit/router_utils/pre_call_checks/**",
+        "tests/unit/router_utils/test_prompt_caching_cache.py"
+      ],
+      "depends_on": [],
+      "entry_points": [
+        "litellm/router_utils/pre_call_checks/deployment_affinity_check.py::DeploymentAffinityCheck.async_filter_deployments",
+        "litellm/router_utils/pre_call_checks/encrypted_content_affinity_check.py::EncryptedContentAffinityCheck.async_filter_deployments",
+        "litellm/router_utils/pre_call_checks/prompt_caching_deployment_check.py::PromptCachingDeploymentCheck.async_filter_deployments",
+        "litellm/router_utils/pre_call_checks/responses_api_deployment_check.py::ResponsesApiDeploymentCheck.async_filter_deployments",
+        "litellm/router_utils/pre_call_checks/continuation_prefill_check.py::ContinuationPrefillDeploymentCheck.async_filter_deployments",
+        "litellm/router_utils/prompt_caching_cache.py::PromptCachingCache.async_get_model_id"
+      ],
+      "critical": false,
+      "rebuild_candidate": true,
+      "rationale": "These optional CustomLogger pre-call checks narrow or pin the candidate deployments so a request lands where its state already lives or where it can be served (user/session pins, encrypted reasoning content, provider prompt-cache prefixes, Responses API previous_response_id, prefill-capable continuation targets), backed by the prompt-cache pin store."
+    },
+    {
+      "id": "routing-contracts",
+      "prefix": "CONTRACTS",
+      "name": "Routing configuration and model capability contracts",
+      "globs": [
+        "litellm/router_utils/routing_groups.py",
+        "litellm/router_utils/auto_router_model_naming.py",
+        "litellm/router_utils/auto_router_tuning_baseline.py",
+        "litellm/router_utils/baseline_request.py",
+        "litellm/router_utils/reasoning_effort_capability.py"
+      ],
+      "test_globs": [
+        "tests/unit/router_utils/test_auto_router_model_naming.py",
+        "tests/unit/router_utils/test_auto_router_tuning_baseline.py",
+        "tests/unit/router_utils/test_baseline_request.py",
+        "tests/unit/router_utils/test_reasoning_effort_capability.py",
+        "tests/unit/router_strategy/test_router_routing_groups.py"
+      ],
+      "depends_on": [],
+      "entry_points": [
+        "litellm/router_utils/routing_groups.py::parse_routing_groups",
+        "litellm/router_utils/auto_router_model_naming.py::classify_strategy_router_model",
+        "litellm/router_utils/auto_router_model_naming.py::validate_strategy_router_model_write",
+        "litellm/router_utils/auto_router_tuning_baseline.py::tuning_limit_violation",
+        "litellm/router_utils/baseline_request.py::capture_baseline_parameters",
+        "litellm/router_utils/reasoning_effort_capability.py::resolve_supported_reasoning_efforts"
+      ],
+      "critical": false,
+      "rebuild_candidate": true,
+      "rationale": "Pure functions that define what a valid routing configuration or model capability is (routing-group parsing and priority, auto_router/ pseudo-model classification and write validation, the heuristic-tuning license gate, baseline request capture, reasoning_effort levels per deployment), shared by the router and the proxy management endpoints."
+    },
+    {
+      "id": "request-targets",
+      "prefix": "TARGETS",
+      "name": "Request-to-target resolution helpers",
+      "globs": [
+        "litellm/router_utils/pattern_match_deployments.py",
+        "litellm/router_utils/kubernetes_pod_discovery.py",
+        "litellm/router_utils/clientside_credential_handler.py",
+        "litellm/router_utils/client_initalization_utils.py",
+        "litellm/router_utils/common_utils.py",
+        "litellm/router_utils/batch_utils.py",
+        "litellm/router_utils/search_api_router.py"
+      ],
+      "test_globs": [
+        "tests/unit/router_utils/test_pattern_match_deployments.py",
+        "tests/unit/router_utils/test_kubernetes_pod_discovery.py",
+        "tests/unit/router_utils/test_client_initalization_utils.py",
+        "tests/unit/router_utils/test_router_utils_common_utils.py",
+        "tests/unit/router_utils/test_batch_utils.py",
+        "tests/unit/test_router/test_router_max_parallel_requests.py"
+      ],
+      "depends_on": [
+        "failure-handling"
+      ],
+      "entry_points": [
+        "litellm/router_utils/pattern_match_deployments.py::PatternMatchRouter.route",
+        "litellm/router_utils/kubernetes_pod_discovery.py::KubernetesPodDiscovery.async_resolve_deployment",
+        "litellm/router_utils/kubernetes_pod_discovery.py::async_resolve_pods_after",
+        "litellm/router_utils/clientside_credential_handler.py::get_dynamic_litellm_params",
+        "litellm/router_utils/common_utils.py::filter_team_based_models",
+        "litellm/router_utils/common_utils.py::resolve_served_model",
+        "litellm/router_utils/batch_utils.py::replace_model_in_jsonl",
+        "litellm/router_utils/search_api_router.py::SearchAPIRouter.async_search_with_fallbacks",
+        "litellm/router_utils/search_api_router.py::SearchAPIRouter.update_router_search_tools"
+      ],
+      "critical": true,
+      "rebuild_candidate": false,
+      "rationale": "Helpers that turn a request's model name and caller into a concrete callable target: wildcard pattern routing, Kubernetes pod IP resolution for a deployment, client-supplied credential deployments, per-deployment parallel-request semaphores, team/alias/web-search candidate filtering, batch-file model rewriting, and search-tool selection with fallbacks."
+    }
+  ],
+  "excluded": []
+}

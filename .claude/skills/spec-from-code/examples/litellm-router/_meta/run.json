@@ -1,0 +1,11 @@
+{
+  "eval_dir": "/tmp/claude-0/-home-user-tenet/bc98398a-ba61-59d9-9853-99cf8b127d2e/scratchpad/ll-specs-eval",
+  "repo": "/tmp/claude-0/-home-user-tenet/bc98398a-ba61-59d9-9853-99cf8b127d2e/scratchpad/litellm",
+  "python": "/tmp/claude-0/-home-user-tenet/bc98398a-ba61-59d9-9853-99cf8b127d2e/scratchpad/ll-venv/bin/python",
+  "run_cwd": "/tmp/claude-0/-home-user-tenet/bc98398a-ba61-59d9-9853-99cf8b127d2e/scratchpad/ll-evidence-run",
+  "run_env": {
+    "PYTHONPATH": "/tmp/claude-0/-home-user-tenet/bc98398a-ba61-59d9-9853-99cf8b127d2e/scratchpad/litellm",
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "LITELLM_LOCAL_MODEL_COST_MAP": "True"
+  }
+}

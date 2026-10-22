@@ -1,0 +1,235 @@
+---
+module: _system
+---
+# The router spreads AI requests across deployments and recovers when one fails
+
+@plain
+The router is a code library with no server of its own [SYS-001]. Applications call it directly or through the proxy, a gateway server that builds a router from its settings [RSETUP-059]. A caller asks the router for a model group, a name several deployments can share [RSELECT-001]. Each deployment is one copy of the model at a provider, with its own keys and limits [RDEPLOY-001], [RDEPLOY-097], [LIMITS-054]. For each request, the router drops deployments that are cooling down, paused or reserved for other teams, then picks one [RSELECT-044], [RSELECT-046], [RSELECT-024], [RSELECT-067]. When a call fails, the router can cool that deployment down, retry the group, then try backup groups [FAILURE-021], [RDISP-155], [RDISP-113]. When the router itself goes wrong, one setting can fail every chat call [RSETUP-297]. A retry can repeat a batch job, and a provider key can reach a caller's own server [RDISP-286], [TARGETS-207].
+
+## Words you'll see
+| Term | Means | In the code | Claims |
+| --- | --- | --- | --- |
+| router | a code library inside an application or the proxy; it takes requests for model groups and spreads them over deployments | `Router` | SYS-001, RSETUP-059 |
+| proxy | a separate gateway server that builds a router from its settings and passes its requests to it, so running the proxy means running a router | `router_settings`, `proxy_server_request` | RSETUP-059, FAILURE-175, RSETUP-298 |
+| model group | the name a caller asks for; several deployments can share it | `model_name`, `model_group` | RSELECT-001, RCALL-059 |
+| deployment | one copy of a model at a provider, with its own keys, limits and id | `model_list`, `litellm_params`, `model_info` | RDEPLOY-001, RDEPLOY-002, RDEPLOY-097 |
+| cooldown | a timed pause in which selection skips a deployment; 5 seconds unless the deployment, the provider's retry-after time or the router's setting says otherwise | `deployment:<id>:cooldown`, `cooldown_time` | FAILURE-001, RDISP-191, RSELECT-044 |
+| paused | describes a deployment whose blocked setting is on, so selection skips it | `model_info.blocked` | RSELECT-046, RSELECT-141 |
+| reservation | a daily time window or a capacity share that keeps a shared deployment for listed teams | `access_windows`, `ptu_shares` | RSELECT-024, LIMITS-003, LIMITS-020 |
+| retry | another attempt in the same model group after a failure; 2 by default, and only for some errors | `num_retries` | RDISP-131, RSETUP-031, RDISP-155 |
+| fallback list | the ordered backup model groups tried after a group's retries run out; empty unless an operator sets one | `fallbacks` | RDISP-093, RSETUP-037, RDISP-111 |
+| asynchronous | the call style in which the caller's program keeps working while it waits; blocking calls skip the team filter, strategy routers, optional filters, priority queue and alerts | `acompletion`, `completion` | SYS-020, RSELECT-128, RSETUP-160 |
+| fallback entry | the outer step that resets the request's fallback notes, runs the retry loop and hands any final error to the fallback dispatcher | `async_function_with_fallbacks` | RDISP-092, RDISP-096 |
+| retry loop | the part that tries the same model group again, up to the retry count | `async_function_with_retries` | RDISP-130, RDISP-131 |
+| selection | the step that turns a model group into candidate deployments, filters them and picks one | `async_get_available_deployment` | RCALL-045, RSELECT-040 |
+| metadata | the dictionary of notes a caller passes with a request; the router writes its own notes into it in place, so reusing one for concurrent requests mixes them | `metadata`, `litellm_metadata` | SYS-012, RDISP-285, TARGETS-136 |
+| priority queue | a queue that holds an asynchronous chat request with a nonzero whole-number priority until its turn; a router-wide default priority makes every such call fail | `priority`, `default_priority`, `schedule_acompletion` | RSETUP-190, RSETUP-191, RCALL-091, RSETUP-284 |
+| attempt | one try on one deployment, making exactly one provider call | `_acompletion` | RCALL-044, RCALL-164 |
+| strategy | the rule that picks one deployment from those left: random shuffle by default, or least-busy, usage-based, latency-based or cost-based picking | `routing_strategy`, `simple-shuffle` | RSELECT-063, RSELECT-067, RSELECT-139, RSELECT-060 |
+| strategy router | a row in the deployment list whose model name starts with a special prefix; it never answers calls, it only points the request at another model group | `auto_router/` | RSELECT-015, RSELECT-016, RSELECT-061 |
+| routing group | a named set of model groups that share one strategy | `routing_groups` | RSETUP-106, RSELECT-152 |
+| pre-routing hook | the first step of full selection, where a strategy router can swap the requested model group | `async_pre_routing_hook` | RSELECT-061, RSELECT-092 |
+| team-owned deployment | a deployment registered for one team; requests from other teams, or with no team, never see it | `model_info.team_id` | TARGETS-100 |
+| health checks | background verdicts on whether each deployment is healthy; selection uses them only when health-check routing is on, which it is not by default | `enable_health_check_routing` | RSELECT-142, FAILURE-078, CFG-074 |
+| optional filters | registered checks, such as rate limits or affinity, that can shrink the list of candidates | `async_filter_deployments` | RSELECT-047, AFFINITY-009 |
+| tag | a label on a request or deployment; tag-based routing can send tagged requests to matching deployments | `tags`, `enable_tag_filtering` | RSELECT-049, RSELECT-108 |
+| routing plugin | a configured function that can narrow which deployments stay candidates | `plugins` | RSELECT-050, RSELECT-120 |
+| order level | a priority tier among one group's deployments; a lower number is preferred, and higher levels serve as backups inside the group | `order` | RSELECT-051, RDISP-103, RDISP-104 |
+| pod discovery | an opt-in that sends a deployment's calls to individual Kubernetes server pods instead of the shared service address | `kubernetes_pod_discovery` | TARGETS-024, TARGETS-046 |
+| token reservation | tokens a request books before the call against a deployment's per-minute input and output limits; a failed try's booking comes back | `itpm`, `otpm` | LIMITS-083, LIMITS-084, LIMITS-088, LIMITS-069 |
+| parallel cap | the most calls one deployment may run at once, counted separately in each server process; without its own setting it comes from the deployment's per-minute limits | `max_parallel_requests`, `rpm`, `tpm` | TARGETS-077, TARGETS-079 |
+| success hook | a function the provider library calls after each successful call; the router registers its own, which counts the success and, for limited deployments, the usage | `deployment_callback_on_success` | SYS-003, RDISP-172, RDISP-181, RDISP-196 |
+| response headers | labels on a reply the caller can read: retries and fallbacks taken, and how much of the group's per-minute limits is left | `x-litellm-attempted-retries`, `x-ratelimit-remaining-tokens` | RDISP-134, RDISP-095, RDEPLOY-146 |
+| failure hook | a function the provider library calls after each failed call; the router registers its own, which counts the failure and can start a cooldown | `deployment_callback_on_failure` | SYS-003, RDISP-190, RDISP-193 |
+| deployment id | the key of one deployment; at startup, a fingerprint of its settings when the row gives none | `model_info.id`, `generate_model_id` | RDEPLOY-007, RDISP-240 |
+| Redis | an optional shared data store; with it, router copies share cooldowns, health state and usage counters | `redis_url`, `redis_host`, `redis_port` | RSETUP-006, SYS-011 |
+| retry policy | retry counts per error type, for the whole router or one model group | `retry_policy`, `model_group_retry_policy` | RDISP-138, FAILURE-099 |
+| backoff | the wait before a retry: zero while the group has several deployments and a healthy one remains, else the provider's retry-after time or a growing pause | `_time_to_sleep_before_retry` | RDISP-160, RDISP-162 |
+| no-deployment error | the 429 error selection raises when no deployment is left; it means nothing was available, and its type says when every deployment is cooling down | `RouterRateLimitError`, `all_deployments_in_cooldown` | RSELECT-054, RSELECT-283, FAILURE-179 |
+| fallback dispatcher | the part that takes the final error and decides where else to send the request | `async_function_with_fallbacks_common_utils` | RDISP-096, RDISP-101 |
+| weighted failover | an optional extra try on another deployment of the same group that is not cooling down, before backup groups; off by default, random shuffle only | `enable_weighted_failover` | RDISP-106, RDISP-120, CFG-070 |
+| special backup list | one of two optional fallback lists, used only when the prompt is too long for the model or the provider blocks the content; it replaces the general list | `context_window_fallbacks`, `content_policy_fallbacks` | RDISP-108, RDISP-110 |
+| catch-all entry | a fallback list entry for any group without its own; off unless an operator sets default fallbacks, and it also serves unknown model names | `default_fallbacks`, `"*"` | CFG-044, RSETUP-038, RSELECT-028 |
+| continuation | finishing a broken chat reply on another deployment, which receives the partial text as the start of its answer; off by default | `enable_mid_stream_fallback_continuation` | RCALL-019, RCALL-008, RCALL-169 |
+| status events | early notices a stream sends, such as created or in progress, before any answer text | `response.created`, `response.in_progress` | RCALL-029 |
+| Responses API | a request format besides chat that the router also serves and streams | `aresponses` | RCALL-118, RCALL-027 |
+| Anthropic Messages | another request format besides chat that the router also serves and streams | `anthropic_messages` | RCALL-118, RCALL-128 |
+| endpoint factory | the builder that turns each provider function into a router endpoint, choosing its wrapper by call type | `factory_function`, `call_type` | RDISP-001 |
+| runtime edits | the calls that add, replace or remove one deployment while the router runs | `add_deployment`, `upsert_deployment`, `delete_deployment` | RDEPLOY-040, RDEPLOY-046, RDEPLOY-053 |
+| client-side credentials | a key or server address the caller sends with its own request; the router always honours it, so the gateway in front decides who may send one | `api_key`, `api_base`, `base_url` | RCALL-065, TARGETS-062, SYS-019 |
+
+## A successful chat request picks one healthy deployment and returns its reply
+In the usual case, a chat request passes the asynchronous chat entry, the fallback entry and its retry loop, then selection and one provider call [RSETUP-186], [RDISP-092], [RDISP-130], [RCALL-045], [RCALL-050]. The table shows what decides where it goes, in order [RSELECT-063], [RSELECT-061]. On success, the reply reports no retries and no fallbacks [RDISP-134], [RDISP-095].
+
+@figure table id=destination title="What decides where a request goes, in the order it happens"
+| A strategy router owns the requested name | it can swap the request to another model group | RSELECT-061, RSELECT-105 |
+| A valid strategy sent with the request | sets the strategy for this request only | RSETUP-105 |
+| Else the model's routing group | its strategy applies | RSETUP-106 |
+| Else the router's own setting | applies; random shuffle unless an operator chose another | RSETUP-108, RSELECT-139 |
+| Team, reservations, cooldowns and filters | remove deployments this request may not use | RSELECT-024, RSELECT-041, RSELECT-044, RSELECT-047 |
+| The strategy | picks one deployment from those left | RSELECT-067, RSELECT-068 |
+| Nothing left to pick | no-deployment error, which still reaches the backup groups | RSELECT-054, RDISP-096 |
+
+@path flow-async-chat-completion-that-succeeds
+| 1 | The caller sends a model group and messages to the asynchronous chat entry, which adds a tracking id and stamps the caller's metadata [RSETUP-186], [RCALL-058], [RCALL-059]. It saves the request's own fallback and retry settings for later stream recovery [RSETUP-189], [RSETUP-158], [FAILURE-124]. A request that sends a nonzero whole-number priority waits in the priority queue first, and a request priority of 0 counts as none [RSETUP-190], [RSETUP-191], [RCALL-091]. Setting a router-wide default priority instead makes every asynchronous chat call fail [RSETUP-284], [RSETUP-297]. |
+| 2 | The fallback entry resets two notes in the caller's metadata: how many backups were tried and which group the request first asked for [RDISP-092]. It reads the fallback lists from the request when it sends them, else from the router [RDISP-093]. Its retry loop removes its own control settings, such as the fallback lists, so they never reach the provider, and records the retry count [RDISP-130]-[RDISP-133]. |
+| 3 | The retry loop makes the first attempt, which asks selection for one deployment of the group [RDISP-134], [RDISP-150], [RCALL-045]. |
+| 4 | When the router-wide strategy is one of five, selection first runs the pre-routing hook [RSELECT-060], [RSELECT-061]. The five are random shuffle, the default, plus usage-based routing version 2, cost-based, latency-based and least-busy routing [RSELECT-060], [RSELECT-139]. Under any other router-wide strategy, the request skips the hook, the team filter, optional filters, tags and plugins, though reservations, cooldowns and pauses still apply [RSELECT-128], [RSELECT-121], [RSELECT-122], [RSELECT-123]. If routing plugins are configured, that reduced path fails with an error instead [RSELECT-120]. In the hook, a strategy router can swap the requested group for another [RSELECT-090]-[RSELECT-116]. One built-in rule serves the Claude Code coding tool, for requests that carry its session header and a caller key [RSELECT-110]. Its helper agents then follow the strategy router the session's latest main request named, for 3600 seconds after each use [RSELECT-113], [RSELECT-115], [RSELECT-116]. Selection then settles the strategy: a valid choice sent with the request wins, then the model's routing group, then the router's own setting [RSELECT-063], [RSETUP-105]-[RSETUP-108]. |
+| 5 | Selection turns the name into candidate deployments, then removes some in a fixed order [RSELECT-020]. First go deployments reserved for other teams, then any team-owned deployment of another team [RSELECT-024], [LIMITS-008], [LIMITS-021], [RSELECT-041], [TARGETS-100]. If the request asks for web search, deployments that cannot search the web go too [TARGETS-106]. Next go unhealthy ones when health checks are on, then those cooling down, paused ones, and whatever the optional filters remove [RSELECT-043], [RSELECT-142], [RSELECT-044], [FAILURE-011], [RSELECT-046], [RSELECT-047], [AFFINITY-009]. With health checks off, the default, a failing deployment keeps its traffic until a cooldown starts [CFG-074], [RSELECT-142], [RSELECT-044]. Then come the prompt-size, request-rate, region and parameter checks, which run only when an operator switches them on; the region check also needs the request to name an allowed region [RSELECT-048], [CFG-062], [RSELECT-200]-[RSELECT-211]. Last come tags, routing plugins, the lowest order level present, and the removal of deployments that failover excluded or that already refused this request with a status such as 400 or 404 [RSELECT-049]-[RSELECT-053], [RDISP-148]. |
+| 6 | The strategy picks one survivor; under random shuffle, the pick is random, weighted by each deployment's weight or rate limits when set [RSELECT-067]. Other strategies use their own picking logic [RSELECT-068], [RSETUP-083]. The router records and traces the pick [RSELECT-069], [RSELECT-070]. For a deployment that opts in to pod discovery, the pick comes back pointed at one server pod, and calls without a session id take the pods in turn [SYS-005], [TARGETS-024], [TARGETS-039], [TARGETS-046]. |
+| 7 | The attempt binds the pick into the request: it sets the time limits and adds the router's default settings, which fill gaps but overwrite metadata notes of the same name [RCALL-078], [RCALL-082], [RCALL-083], [RCALL-064]. A key or server address the caller sent replaces the deployment's [RCALL-065], [TARGETS-063]. It merges tools, writes the deployment and its tags into the caller's metadata, and gives back any token reservation an earlier try of this request left [RCALL-066]-[RCALL-074], [RCALL-071], [LIMITS-083]. It passes the provider connection the router keeps for that deployment, if one exists, unless the caller sent a different key [RCALL-081]. |
+| 8 | The provider call runs in a slot under the deployment's parallel cap, when it has one, together with checks the strategy registers, which can refuse the call and cool the deployment down [RCALL-049], [RCALL-050], [RDISP-215], [RDISP-216], [RDISP-218]. When every slot is busy, the call fails at once with 429 Too Many Requests, which the retry loop can retry [RDISP-218], [TARGETS-072], [TARGETS-076]. A non-streamed reply the provider blocked for its content comes back unchanged, as a success [RCALL-051]. It becomes an error, so a backup can run, only when the router's own blocked-content list still has a group to try [RCALL-051], [RDISP-237]. With no such list, a catch-all entry on the router has the same effect [RCALL-051]. |
+| 9 | The attempt counts the success [RCALL-054]. The router's success hook adds one to the deployment's success count and, for deployments with per-minute limits, records this minute's token and request use [RDISP-172], [RDISP-173], [RDISP-181], [RDISP-182]. The reply gets response headers naming its model group and how much of the group's per-minute limits is left, then headers reporting no retries and no fallbacks [RDEPLOY-147], [RDEPLOY-146], [RDISP-134], [RDISP-095]. |
+
+## A failing deployment can sit out a cooldown while the group retries
+When a call fails, the router's failure hook decides whether the deployment sits out a cooldown, and the retry loop decides whether to try the group again [SYS-003], [FAILURE-021], [RDISP-140]. Each decision has its own conditions; the table gives the cooldown rules under default settings [FAILURE-042], [FAILURE-043]. The next try skips deployments in cooldown [RSELECT-044].
+
+@figure table id=cooldown-rules title="When a failed call starts a cooldown, under default settings"
+| 429, and the group has other deployments | cooldown | FAILURE-043 |
+| Over half of at least 5 calls failed this minute | cooldown unless alone in its group; counts are per server process | FAILURE-043, FAILURE-045, CFG-015, CFG-016 |
+| 401 or 404 | cooldown, even for a deployment alone in its group | FAILURE-044 |
+| A lone deployment returns 429, 408 or a 5xx | cooldown only if all of at least 1000 calls this minute failed | FAILURE-043, FAILURE-044, CFG-017 |
+| Other 4xx statuses, such as 400, 403 or 422 | no cooldown | FAILURE-031, RDISP-156 |
+| Error text naming a connection error | no cooldown, whatever the status | FAILURE-031, FAILURE-209 |
+| Caller's own credential failed, or request rejected before the call | no cooldown | FAILURE-023, FAILURE-024 |
+| Cooldown time of 0, or cooldowns switched off | no cooldown | FAILURE-027, FAILURE-028 |
+
+@path flow-a-deployment-fails-cooldown-and-same-group-retry
+| 1 | The attempt logs the error, counts it, and stamps it with the failed deployment's id and, when set, that deployment's own retry count [RCALL-057], [RCALL-060], [RCALL-061]. |
+| 2 | The router's failure hook skips a few cases, such as a timeout the caller set [RDISP-190]. Otherwise it picks a cooldown time: the deployment's own, else the provider's retry-after time, else the router's setting, which is 5 seconds by default [RDISP-191]. With a deployment id, it adds one to the failure count and asks whether to cool the deployment down [RDISP-192], [RDISP-193], [FAILURE-021]. |
+| 3 | No cooldown starts when the deployment is unknown, the caller's own credential failed, the request was rejected before the call, or a personal Copilot session or credential is involved [FAILURE-022]-[FAILURE-026]. Nor does one start when the cooldown time is zero, cooldowns are off, the status never cools, or the deployment is a provider default, such as one whose name has a star [FAILURE-027]-[FAILURE-030], [FAILURE-031], [RDEPLOY-026]. Otherwise one rule decides: a failure allowance the deployment sets itself, the default failure-rate rules in the table, or the router's failure counter [FAILURE-036]-[FAILURE-041], [FAILURE-042]-[FAILURE-045], [CFG-118], [FAILURE-046]-[FAILURE-049]. A cooldown is one timed entry, shared through Redis when the router has one; only a cooldown time set below 1 second stays on one server [FAILURE-001], [FAILURE-006], [FAILURE-052]. |
+| 4 | The retry loop takes its retry count from the request, then the failed deployment, then the router, which allows 2 by default [RDISP-131], [RDISP-136], [RSETUP-031]. Without a retry policy, it retries timeouts (408), conflicts (409), rate limits (429) and server errors (5xx), and 401 or 403 only in a group with several deployments [RDISP-140], [RDISP-155], [RDISP-156], [RDISP-158]. It never retries 400, 404 or 422, a too-long prompt or blocked reply that has its own special backup list, or anything once no healthy deployment is left [RDISP-155], [RDISP-156], [RDISP-157]. A retry policy, when set and not turned off by the request, replaces these rules with a count per error type [RDISP-138], [FAILURE-099]-[FAILURE-105]. The loop waits the backoff, retries, and records each failure and any deployment that refused with a status such as 400 or 404 [RDISP-142], [RDISP-160]-[RDISP-162], [RDISP-143]-[RDISP-148], [RDISP-200]-[RDISP-202]. |
+| 5 | The next selection leaves out deployments in cooldown and those that refused that way [RSELECT-044], [RSELECT-053], [RSELECT-140]. When skipping the refusers would leave none, the whole list comes back, refusers included [RDISP-149]. When nothing survives, selection raises the no-deployment error, a 429 that means no deployment was available and says when to try again [RSELECT-054], [FAILURE-179]. That error still goes through the retry loop's checks and the fallback dispatcher, so a backup group can answer [RDISP-155], [RDISP-096]. |
+
+## When retries run out, the router tries backup groups one at a time
+When the retry loop gives up, the fallback dispatcher looks for somewhere else to send the request [RDISP-096]. It can try the group's higher order levels, weighted failover, then one fallback list, which is empty unless an operator sets one [RDISP-104], [RDISP-106], [RDISP-111], [RSETUP-037]. It skips a backup it already tried for this request, and the first backup that answers wins [FAILURE-145], [FAILURE-150].
+
+@figure table id=final-outcome title="What the caller gets when a request cannot be served as asked"
+| A backup group answers | its reply, with a header counting fallback hops | RDISP-113, FAILURE-150 |
+| Every backup fails | usually the original error, not a backup's | RDISP-115, RDISP-105 |
+| No backup was found | the original error | RDISP-112, RDISP-115 |
+| Error note setting, on by default | a sentence naming backups tried, or none attempted | CFG-087, RDISP-115, TARGETS-091 |
+| Nothing left to pick, even after backups | 429 no-deployment error naming a wait | RSELECT-054, RSELECT-283 |
+| Reservations removed every deployment | 400 error saying the deployment is reserved for other teams | RSELECT-024, LIMITS-014 |
+| Unknown model name and no catch-all entry | 400 error saying the model has no healthy deployments | RSELECT-288, RSELECT-028 |
+| Fallbacks off, or a guardrail stepped in | the original error at once | RDISP-101 |
+
+@path flow-retries-exhausted-cross-group-fallback
+| 1 | The fallback dispatcher receives the final error [RDISP-096]. It raises that error again at once when fallbacks are off for the request, no model was named, or a safety guardrail stepped in [RDISP-101]. An operator can also turn off the setting, on by default, that lets bad requests fall back [RSETUP-028]. Then an unsupported-parameter error or other provider bad request stops here too, unless it is a too-long prompt or blocked content [RDISP-101]. |
+| 2 | For most errors it first tries the group's higher order levels, when the group has two or more [RDISP-103], [RDISP-104]. Next comes weighted failover, which is off by default: one more try on the group's other deployments that are not cooling down, only under random shuffle [RDISP-106], [RDISP-120]-[RDISP-124], [CFG-070]. |
+| 3 | It picks one fallback list [RDISP-111]. A too-long prompt or blocked content uses its special backup list alone when one is set, else the general list [RDISP-108], [RDISP-110], [RDISP-109]. Within a list, the group's own entry beats the catch-all entry, which is off unless an operator sets default fallbacks [FAILURE-114]-[FAILURE-120], [CFG-044]. |
+| 4 | The router tries the list's groups one at a time [FAILURE-194]. It tries none when the request already sits at the depth cap, 5 levels of nesting by default, and that cap limits depth, not how many backups one list tries [FAILURE-138], [FAILURE-147], [RSETUP-032]. It skips the failed group, backups already tried, and groups that optional access or budget checks reject, when an operator installed them [FAILURE-140]-[FAILURE-145]. A group listed again with different settings counts as a new backup [FAILURE-109]. A request about a file, batch or fine-tuning job held at one provider stays in its own group [FAILURE-137], [FAILURE-142]. Each backup runs its own retries and fallbacks one level deeper; a failed backup's deployment can cool down, and a success gets response headers that report the fallback [FAILURE-146]-[FAILURE-149], [FAILURE-067]-[FAILURE-070], [FAILURE-150], [FAILURE-157], [FAILURE-158]. |
+| 5 | The first backup that answers returns its reply to the caller [RDISP-113]. Otherwise, in the usual case, the caller gets the original error [RDISP-112], [RDISP-115]. By default its message gains a sentence naming the backups tried, or saying none was attempted [TARGETS-091], [CFG-087]. |
+
+After a failed walk through order levels, the caller gets that walk's last error instead, with no added sentence [RDISP-105].
+
+## Broken streams fall back or continue, depending on what the caller saw
+Many replies arrive as a stream of small pieces [RSETUP-186], [RCALL-001]. For chat, the router reads the first piece itself, so a stream that fails before any text takes the normal retries [RCALL-053], [RSETUP-174]. A later break falls back, continues on another deployment, or reaches the caller as an error; the table shows which [RCALL-005], [RCALL-006], [RCALL-007], [RCALL-019], [RCALL-031].
+
+@figure table id=stream-breaks title="How each kind of stream recovers from a break"
+| Chat, break before any text reached the caller | restarts on the fallback list with the original messages | RCALL-005, RCALL-007 |
+| Chat, text already shown, continuation off by default | the caller gets the provider's own error | RCALL-006, RCALL-169 |
+| Chat, text shown, continuation on and checks pass | another deployment finishes the reply from the partial text | RCALL-008, RCALL-019 |
+| Responses API, any break | falls back; a backup after output is told to continue | RCALL-031, RCALL-026 |
+| Anthropic Messages, recoverable break before content | retries in its own group, then falls back | RCALL-136, RCALL-141 |
+| Anthropic Messages, break after content | the provider's error reaches the caller as sent | RCALL-136, RCALL-139 |
+
+@path flow-a-stream-breaks-after-it-opened
+| 1 | The chat attempt opens the stream and reads its first piece before handing it back, so a failure before any content takes the normal retries [RCALL-052], [RCALL-053]. It then wraps the stream in a guard that watches for a break [RCALL-055], [RCALL-001]. |
+| 2 | When a chat stream breaks, the guard checks whether generated text already reached the caller [RCALL-005]. If not, the request goes back through the fallback list with its original messages [RCALL-007]. If so, and continuation is on and its checks pass, another deployment that accepts a partial answer finishes the reply [RCALL-008], [RCALL-019], [RCALL-169], [AFFINITY-130]-[AFFINITY-141]. That deployment gets the original messages plus the partial text as the start of its answer, with its output limit cut by the tokens already sent [RCALL-023], [RCALL-008]. Any other break hands the caller the provider's own error [RCALL-006]. |
+| 3 | A Responses API stream holds back its status events and falls back on any break, even after output reached the caller [RCALL-027]-[RCALL-036]. After output, the backup gets the original input, the partial answer and an instruction to continue without repeating, so the answer can change model part-way [RCALL-026], [RCALL-031], [RCALL-191]. An Anthropic Messages stream holds its early events only while a retry or fallback could still take over, and for at most 200 events [RCALL-129], [RCALL-131]. A break before any content with a rate-limit or server error is recoverable: the stream retries in its own group, then falls back [RCALL-128]-[RCALL-152]. |
+
+## Other endpoints mostly run the same retry and fallback steps as chat
+Besides chat, the router serves the Responses API and Anthropic Messages, plus services such as embeddings, file uploads, batch jobs, vector stores and web searches [RSETUP-111], [RDISP-052], [RDISP-057], [RDISP-074], [TARGETS-143]. Most run the same retry and fallback steps as chat [SYS-004], [RDISP-044], [RCALL-116]. The table shows the exceptions [RDISP-002], [RDISP-296].
+
+@figure table id=endpoint-paths title="Which path each kind of endpoint takes"
+| Chat | the chat entry, with retries and backup groups | RSETUP-186, RDISP-092 |
+| Responses API, Anthropic Messages, vector stores naming a model | a fallback path with retries and backup groups | RDISP-030, RDISP-044, RCALL-116 |
+| Embeddings, file uploads and batches | hand-written entries; an upload goes to every healthy deployment | RDISP-052, RDISP-058, RDISP-074 |
+| Blocking Responses, search and video calls | one deployment, one call, no retries or backups | RDISP-002, RDISP-048, RDISP-051 |
+| Assistants, managed agents and blocking vector-store file calls | straight to the provider, with no routing | RDISP-005, RDISP-040, RDISP-041 |
+| Web searches | one same-named search tool at random, with fallback lists | TARGETS-141, TARGETS-143, TARGETS-146 |
+| Thirteen names, such as video edit and get interaction | nothing returned, no provider call, no error | RDISP-296, RDISP-024, RDISP-025 |
+
+@path flow-non-chat-endpoints-through-the-factory
+| 1 | When the router is built, it attaches ready-made functions for many endpoints, such as Responses, Anthropic Messages, vector stores, video, containers, skills, interactions and agents [RSETUP-110]-[RSETUP-127]. |
+| 2 | The endpoint factory gives each call type a blocking or an asynchronous wrapper [RDISP-002]-[RDISP-007]. The asynchronous wrapper sends the call down a matching branch, such as the generic path most endpoints share, or a vector-store, container or agent router [RDISP-008]-[RDISP-021], [RDISP-030]-[RDISP-046]. Thirteen names match no branch: one adapter call, four video calls, three interaction calls and five container-file calls [RDISP-023]-[RDISP-026], [RDISP-296]. They return nothing, or an unfinished task, with no provider call and no error; the behaviour is confirmed, and that it is unintended is a suspicion [RDISP-296]. |
+| 3 | The generic path runs the same fallback and retry loop as chat [RCALL-116], [RDISP-090]. Each attempt selects and binds a deployment and keeps the router's notes in a second metadata field [RCALL-117]-[RCALL-122], [TARGETS-136]. It takes its time limits from the rules for pass-through calls, so its timeouts can differ from chat's [RCALL-077]. |
+| 4 | Embeddings, file uploads and batch jobs have their own hand-written entries [RDISP-052]-[RDISP-087]. Several web-search tools can share one name; a search picks one of them at random and runs through the fallback loop [TARGETS-139]-[TARGETS-149]. |
+
+## Startup loads every deployment with full checks, but runtime edits skip some
+Before any request, the router loads its list of deployments and checks each one [RSETUP-022], [RDEPLOY-001]. Each deployment gets an id that keys its cooldowns, prices and lookups [RDEPLOY-007], [RDEPLOY-080], [RDEPLOY-057], [FAILURE-001]. While the router runs, the proxy can add, replace or remove one deployment at a time, skipping the environment, secret, reservation and tag-pattern checks [RDEPLOY-040], [RDEPLOY-042].
+
+@figure table id=defaults title="What the router does unless an operator changes it"
+| Retries per group | 2 more tries, for some errors only | RSETUP-031, RDISP-155 |
+| Cooldown time | 5 seconds | RSETUP-027, RDISP-191 |
+| Fallback list | empty | RSETUP-037, CFG-043 |
+| Catch-all entry | off unless an operator sets one | RSETUP-038, CFG-044, RSELECT-028 |
+| Depth cap on nested fallbacks | 5 levels | RSETUP-032, CFG-117 |
+| Health checks in selection | off | CFG-074, RSELECT-142 |
+| Prompt-size, request-rate, region and parameter checks | off | CFG-062, RSELECT-048 |
+| Weighted failover | off | CFG-070, RDISP-106 |
+| Continuation of broken chat streams | off | RCALL-169 |
+| Bad-request errors may fall back | on | RSETUP-028, RDISP-101 |
+| Error note naming backups tried | on | CFG-087 |
+| Keys and server addresses sent by callers | always honoured; the gateway decides who may send them | TARGETS-062, RCALL-065, SYS-019 |
+| Router-wide default queue priority | unset; setting it fails every asynchronous chat call | CFG-036, RSETUP-297, RSETUP-284 |
+
+@path flow-loading-and-changing-deployments
+| 1 | When the router is built, it stores its settings and loads the deployment list, which first empties most of the router's lists and indexes and then builds each row [RSETUP-001]-[RSETUP-058], [RSETUP-022], [RDEPLOY-001]-[RDEPLOY-011]. |
+| 2 | Building a row settles its id, a fingerprint of its settings when the row gives none [RDEPLOY-007], [RDISP-240]. It fills in secrets named by environment variables, and a row that lists environments loads only in those [RDEPLOY-006], [RDEPLOY-014], [RSETUP-202]-[RSETUP-207]. It checks reservations and tag patterns, records prices, and registers names with a star and strategy routers [RDEPLOY-015], [RDEPLOY-016], [RDEPLOY-022], [RDEPLOY-019], [RDEPLOY-020], [RDEPLOY-080], [RDEPLOY-026], [RDEPLOY-060]-[RDEPLOY-072], [CONTRACTS-014]. A name with a star serves a request only when no deployment, alias or routing group has the exact name [RSELECT-001]. |
+| 3 | While the router runs, the proxy adds, replaces and removes deployments one at a time [RDEPLOY-040]-[RDEPLOY-056]. These runtime edits skip the reservation and time-window checks, the environment list, the tag-pattern check, secret filling and splitting by organization, a suspected defect [RDEPLOY-042], [RDEPLOY-207]. So a deployment meant for one environment can go live in another, or carry a secret's reference text instead of the key, though an unknown provider is still refused [RDEPLOY-207], [RDEPLOY-044]. A settings update changes the allowed settings in place and drops any other with only a debug log line [RSELECT-152]-[RSELECT-162]. It also rounds five number settings down, so a timeout of 0.5 seconds becomes 0, which counts as unset [RSELECT-153], [RSELECT-275]. |
+| 4 | The proxy builds a throw-away router for requests that carry their own router settings, then detaches it, which removes most of its hooks from the lists every router in the process shares [RSETUP-062], [RSETUP-063], [RSETUP-298]. Its strategy objects and alerting stay behind, so in a long-running proxy those lists grow with such requests until the process restarts [RSETUP-064], [RSETUP-298], [SYS-010]. Only the shared list's own size cap limits them [RSETUP-286]. Every later log event walks them [RSETUP-298]. |
+
+## Router faults can cause outages, slow replies, extra cost or exposure
+The router's own faults reach customers as outages, slow replies, extra cost and security exposure [RSETUP-297], [RDISP-297], [RDISP-286], [TARGETS-207]. The figure follows one request along the failure path, where customers notice, and how operators find out [RSELECT-054], [RDISP-115], [FAILURE-175].
+
+@figure flow id=failure-path title="One request's path through retries and fallbacks, and who notices"
+| node ask | Caller asks for group | RSETUP-186 |
+| node pick | Deployment left to pick? | RSELECT-054, RSELECT-067 |
+| node call | Call the provider | RCALL-049, RCALL-164 |
+| node reply | Reply reaches caller | RCALL-054, RDISP-134 |
+| node count | Count failure, decide cooldown | RDISP-193, FAILURE-021 |
+| node again | Retry allowed? | RDISP-138, RDISP-155 |
+| node wait | Wait the backoff | RDISP-142, RDISP-146 |
+| node list | Fallback list found? | RDISP-111, RDISP-112 |
+| node walk | Try backup groups | FAILURE-145, FAILURE-150 |
+| node err | Caller gets original error | RDISP-115 |
+| ask > pick | selection runs | RCALL-045 |
+| pick > call | yes, one picked | RSELECT-067 |
+| pick > again | no, 429 error | RSELECT-054 |
+| call > reply | success | RCALL-054 |
+| call > count | failure | RDISP-193 |
+| count > again | error returns to loop | RCALL-057 |
+| again > wait | yes, retries left | RDISP-142, RDISP-143 |
+| wait > pick | retry the group | RDISP-143 |
+| again > list | no | RDISP-096, RDISP-147 |
+| list > walk | yes | RDISP-113 |
+| list > err | no | RDISP-112, RDISP-115 |
+| walk > reply | a backup answers | FAILURE-150 |
+| walk > err | every backup fails | RDISP-115 |
+
+@steps failure-path
+| pick>again | Nothing left to pick | When filters or cooldowns remove every deployment, selection raises a 429 error that names a wait [RSELECT-054], [FAILURE-179]. The error still passes the retry checks and goes on to the backup groups [RDISP-155], [RDISP-096]. |
+| count | Operators see cooldowns | When a Prometheus logger is registered, each cooldown shows up in its metrics [FAILURE-052], [FAILURE-056]. A cooldown time set below one second stays on one server [FAILURE-006]. |
+| wait | Waiting slows the reply | The wait is zero when the group has several deployments and a healthy one remains [RDISP-160]. Otherwise it follows a provider retry-after time of up to 60 seconds [RDISP-162]. Without one, the default pause starts at 0.5 seconds, or the router's higher floor, doubles to at most 8, and adds up to 0.75 seconds [RDISP-161], [RDISP-162]. |
+| wait>pick | Every retry resends | A retry sends the whole request again, and nothing marks it as a repeat [SYS-013]. |
+| walk | The worst case multiplies | With default settings each group tried makes up to 3 provider calls, 1 plus 2 retries, and each backup runs its own retries [RSETUP-031], [RDISP-143], [FAILURE-149]. Backups nest up to 5 levels deep, and that cap does not limit how many backups one list tries [RSETUP-032], [FAILURE-147]. |
+| walk>err | The original error returns | When every backup fails, the caller usually gets the original error, not a backup's [RDISP-115], [RDISP-105]. |
+| err | Operators hear of failures | An optional Slack alert reports failed asynchronous calls, except requests from the proxy, which reports those itself [FAILURE-175], [RSETUP-195], [RCALL-157]. Registered loggers also hear of each backup's success or failure [FAILURE-154]. |
+
+Several settings and edits stop requests outright [RSETUP-297], [RSELECT-279], [RDEPLOY-209]. The accepted strategy name for provider budgets builds no picker [RSELECT-279]. So every request for a model outside any routing group fails, unless it names a deployment id or reaches the router's default deployment [RSELECT-279]. With the skip-invalid setting off, a failed edit of a deployment takes the working model offline [RDEPLOY-209]. An asynchronous chat stream the caller drops before its first read keeps its slot under the parallel cap [RCALL-200]. With a cap of one, every later call to that deployment then fails with 429 [RCALL-200], [RCALL-203].
+
+Extra cost and lost capacity come from repeated work and limits that miscount [SYS-013], [LIMITS-200]. A successful call keeps its whole output-token reservation for the minute, so an output-token limit refuses traffic well below its set rate [LIMITS-200]. The router's streaming chat calls and Anthropic Messages calls never count toward a deployment's token limit, so that limit does not bound them [LIMITS-205]. Without Redis, each process counts only its own traffic toward the limits [LIMITS-147].
+
+Security exposure rests on trust: the router checks no identities and trusts the team, priority and control fields in each request, expecting the proxy to clean them [SYS-019]. A caller whose fields reach the router unfiltered can raise its own fallback cap [RDISP-301]. A stored cooldown keeps the first 50 characters of error text unmasked, so a key echoed there can reach Redis and the logs [FAILURE-210].
+
+## Watch out
+- Setting the router-wide default queue priority to any whole number, even 0, fails every asynchronous chat call, including calls that send no priority [RSETUP-297], [RSETUP-284].
+- When the gateway lets a caller send client-side credentials with a server address but no key, the router sends the administrator's provider key to that address [TARGETS-207].
+- The router believes the team, priority and strategy a request carries, so team reservations protect capacity only when the proxy sets the team from the caller's key [SYS-019], [LIMITS-156], [RSETUP-293].
+- Calling the router's cache flush with Redis attached erases every key on that Redis server, other applications' data included; nothing in the library calls it outside tests [RSELECT-274], [DATA-122].
+- Thirteen endpoint names return nothing, with no provider call and no error [RDISP-296].
+- An asynchronous chat stream the caller drops before reading it holds its slot under the parallel cap until the router object is replaced [RCALL-203]. A deployment capped at one call then refuses everything [RCALL-203], [RCALL-200].
+- Retries and backups resend the whole job: a retried batch creation can make a second batch, and a retried file upload goes to every healthy deployment again [RDISP-286].
+- A request that runs out of retries still waits one more backoff before any backup starts [RDISP-297]. With 3 retries on a lone deployment, that last wait is 4 seconds plus jitter by default [RDISP-160], [RDISP-162].
