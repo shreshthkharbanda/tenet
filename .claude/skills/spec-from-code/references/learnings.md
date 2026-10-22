@@ -831,3 +831,17 @@ and 1 vague; router-selection: 1 contradicted answer, 3 wrong teach-back stateme
 measure earlier versions. Comprehension needs its own re-measurement before it can be claimed for the
 final stories. Order that worked: narrator writes; judge, probe reader and persona reader measure;
 narrator rewrites once for comprehension; then fixer and recheck until faithful.
+
+**L88. Re-measuring after the repairs: readers are helped more, and one reader per story is noisy.**
+Result: LiteLLM Phase 9, the two chapters with earlier readings, re-read on their final versions.
+Questions the story-only reader answered fully, partly, not at all, wrongly: failure-handling 8, 9,
+5, 3 in round 1 and 10, 8, 3, 4 in round 5; router-selection 5, 3, 16, 1 and 5, 11, 7, 2. The
+plain-language reader's explanation had no wrong statement in either chapter (16 and 17 correct).
+The story helps with far more questions, and fully answered ones rose in one chapter and held in the
+other. Contradicted answers did not fall: they moved to different questions between rounds (two
+persisted, two were new), which says a single reader's contradiction count has an error of one or two
+and cannot show a trend alone. What it does show is concrete: each contradiction names a fact
+the story or its claim lacks (a tolerance, the order of two sources, a rule for plain-string
+entries, a claim that says "configured" where the code reads "recorded"). Faithful-but-incomplete
+text is the remaining failure, and judging sentences cannot see it. Use the probe readers to find
+missing facts, the claims to supply them, and the story judge to keep what is added faithful.
