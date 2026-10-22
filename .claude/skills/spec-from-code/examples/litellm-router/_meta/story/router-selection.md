@@ -33,7 +33,7 @@ An asynchronous call runs the full path only when the router-wide strategy is on
 | deployment id | the unique name of one deployment, such as dep-0 | `model_info.id` | RSELECT-140, RSELECT-042 |
 | alias | a second name that points at a model group, followed one hop | `model_group_alias` | RSELECT-011 |
 | wildcard route | a deployment registered under a name pattern, such as openai/*-mini, that serves any name the pattern matches from its start | `wildcard_route_deployments` | RSELECT-003, TARGETS-007 |
-| team filter | usually keeps deployments with no owner team plus those owned by the caller's team; an admin without a team can reach one team's deployments | `model_info.team_id` | TARGETS-100, TARGETS-103, RSELECT-041 |
+| team filter | usually keeps deployments with no owner team plus the caller's team's; an admin without a team reaches one team's deployments, but a name two teams share is refused | `model_info.team_id` | TARGETS-100, TARGETS-103, TARGETS-104, RSELECT-041 |
 | web-search filter | for a request that asks for a web-search tool, keeps deployments not marked as lacking web search | `supports_web_search` | TARGETS-106, TARGETS-107, RSELECT-041 |
 | access-group filter | the lookup step that checks the caller's key against access groups and can narrow the candidates to deployments in groups the key allows | `access_groups` | RSELECT-030 |
 | reservation filter | drops strategy routers, then deployments that an access window or a provisioned-throughput share keeps for other teams | `_filter_reserved_deployments` | RSELECT-024 |
@@ -229,7 +229,7 @@ After the lookup, a fixed chain of filters removes deployments that should not s
 | pre | Pre-call checks need a switch | These checks run only when the router has them switched on and the request has messages or input [RSELECT-048]. |
 | ord>err | Nothing left | An empty list ends in the no-deployment error, status 429 (too many requests), which here means no deployment could take the request [RSELECT-054], [RSELECT-283]. |
 
-The 503 is `ServiceUnavailableError`, naming the provider model, not the id [RSELECT-042]. Health checks also do nothing when `allowed_fails_policy` is set without background health-check groups [RSELECT-142]. If every candidate is unhealthy, the full path keeps the whole list, but a health-check probe gets an empty one [RSELECT-145].
+The 503 is `ServiceUnavailableError`, naming the provider model, not the id [RSELECT-042]. Health checks also do nothing when `allowed_fails_policy` is set without background health-check groups [RSELECT-142]. If every candidate is unhealthy, the full path keeps the whole list, but for a health-check probe the filter returns an empty list, and the call then ends in the no-deployment error [RSELECT-145], [RSELECT-054].
 
 The paused filter counts only `model_info.blocked` equal to the value true, so the string `"true"` does not count [RSELECT-141]. Pre-call checks need `enable_pre_call_checks` on and messages or input in the request [RSELECT-048]. They exclude a deployment over its context window, at its per-minute request limit, or outside the requested region [RSELECT-202]-[RSELECT-204]. The per-minute check reads only this process's in-memory counts and skips entirely under a router-wide `usage-based-routing-v2` [RSELECT-203], [RSELECT-232], [RSELECT-251].
 
